@@ -11,6 +11,7 @@ import {
 } from './config.js';
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { pushDataset } from './commands/push-dataset.js';
+import { pushForm } from './commands/push-form.js';
 import { importCandidates, scanServersJson } from './import.js';
 import { promptPassword } from './prompt.js';
 import { testServer } from './commands/server-test.js';
@@ -27,6 +28,9 @@ const USO = `fluigctl — sobe datasets e formulários para o TOTVS Fluig
   fluigctl server test <nome>
 
   fluigctl push dataset <arquivo.js> --server <nome> [--create] [--description D] [--dry-run]
+  fluigctl push form <pasta/> --server <nome> [--document-id N] [--principal A]
+                              [--new-version] [--dry-run]
+                              [--create --parent-id N --dataset-name D --persistence-type form|list]
 
 A senha de cada servidor vem de variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD).
 Nenhuma senha é gravada em disco.`;
@@ -210,11 +214,8 @@ async function comandoServer(argv: string[]): Promise<void> {
 
 async function comandoPush(argv: string[]): Promise<void> {
   const tipo = argv[0];
-  if (tipo !== 'dataset') {
-    throw new ErroFluigctl(
-      `push só aceita "dataset" nesta versão — recebi "${tipo ?? ''}"`,
-      2,
-    );
+  if (tipo !== 'dataset' && tipo !== 'form') {
+    throw new ErroFluigctl(`push aceita "dataset" ou "form" — recebi "${tipo ?? ''}"`, 2);
   }
 
   const { values, positionals } = parseArgs({
@@ -225,8 +226,17 @@ async function comandoPush(argv: string[]): Promise<void> {
       create: { type: 'boolean', default: false },
       description: { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
+      'document-id': { type: 'string' },
+      'parent-id': { type: 'string' },
+      'dataset-name': { type: 'string' },
+      'persistence-type': { type: 'string' },
+      'description-field': { type: 'string' },
+      principal: { type: 'string' },
+      'new-version': { type: 'boolean', default: false },
     },
   });
+
+  if (tipo === 'form') return pushFormCli(values, positionals);
 
   const arquivo = positionals[0];
   if (!arquivo || !values.server) {
@@ -255,6 +265,89 @@ async function comandoPush(argv: string[]): Promise<void> {
     values['dry-run']
       ? `[dry-run] ${r.nome} seria ${verbo} em ${alvo} — ${r.bytes} bytes. Nada foi enviado.`
       : `${r.nome} ${verbo} em ${alvo} — ${r.bytes} bytes.`,
+  );
+}
+
+type ValoresPush = {
+  server?: string | undefined;
+  create?: boolean | undefined;
+  'dry-run'?: boolean | undefined;
+  'document-id'?: string | undefined;
+  'parent-id'?: string | undefined;
+  'dataset-name'?: string | undefined;
+  'persistence-type'?: string | undefined;
+  'description-field'?: string | undefined;
+  principal?: string | undefined;
+  'new-version'?: boolean | undefined;
+};
+
+function inteiro(valor: string | undefined, flag: string): number | undefined {
+  if (valor === undefined) return undefined;
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new ErroFluigctl(`${flag} precisa de um número inteiro positivo — recebi "${valor}"`, 2);
+  }
+  return n;
+}
+
+async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<void> {
+  const pasta = positionals[0];
+  if (!pasta || !values.server) {
+    throw new ErroFluigctl(
+      'uso: fluigctl push form <pasta/> --server <nome> [--document-id N] [--dry-run]',
+      2,
+    );
+  }
+
+  const tipoPersistencia = values['persistence-type'];
+  if (tipoPersistencia !== undefined && tipoPersistencia !== 'form' && tipoPersistencia !== 'list') {
+    throw new ErroFluigctl(
+      `--persistence-type aceita "form" ou "list" — recebi "${tipoPersistencia}"`,
+      2,
+    );
+  }
+
+  const servidor = resolveServer(loadConfig(), values.server);
+  const senha = resolvePassword(servidor);
+  const documentId = inteiro(values['document-id'], '--document-id');
+  const parentId = inteiro(values['parent-id'], '--parent-id');
+
+  const r = await pushForm({
+    server: servidor,
+    senha,
+    pasta,
+    ...(documentId === undefined ? {} : { documentId }),
+    create: values.create ?? false,
+    ...(parentId === undefined ? {} : { parentId }),
+    ...(values['dataset-name'] === undefined ? {} : { datasetName: values['dataset-name'] }),
+    ...(tipoPersistencia === undefined ? {} : { persistenceType: tipoPersistencia }),
+    ...(values['description-field'] === undefined
+      ? {}
+      : { descriptionField: values['description-field'] }),
+    ...(values.principal === undefined ? {} : { principal: values.principal }),
+    novaVersao: values['new-version'] ?? false,
+    dryRun: values['dry-run'] ?? false,
+    prompt: promptPassword,
+  });
+
+  for (const aviso of r.avisos) console.log(`aviso: ${aviso}`);
+
+  const alvo = `${values.server} (${serverUrl(servidor)})`;
+  const detalhe = `${r.anexos} anexo(s), ${r.eventos} evento(s)`;
+
+  if (values['dry-run']) {
+    console.log(
+      r.acao === 'update'
+        ? `[dry-run] ${r.nome} seria atualizado em ${alvo}, documentId ${r.documentId} — ${detalhe}. Nada foi enviado.`
+        : `[dry-run] ${r.nome} seria criado em ${alvo} — ${detalhe}. Nada foi enviado.`,
+    );
+    return;
+  }
+
+  console.log(
+    r.acao === 'update'
+      ? `${r.nome} atualizado em ${alvo}, documentId ${r.documentId} — ${detalhe}.`
+      : `${r.nome} criado em ${alvo} com documentId ${r.documentId} — ${detalhe}.`,
   );
 }
 
