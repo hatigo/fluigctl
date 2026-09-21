@@ -1,0 +1,24 @@
+{
+  "name": "fluigctl",
+  "version": "0.1.0",
+  "description": "CLI para subir datasets e formulários no TOTVS Fluig",
+  "type": "module",
+  "bin": {
+    "fluigctl": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && cp -r test/fixtures dist/test/ && node --test \"dist/test/**/*.test.js\""
+  },
+  "dependencies": {
+    "soap": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,191 @@
+#!/usr/bin/env node
+import { parseArgs } from 'node:util';
+
+import {
+  configPath,
+  loadConfig,
+  resolvePassword,
+  resolveServer,
+  saveConfig,
+  serverUrl,
+} from './config.js';
+import { addServer, listServers, removeServer } from './commands/server.js';
+import { pushDataset } from './commands/push-dataset.js';
+import { promptPassword } from './prompt.js';
+import { testServer } from './commands/server-test.js';
+import { findUserByLogin, login } from './fluig/session.js';
+import { ErroFluigctl } from './errors.js';
+
+const USO = `fluigctl — sobe datasets e formulários para o TOTVS Fluig
+
+  fluigctl server ls
+  fluigctl server add <nome> --host H [--port P] [--ssl] --user U [--prod]
+  fluigctl server rm <nome>
+  fluigctl server test <nome>
+
+  fluigctl push dataset <arquivo.js> --server <nome> [--create] [--description D] [--dry-run]
+
+A senha de cada servidor vem de variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD).
+Nenhuma senha é gravada em disco.`;
+
+
+async function comandoServer(argv: string[]): Promise<void> {
+  const sub = argv[0];
+  const resto = argv.slice(1);
+
+  if (sub === 'ls') {
+    console.log(listServers(loadConfig()));
+    return;
+  }
+
+  if (sub === 'add') {
+    const { values, positionals } = parseArgs({
+      args: resto,
+      allowPositionals: true,
+      options: {
+        host: { type: 'string' },
+        port: { type: 'string' },
+        ssl: { type: 'boolean', default: false },
+        user: { type: 'string' },
+        prod: { type: 'boolean', default: false },
+      },
+    });
+
+    const nome = positionals[0];
+    if (!nome || !values.host || !values.user) {
+      throw new ErroFluigctl('uso: fluigctl server add <nome> --host H --user U [--ssl] [--port P] [--prod]', 2);
+    }
+
+    const porta = values.port ? Number(values.port) : values.ssl ? 443 : 80;
+    if (!Number.isInteger(porta) || porta <= 0) {
+      throw new ErroFluigctl(`porta inválida: ${values.port}`, 2);
+    }
+
+    // Cadastra provisoriamente para derivar passwordEnv, consulta o servidor
+    // para descobrir companyId e userCode, e só então grava.
+    const provisorio = addServer(loadConfig(), nome, {
+      host: values.host,
+      port: porta,
+      ssl: values.ssl,
+      username: values.user,
+      companyId: 0,
+      userCode: '',
+      ...(values.prod ? { prod: true } : {}),
+    });
+
+    const servidor = provisorio.servers[nome]!;
+    const senha = resolvePassword(servidor);
+    const url = serverUrl(servidor);
+
+    const cookie = await login(url, servidor.username, senha);
+    const usuario = await findUserByLogin(url, cookie, servidor.username);
+
+    servidor.companyId = usuario.companyId;
+    servidor.userCode = usuario.userCode;
+
+    saveConfig(provisorio);
+    console.log(
+      `${nome} cadastrado: ${url} · companyId=${usuario.companyId} · ` +
+        `userCode=${usuario.userCode} · senha em ${servidor.passwordEnv}` +
+        (servidor.prod ? ' · PRODUÇÃO' : ''),
+    );
+    return;
+  }
+
+  if (sub === 'rm') {
+    const nome = resto[0];
+    if (!nome) throw new ErroFluigctl('uso: fluigctl server rm <nome>', 2);
+    saveConfig(removeServer(loadConfig(), nome));
+    console.log(`${nome} removido de ${configPath()}`);
+    return;
+  }
+
+  if (sub === 'test') {
+    const nome = resto[0];
+    if (!nome) throw new ErroFluigctl('uso: fluigctl server test <nome>', 2);
+
+    const servidor = resolveServer(loadConfig(), nome);
+    const resultado = await testServer(servidor, resolvePassword(servidor));
+
+    console.log(`${nome}: ${serverUrl(servidor)}`);
+    console.log(`  login    ok`);
+    console.log(`  ping     ${resultado.pingOk ? 'ok' : 'FALHOU (sessão não validou)'}`);
+    console.log(`  usuário  ${resultado.userCode} · companyId ${resultado.companyId}`);
+    for (const d of resultado.divergencias) console.log(`  aviso    ${d}`);
+
+    if (!resultado.pingOk) throw new ErroFluigctl('a sessão não validou no ping', 7);
+    return;
+  }
+
+  throw new ErroFluigctl(`subcomando desconhecido: server ${sub ?? ''}\n\n${USO}`, 2);
+}
+
+async function comandoPush(argv: string[]): Promise<void> {
+  const tipo = argv[0];
+  if (tipo !== 'dataset') {
+    throw new ErroFluigctl(
+      `push só aceita "dataset" nesta versão — recebi "${tipo ?? ''}"`,
+      2,
+    );
+  }
+
+  const { values, positionals } = parseArgs({
+    args: argv.slice(1),
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      create: { type: 'boolean', default: false },
+      description: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+
+  const arquivo = positionals[0];
+  if (!arquivo || !values.server) {
+    throw new ErroFluigctl(
+      'uso: fluigctl push dataset <arquivo.js> --server <nome> [--create] [--description D] [--dry-run]',
+      2,
+    );
+  }
+
+  const servidor = resolveServer(loadConfig(), values.server);
+  const senha = resolvePassword(servidor);
+
+  const r = await pushDataset({
+    server: servidor,
+    senha,
+    arquivo,
+    create: values.create,
+    ...(values.description === undefined ? {} : { description: values.description }),
+    dryRun: values['dry-run'],
+    prompt: promptPassword,
+  });
+
+  const verbo = r.acao === 'create' ? 'criado' : 'atualizado';
+  const alvo = `${values.server} (${serverUrl(servidor)})`;
+  console.log(
+    values['dry-run']
+      ? `[dry-run] ${r.nome} seria ${verbo} em ${alvo} — ${r.bytes} bytes. Nada foi enviado.`
+      : `${r.nome} ${verbo} em ${alvo} — ${r.bytes} bytes.`,
+  );
+}
+
+async function main(argv: string[]): Promise<void> {
+  const comando = argv[0];
+
+  if (!comando || comando === '--help' || comando === '-h' || comando === 'help') {
+    console.log(USO);
+    return;
+  }
+
+  if (comando === 'server') return comandoServer(argv.slice(1));
+  if (comando === 'push') return comandoPush(argv.slice(1));
+
+  throw new ErroFluigctl(`comando desconhecido: ${comando}\n\n${USO}`, 2);
+}
+
+main(process.argv.slice(2)).catch((erro: unknown) => {
+  const e = erro as Error;
+  console.error(`fluigctl: ${e.message}`);
+  process.exit(erro instanceof ErroFluigctl ? erro.codigo : 1);
+});
