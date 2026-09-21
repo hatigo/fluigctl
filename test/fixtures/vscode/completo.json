@@ -1,0 +1,30 @@
+{
+  "version": "1.0.0",
+  "configurations": [
+    {
+      "id": "a1b2c3",
+      "name": "CETENCO HML",
+      "host": "homolog.exemplo.com.br",
+      "ssl": false,
+      "port": 8021,
+      "username": "integracao.fluig",
+      "password": "eyJpdiI6ImJsb2ItY2lmcmFkbyIsInNhbHQiOiJ4In0=",
+      "userCode": "Integracao.Fluig",
+      "confirmExporting": false,
+      "companyId": 1
+    },
+    {
+      "id": "d4e5f6",
+      "name": "Produção",
+      "host": "fluig.exemplo.com.br",
+      "ssl": true,
+      "port": 443,
+      "username": "integracao.fluig",
+      "password": "eyJpdiI6Im91dHJvLWJsb2IifQ==",
+      "userCode": "000547",
+      "confirmExporting": true,
+      "companyId": 1,
+      "hasBrowser": true
+    }
+  ]
+}

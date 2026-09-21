@@ -9,8 +9,9 @@ import {
   saveConfig,
   serverUrl,
 } from './config.js';
-import { addServer, listServers, removeServer } from './commands/server.js';
+import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { pushDataset } from './commands/push-dataset.js';
+import { importCandidates, scanServersJson } from './import.js';
 import { promptPassword } from './prompt.js';
 import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
@@ -21,6 +22,8 @@ const USO = `fluigctl — sobe datasets e formulários para o TOTVS Fluig
   fluigctl server ls
   fluigctl server add <nome> --host H [--port P] [--ssl] --user U [--prod]
   fluigctl server rm <nome>
+  fluigctl server import <dir> [--write]
+  fluigctl server set-prod <nome> [--off]
   fluigctl server test <nome>
 
   fluigctl push dataset <arquivo.js> --server <nome> [--create] [--description D] [--dry-run]
@@ -92,11 +95,96 @@ async function comandoServer(argv: string[]): Promise<void> {
     return;
   }
 
+  if (sub === 'import') {
+    const { values, positionals } = parseArgs({
+      args: resto,
+      allowPositionals: true,
+      options: { write: { type: 'boolean', default: false } },
+    });
+
+    const dir = positionals[0];
+    if (!dir) throw new ErroFluigctl('uso: fluigctl server import <dir> [--write]', 2);
+
+    const { candidatos, ignorados } = importCandidates(await scanServersJson(dir));
+
+    if (candidatos.length === 0) {
+      console.log(`nenhum servidor encontrado em ${dir}`);
+      for (const i of ignorados) console.log(`  ignorado  ${i}`);
+      return;
+    }
+
+    let config = loadConfig();
+    const novos: string[] = [];
+    const jaExistiam: string[] = [];
+
+    for (const c of candidatos) {
+      if (config.servers[c.nome]) {
+        jaExistiam.push(c.nome);
+        continue;
+      }
+      config = addServer(config, c.nome, c.servidor);
+      novos.push(c.nome);
+      console.log(
+        `  ${values.write ? '+' : '·'} ${c.nome.padEnd(28)} ${serverUrl(c.servidor)}` +
+          `  ${c.servidor.username}` +
+          (c.servidor.prod ? '  PRODUÇÃO' : '') +
+          (c.precisaIdentidade ? '  (sem companyId/userCode — rode server test)' : ''),
+      );
+    }
+
+    for (const nome of jaExistiam) console.log(`  = ${nome} (já cadastrado, mantido)`);
+    for (const i of ignorados) console.log(`  ignorado  ${i}`);
+
+    const semMarca = candidatos.filter((c) => !c.servidor.prod).map((c) => c.nome);
+    if (semMarca.length > 0) {
+      console.log(
+        `\nCONFIRA: estes NÃO foram marcados como produção, e portanto não terão\n` +
+          `gate de senha. A marca vem do nome do servidor, que é um palpite.\n` +
+          semMarca.map((n) => `  ${n}`).join('\n') +
+          `\nCorrija o que estiver errado com: fluigctl server set-prod <nome>`,
+      );
+    }
+
+    if (!values.write) {
+      console.log(`\n${novos.length} servidor(es) a importar. Repita com --write para gravar.`);
+      return;
+    }
+
+    saveConfig(config);
+    console.log(`\n${novos.length} servidor(es) gravados em ${configPath()}.`);
+    if (novos.length > 0) {
+      console.log('Nenhuma senha foi importada. Defina:');
+      for (const nome of novos) {
+        console.log(`  export ${config.servers[nome]!.passwordEnv}='...'`);
+      }
+    }
+    return;
+  }
+
   if (sub === 'rm') {
     const nome = resto[0];
     if (!nome) throw new ErroFluigctl('uso: fluigctl server rm <nome>', 2);
     saveConfig(removeServer(loadConfig(), nome));
     console.log(`${nome} removido de ${configPath()}`);
+    return;
+  }
+
+  if (sub === 'set-prod') {
+    const { values, positionals } = parseArgs({
+      args: resto,
+      allowPositionals: true,
+      options: { off: { type: 'boolean', default: false } },
+    });
+
+    const nome = positionals[0];
+    if (!nome) throw new ErroFluigctl('uso: fluigctl server set-prod <nome> [--off]', 2);
+
+    saveConfig(setProd(loadConfig(), nome, !values.off));
+    console.log(
+      values.off
+        ? `${nome} deixou de ser produção — push passa a rodar sem confirmação.`
+        : `${nome} marcado como produção — push passa a exigir a senha no terminal.`,
+    );
     return;
   }
 

@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "configurations": [
+    {
+      "id": "i9j0",
+      "name": "Produção",
+      "host": "fluig.outrocliente.com.br",
+      "ssl": true,
+      "port": 443,
+      "username": "svc.fluig",
+      "password": "eyJpdiI6InEifQ==",
+      "userCode": "99990069",
+      "companyId": 2
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import {
   defaultPasswordEnv,
   listServers,
   removeServer,
+  setProd,
 } from '../src/commands/server.js';
 
 const vazia: Config = { version: 1, servers: {} };
@@ -80,4 +81,25 @@ test('listServers marca produção e mostra a variável de senha', () => {
 
 test('listServers explica que não há servidor em vez de imprimir vazio', () => {
   assert.match(listServers(vazia), /nenhum servidor/i);
+});
+
+test('setProd marca e desmarca um servidor como produção', () => {
+  const config = addServer(vazia, 'cetenco-hml', entrada);
+
+  assert.equal(setProd(config, 'cetenco-hml', true).servers['cetenco-hml']!.prod, true);
+
+  const marcado = setProd(config, 'cetenco-hml', true);
+  assert.equal(setProd(marcado, 'cetenco-hml', false).servers['cetenco-hml']!.prod, undefined);
+});
+
+test('setProd reclama de servidor inexistente', () => {
+  assert.throws(() => setProd(vazia, 'fantasma', true), /fantasma/);
+});
+
+test('setProd não altera a config recebida', () => {
+  const config = addServer(vazia, 'cetenco-hml', entrada);
+
+  setProd(config, 'cetenco-hml', true);
+
+  assert.equal(config.servers['cetenco-hml']!.prod, undefined);
 });

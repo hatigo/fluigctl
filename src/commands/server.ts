@@ -1,4 +1,5 @@
 import { serverUrl, type Config, type Server } from '../config.js';
+import { ErroFluigctl } from '../errors.js';
 
 export type EntradaServidor = Omit<Server, 'passwordEnv'> & { passwordEnv?: string };
 
@@ -15,13 +16,14 @@ export function addServer(
   entrada: EntradaServidor,
 ): Config {
   if (!SLUG.test(nome)) {
-    throw new Error(
+    throw new ErroFluigctl(
       `nome de servidor inválido: "${nome}". ` +
         `Use minúsculas, números e hífen (ex.: cetenco-prod).`,
+      2,
     );
   }
   if (config.servers[nome]) {
-    throw new Error(`o servidor "${nome}" já existe. Remova-o antes de recadastrar.`);
+    throw new ErroFluigctl(`o servidor "${nome}" já existe. Remova-o antes de recadastrar.`, 2);
   }
 
   // Campo a campo, de propósito: garante que nada além do esperado — uma senha,
@@ -42,7 +44,7 @@ export function addServer(
 
 export function removeServer(config: Config, nome: string): Config {
   if (!config.servers[nome]) {
-    throw new Error(`o servidor "${nome}" não está cadastrado.`);
+    throw new ErroFluigctl(`o servidor "${nome}" não está cadastrado.`, 3);
   }
   const servers = { ...config.servers };
   delete servers[nome];
@@ -66,4 +68,17 @@ export function listServers(config: Config): string {
       );
     })
     .join('\n');
+}
+
+export function setProd(config: Config, nome: string, prod: boolean): Config {
+  const servidor = config.servers[nome];
+  if (!servidor) {
+    throw new ErroFluigctl(`o servidor "${nome}" não está cadastrado.`, 3);
+  }
+
+  const { prod: _atual, ...resto } = servidor;
+  return {
+    version: 1,
+    servers: { ...config.servers, [nome]: { ...resto, ...(prod ? { prod: true } : {}) } },
+  };
 }

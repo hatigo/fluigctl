@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "configurations": [
+    {
+      "id": "g7h8",
+      "name": "Sem Identidade",
+      "host": "outro.exemplo.com.br",
+      "ssl": false,
+      "port": 8080,
+      "username": "admin",
+      "password": "eyJpdiI6InoifQ=="
+    }
+  ]
+}
