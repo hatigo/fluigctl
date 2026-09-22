@@ -27,7 +27,7 @@ export interface OpcoesPushForm {
   persistenceType?: 'form' | 'list';
   descriptionField?: string;
   principal?: string;
-  novaVersao?: boolean;
+  versionOption?: '0' | '2';
   dryRun?: boolean;
   prompt: PromptSenha;
 }
@@ -105,6 +105,14 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
   await confirmProduction(server, senha, `push form ${fonte.nome} (${alvo})`, opcoes.prompt);
 
   if (decisao.acao === 'update') {
+    const versionOption = opcoes.versionOption;
+    if (versionOption === undefined) {
+      throw new ErroFluigctl(
+        'atualizar um formulário exige --keep-version ou --new-version',
+        2,
+      );
+    }
+
     await cliente.updateForm({
       documentId: decisao.documentId,
       cardDescription: fonte.nome,
@@ -112,7 +120,7 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
       datasetName: opcoes.datasetName ?? `ds${fonte.nome}`,
       anexos: fonte.anexos,
       eventos: fonte.eventos,
-      versionOption: opcoes.novaVersao ? '2' : '0',
+      versionOption,
     });
 
     return { ...base, acao: 'update', documentId: decisao.documentId };

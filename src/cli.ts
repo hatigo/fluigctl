@@ -13,6 +13,7 @@ import { addServer, listServers, removeServer, setProd } from './commands/server
 import { pushDataset } from './commands/push-dataset.js';
 import { pushForm } from './commands/push-form.js';
 import { importCandidates, scanServersJson } from './import.js';
+import { decideVersionOption } from './push/form-resolve.js';
 import { promptPassword } from './prompt.js';
 import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
@@ -29,7 +30,7 @@ const USO = `fluigctl — sobe datasets e formulários para o TOTVS Fluig
 
   fluigctl push dataset <arquivo.js> --server <nome> [--create] [--description D] [--dry-run]
   fluigctl push form <pasta/> --server <nome> [--document-id N] [--principal A]
-                              [--new-version] [--dry-run]
+                              (--keep-version | --new-version) [--dry-run]
                               [--create --parent-id N --dataset-name D --persistence-type form|list]
 
 A senha de cada servidor vem de variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD).
@@ -233,6 +234,7 @@ async function comandoPush(argv: string[]): Promise<void> {
       'description-field': { type: 'string' },
       principal: { type: 'string' },
       'new-version': { type: 'boolean', default: false },
+      'keep-version': { type: 'boolean', default: false },
     },
   });
 
@@ -279,6 +281,7 @@ type ValoresPush = {
   'description-field'?: string | undefined;
   principal?: string | undefined;
   'new-version'?: boolean | undefined;
+  'keep-version'?: boolean | undefined;
 };
 
 function inteiro(valor: string | undefined, flag: string): number | undefined {
@@ -307,6 +310,14 @@ async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<
     );
   }
 
+  // Decidido antes de qualquer chamada de rede: sobrescrever a versão ativa é
+  // irreversível e não pode acontecer por omissão.
+  const versionOption = decideVersionOption({
+    create: values.create ?? false,
+    keepVersion: values['keep-version'] ?? false,
+    newVersion: values['new-version'] ?? false,
+  });
+
   const servidor = resolveServer(loadConfig(), values.server);
   const senha = resolvePassword(servidor);
   const documentId = inteiro(values['document-id'], '--document-id');
@@ -325,7 +336,7 @@ async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<
       ? {}
       : { descriptionField: values['description-field'] }),
     ...(values.principal === undefined ? {} : { principal: values.principal }),
-    novaVersao: values['new-version'] ?? false,
+    ...(versionOption === undefined ? {} : { versionOption }),
     dryRun: values['dry-run'] ?? false,
     prompt: promptPassword,
   });

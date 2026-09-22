@@ -123,3 +123,51 @@ export function decideForm(entrada: EntradaDecisao): DecisaoForm {
     6,
   );
 }
+
+export interface EscolhaVersao {
+  create?: boolean;
+  keepVersion?: boolean;
+  newVersion?: boolean;
+}
+
+/**
+ * Traduz as flags de versão em `versionOption`.
+ *
+ * Num update a escolha é obrigatória: `"0"` sobrescreve a versão ativa no
+ * lugar e `"2"` cria a próxima. Sobrescrever é irreversível, então não pode
+ * ser o que acontece quando ninguém disse nada.
+ *
+ * Na criação não há o que escolher — `createSimpleCardIndexWithDatasetPersisteType`
+ * não tem o parâmetro.
+ */
+export function decideVersionOption(escolha: EscolhaVersao): '0' | '2' | undefined {
+  const { create, keepVersion, newVersion } = escolha;
+
+  if (keepVersion && newVersion) {
+    throw new ErroFluigctl(
+      'não dá para pedir --keep-version e --new-version ao mesmo tempo',
+      2,
+    );
+  }
+
+  if (create) {
+    if (keepVersion || newVersion) {
+      throw new ErroFluigctl(
+        'na criação de um formulário não se escolhe versão: ' +
+          '--keep-version e --new-version só valem para atualizar',
+        2,
+      );
+    }
+    return undefined;
+  }
+
+  if (keepVersion) return '0';
+  if (newVersion) return '2';
+
+  throw new ErroFluigctl(
+    'escolha o que fazer com a versão do formulário:\n' +
+      '  --keep-version  sobrescreve a versão ativa no lugar\n' +
+      '  --new-version   cria a próxima versão, preservando a atual',
+    2,
+  );
+}

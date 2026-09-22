@@ -35,8 +35,9 @@ fluigctl push dataset datasets/dsSTGObterProjetos.js --server cetenco-hml --dry-
 fluigctl push dataset datasets/dsSTGObterProjetos.js --server cetenco-hml
 fluigctl push dataset datasets/dsNovo.js --server cetenco-hml --create --description "Novo"
 
-fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --dry-run
-fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml
+fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --keep-version --dry-run
+fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --keep-version
+fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --new-version
 fluigctl push form forms/formNovo --server cetenco-hml \
   --create --parent-id 5 --dataset-name dsformNovo --persistence-type form
 ```
@@ -94,6 +95,27 @@ Com duas correspondências, o push para e lista os candidatos. Sem nenhuma,
 pede `--create` com `--parent-id`, `--dataset-name` e `--persistence-type` —
 nada disso é adivinhado, porque `persistenceType` não existe na operação de
 atualização e um erro na criação não tem conserto por essa via.
+
+### Versão
+
+Atualizar um formulário **exige** escolher, e a recusa acontece antes de
+qualquer chamada de rede:
+
+| flag | efeito |
+|---|---|
+| `--keep-version` | sobrescreve a versão ativa no lugar |
+| `--new-version` | cria a próxima versão; a anterior continua legível |
+
+Não há default. Sobrescrever a versão ativa é irreversível, e isso não pode
+ser o que acontece quando ninguém disse nada — o `fluigctl` roda tanto na sua
+mão quanto na de um agente, e o silêncio de um script não é consentimento.
+
+`--create` não aceita essas flags: `versionOption` não existe na operação de
+criação.
+
+Medido no servidor: as versões andam de mil em mil (1000 → 2000 → 3000) e o
+conteúdo antigo continua acessível por `getCardIndexContent`, então
+`--new-version` dá rollback de verdade.
 
 Vão como anexo todos os arquivos da pasta, com o caminho relativo preservado,
 **exceto** `events/` (que vira `customEvents`, em texto puro), o `.metadata` do

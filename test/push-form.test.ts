@@ -57,7 +57,7 @@ test('push form atualiza o formulário que casa pelo nome da pasta', async () =>
 
   try {
     const r = await pushForm({
-      server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), prompt: async () => '',
+      server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '0', prompt: async () => '',
     });
 
     assert.equal(r.acao, 'update');
@@ -75,7 +75,7 @@ test('push form não publica o .metadata junto', async () => {
 
   try {
     await pushForm({
-      server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), prompt: async () => '',
+      server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '0', prompt: async () => '',
     });
 
     assert.equal(escritas(a.fluig)[0]!.body.includes('.metadata'), false);
@@ -90,7 +90,7 @@ test('push form em dry-run não envia escrita nenhuma', async () => {
   try {
     const r = await pushForm({
       server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'),
-      dryRun: true, prompt: async () => '',
+      versionOption: '0', dryRun: true, prompt: async () => '',
     });
 
     assert.equal(r.acao, 'update');
@@ -107,7 +107,7 @@ test('push form em produção não escreve quando o gate recusa', async () => {
     await assert.rejects(
       () => pushForm({
         server: { ...a.server, prod: true }, senha: 'certa',
-        pasta: pasta('formSolicitacaoCompras'), prompt: async () => 'errada',
+        pasta: pasta('formSolicitacaoCompras'), versionOption: '0', prompt: async () => 'errada',
       }),
       /não confere/i,
     );
@@ -159,10 +159,28 @@ test('push form manda versionOption 2 quando se pede nova versão', async () => 
   try {
     await pushForm({
       server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'),
-      novaVersao: true, prompt: async () => '',
+      versionOption: '2', prompt: async () => '',
     });
 
     assert.match(escritas(a.fluig)[0]!.body, /<versionOption>2<\/versionOption>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('push form recusa atualizar sem escolha de versão, sem escrever nada', async () => {
+  const a = await ambiente();
+
+  try {
+    await assert.rejects(
+      () => pushForm({
+        server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'),
+        prompt: async () => '',
+      }),
+      /--keep-version|--new-version/,
+    );
+
+    assert.equal(escritas(a.fluig).length, 0);
   } finally {
     await a.fluig.close();
   }
