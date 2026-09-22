@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -33,16 +33,67 @@ export function resolveServer(config: Config, name: string): Server {
   return server;
 }
 
-export function resolvePassword(server: Server): string {
-  const senha = process.env[server.passwordEnv];
-  if (!senha) {
-    throw new ErroFluigctl(
-      `a variável de ambiente ${server.passwordEnv} não está definida. ` +
-        `Defina-a com a senha de ${server.username} antes de usar este servidor.`,
-      4,
-    );
+/** Arquivo opcional de senhas, ao lado do servers.json. */
+export function envFilePath(): string {
+  return join(dirname(configPath()), 'env');
+}
+
+/**
+ * Lê uma linha `NOME=valor` de um arquivo no formato de ambiente de shell.
+ * Aceita `export`, aspas simples, duplas ou nenhuma.
+ */
+function leDoArquivo(caminho: string, nome: string): string | undefined {
+  let conteudo: string;
+  try {
+    const modo = statSync(caminho).mode & 0o077;
+    if (modo !== 0) {
+      console.error(
+        `fluigctl: ${caminho} contém senha e está acessível a outros usuários. ` +
+          `Corrija com: chmod 600 ${caminho}`,
+      );
+    }
+    conteudo = readFileSync(caminho, 'utf8');
+  } catch {
+    return undefined;
   }
-  return senha;
+
+  for (const linha of conteudo.split('\n')) {
+    const limpa = linha.trim().replace(/^export\s+/, '');
+    if (limpa === '' || limpa.startsWith('#')) continue;
+
+    const igual = limpa.indexOf('=');
+    if (igual === -1) continue;
+    if (limpa.slice(0, igual).trim() !== nome) continue;
+
+    const valor = limpa.slice(igual + 1).trim();
+    const aspas = valor[0];
+    return aspas === "'" || aspas === '"'
+      ? valor.slice(1, valor.lastIndexOf(aspas))
+      : valor;
+  }
+
+  return undefined;
+}
+
+/**
+ * Descobre a senha do servidor.
+ *
+ * A variável de ambiente vem primeiro; o arquivo é a conveniência para quem
+ * não quer exportá-la a cada sessão. Quem lê é sempre o CLI — a senha não
+ * passa por quem invoca o comando.
+ */
+export function resolvePassword(server: Server, envPath = envFilePath()): string {
+  const doAmbiente = process.env[server.passwordEnv];
+  if (doAmbiente) return doAmbiente;
+
+  const doArquivo = leDoArquivo(envPath, server.passwordEnv);
+  if (doArquivo) return doArquivo;
+
+  throw new ErroFluigctl(
+    `não encontrei a senha de ${server.username}: a variável ` +
+      `${server.passwordEnv} não está definida e ${envPath} não a contém.`,
+    4,
+  );
 }
 
 export function serverUrl(server: Server): string {

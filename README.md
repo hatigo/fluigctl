@@ -60,13 +60,27 @@ tudo que **não** marcou e pede revisão. Corrija com `server set-prod <nome>`.
 
 ## Segredos
 
-Nenhuma senha é gravada em disco. `~/.config/fluigctl/servers.json` guarda só
-host, porta, usuário, `companyId`, `userCode` e o **nome** da variável de
-ambiente que contém a senha — derivado do nome do servidor
-(`cetenco-prod` → `FLUIG_CETENCO_PROD_PASSWORD`).
+`~/.config/fluigctl/servers.json` nunca contém senha. Guarda host, porta,
+usuário, `companyId`, `userCode` e o **nome** da variável que a contém,
+derivado do nome do servidor (`cetenco-prod` → `FLUIG_CETENCO_PROD_PASSWORD`).
+O arquivo pode ser lido, versionado e inspecionado sem expor credencial.
 
-Isso é proposital: o arquivo de config pode ser lido, versionado e inspecionado
-por qualquer ferramenta sem expor credencial.
+A senha vem, nesta ordem:
+
+1. a variável de ambiente;
+2. `~/.config/fluigctl/env`, no formato de shell, se a variável não estiver
+   definida.
+
+```sh
+# ~/.config/fluigctl/env   (chmod 600)
+export FLUIG_CETENCO_HML_PASSWORD='...'
+export FLUIG_CETENCO_PROD_PASSWORD='...'
+```
+
+O arquivo existe porque exportar a variável a cada sessão não funciona para
+processos não interativos — um shell zsh não interativo lê `.zshenv`, não
+`.zshrc`. Quem lê o arquivo é sempre o CLI. O `fluigctl` avisa se ele estiver
+acessível a outros usuários.
 
 ## Produção
 
