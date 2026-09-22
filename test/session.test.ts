@@ -123,3 +123,38 @@ test('findUserByLogin falha com mensagem útil quando o usuário não existe', a
     await fluig.close();
   }
 });
+
+test('ping aceita a resposta em JSON, que é o que o Fluig 1.8 devolve', async () => {
+  // Servidor real (CETENCO HML) responde {"response":"pong"}, não o texto puro.
+  const fluig = await fakeFluig({
+    [PING]: { headers: { 'content-type': 'application/json' }, body: '{"response":"pong"} ' },
+  });
+
+  try {
+    assert.equal(await ping(fluig.url, 'JSESSIONID=abc'), true);
+  } finally {
+    await fluig.close();
+  }
+});
+
+test('ping recusa JSON cujo response não é pong', async () => {
+  const fluig = await fakeFluig({
+    [PING]: { body: '{"response":"não autenticado"}' },
+  });
+
+  try {
+    assert.equal(await ping(fluig.url, 'JSESSIONID=abc'), false);
+  } finally {
+    await fluig.close();
+  }
+});
+
+test('ping recusa JSON que não tem campo response', async () => {
+  const fluig = await fakeFluig({ [PING]: { body: '{"erro":"sessão expirada"}' } });
+
+  try {
+    assert.equal(await ping(fluig.url, 'JSESSIONID=abc'), false);
+  } finally {
+    await fluig.close();
+  }
+});

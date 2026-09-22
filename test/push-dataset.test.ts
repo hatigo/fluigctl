@@ -17,6 +17,9 @@ function envelope(corpo: string): string {
   return `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>${corpo}</soap:Body></soap:Envelope>`;
 }
 
+const LOGIN = '/portal/api/servlet/login.do';
+const LOAD = '/ecm/api/rest/ecm/dataset/loadDataset';
+
 const LISTA = envelope(
   `<ns:findAllFormulariesDatasetsResponse xmlns:ns="http://ws.dataservice.ecm.technology.totvs.com/">
      <dataset><item><datasetId>dsSTGTEMP</datasetId><type>CUSTOM</type></item></dataset>
@@ -32,6 +35,17 @@ async function ambiente() {
   writeFileSync(arquivo, IMPL);
 
   const fluig = await fakeFluig({
+    [LOGIN]: { headers: { 'set-cookie': 'JSESSIONID=abc; Path=/' } },
+    [LOAD]: {
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        content: {
+          datasetPK: { datasetId: 'dsSTGTEMP' },
+          datasetDescription: 'Descrição que já existia no servidor',
+          datasetImpl: 'antigo',
+        },
+      }),
+    },
     [CAMINHO]: (req) => {
       if (req.method === 'GET') return { headers: { 'content-type': 'text/xml' }, body: WSDL };
       return {
@@ -152,6 +166,57 @@ test('push dataset recusa arquivo cujo dataset não existe no servidor', async (
       /--create/,
     );
     assert.equal(escritas(a.fluig).length, 0);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('update sem --description preserva a descrição que está no servidor', async () => {
+  // Medido no homolog da CETENCO: mandar a descrição errada a sobrescreve.
+  // Sem isso, todo push apagaria a descrição do dataset do cliente.
+  const a = await ambiente();
+
+  try {
+    await pushDataset({
+      server: a.server, senha: 'senha', arquivo: a.arquivo, prompt: async () => '',
+    });
+
+    assert.match(
+      escritas(a.fluig)[0]!.body,
+      /<description>Descrição que já existia no servidor<\/description>/,
+    );
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('update com --description explícita usa a que foi passada', async () => {
+  const a = await ambiente();
+
+  try {
+    await pushDataset({
+      server: a.server, senha: 'senha', arquivo: a.arquivo,
+      description: 'nova descrição', prompt: async () => '',
+    });
+
+    assert.match(escritas(a.fluig)[0]!.body, /<description>nova descrição<\/description>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('create usa a descrição passada, sem consultar o servidor', async () => {
+  const a = await ambiente();
+  const novo = join(a.dir, 'dsInedito.js');
+  writeFileSync(novo, IMPL);
+
+  try {
+    await pushDataset({
+      server: a.server, senha: 'senha', arquivo: novo, create: true,
+      description: 'dataset novo', prompt: async () => '',
+    });
+
+    assert.match(escritas(a.fluig)[0]!.body, /<description>dataset novo<\/description>/);
   } finally {
     await a.fluig.close();
   }

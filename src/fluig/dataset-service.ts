@@ -54,3 +54,35 @@ export async function datasetClient(
     },
   };
 }
+
+/**
+ * Lê a descrição atual de um dataset.
+ *
+ * `updateDataset` grava a descrição que receber, então mandar a errada apaga a
+ * do servidor — medido no homolog da CETENCO. Não há como obter a descrição
+ * pelo SOAP (`findAllFormulariesDatasets` não a devolve), daí o REST.
+ */
+export async function loadDatasetDescription(
+  baseUrl: string,
+  cookie: string,
+  nome: string,
+): Promise<string | undefined> {
+  const url =
+    `${baseUrl}/ecm/api/rest/ecm/dataset/loadDataset` +
+    `?datasetId=${encodeURIComponent(nome)}`;
+
+  const resposta = await fetch(url, { headers: { cookie }, redirect: 'manual' });
+  const texto = await resposta.text();
+
+  // O formato varia por servidor: o CETENCO HML devolve o dataset na raiz,
+  // outros embrulham em `content`. Aceita os dois.
+  try {
+    const lido = JSON.parse(texto) as {
+      datasetDescription?: string;
+      content?: { datasetDescription?: string } | null;
+    };
+    return lido.datasetDescription ?? lido.content?.datasetDescription;
+  } catch {
+    return undefined;
+  }
+}

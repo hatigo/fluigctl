@@ -124,7 +124,7 @@ test('push form recusa criar sem os parâmetros que não dá para adivinhar', as
   try {
     await assert.rejects(
       () => pushForm({
-        server: a.server, senha: 's', pasta: pasta('formEditalFiart'),
+        server: a.server, senha: 's', pasta: pasta('formNovoSimples'),
         create: true, prompt: async () => '',
       }),
       /--parent-id|--dataset-name|--persistence-type/,
@@ -141,7 +141,7 @@ test('push form cria e devolve o documentId novo do servidor', async () => {
 
   try {
     const r = await pushForm({
-      server: a.server, senha: 's', pasta: pasta('formEditalFiart'),
+      server: a.server, senha: 's', pasta: pasta('formNovoSimples'),
       create: true, parentId: 5, datasetName: 'dsformEditalFiart',
       persistenceType: 'form', prompt: async () => '',
     });

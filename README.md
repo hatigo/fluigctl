@@ -162,17 +162,20 @@ Os testes sobem um Fluig de mentira em `127.0.0.1`, servem o WSDL de fixture e
 conferem o XML SOAP enviado — inclusive a ordem dos parâmetros, que em
 RPC/literal é normativa.
 
-**Sem cobertura offline**, e assumido como tal:
+### O que foi medido no servidor
 
-- se `addDataset` num nome já existente duplica ou sobrescreve;
-- se `updateDataset` apaga a `description` atual quando não a informamos —
-  hoje mandamos o nome do dataset por falta de fonte melhor, e isso é
-  potencialmente destrutivo;
-- **a polaridade de `persistenceType`**: a documentação SOAP diz
-  `0 = Formulário, 1 = Lista` e o swagger REST diz o inverso. Seguimos a SOAP,
-  numa constante única em `push-form.ts`. Errar aqui não tem conserto por
-  update;
-- se `fileName` com `/` (asset em subpasta) é aceito pelo servidor;
-- a mudança de autenticação do Fluig 1.8.2.
+As perguntas abaixo estavam em aberto e foram respondidas contra o homolog da
+CETENCO (Fluig 1.8, `4.201.225.233:8021`), criando artefatos descartáveis:
 
-Todos se fecham com uma sessão em homologação e um formulário descartável.
+| Pergunta | Resposta medida |
+|---|---|
+| `addDataset` num nome existente duplica? | Não. O servidor recusa com `DuplicatedDatasetException` e nada muda. |
+| `updateDataset` apaga a `description`? | **Sim.** Grava o que receber. Por isso o update lê a descrição atual antes de enviar. |
+| `persistenceType`: 0 é Formulário ou Lista? | **0 = Formulário, 1 = Lista** — a documentação SOAP está certa, o swagger REST está invertido. Verificado por `metaListId`: 0 com `form`, 86 com `list`. |
+| `fileName` com `/` funciona? | **Não.** O servidor responde "O sistema não pode encontrar o caminho especificado". O push agora recusa antes de enviar. |
+| `versionOption` "0" e "2" | "0" mantém a versão, "2" cria a próxima. A numeração anda de mil em mil (1000 → 2000), não de um em um. |
+| O `ping` devolve texto? | Neste servidor devolve `{"response":"pong"}` em JSON. Os dois formatos são aceitos. |
+| O HTML principal precisa de algo? | Sim, uma tag `<form>`. Sem ela o servidor recusa. O push checa antes. |
+
+**Continua sem cobertura:** a mudança de autenticação do Fluig 1.8.2 em
+servidores que a tenham, e o comportamento em versões diferentes de 1.8.

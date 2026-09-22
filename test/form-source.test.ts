@@ -64,7 +64,7 @@ test('readForm aceita html com nome diferente da pasta', async () => {
 });
 
 test('readForm preserva o caminho relativo dos assets em subpasta', async () => {
-  const form = await readForm(pasta('formEditalFiart'));
+  const form = await readForm(pasta('formEditalFiart'), { permitirSubpastas: true });
 
   const nomes = form.anexos.map((a) => a.fileName).sort();
   assert.deepEqual(nomes, ['css/style.css', 'formEditalFiart.html', 'js/lib/select2.min.js']);
@@ -116,7 +116,7 @@ test('readForm devolve todos os eventos da pasta events', async () => {
 });
 
 test('readForm devolve lista de eventos vazia quando não há pasta events', async () => {
-  const form = await readForm(pasta('formEditalFiart'));
+  const form = await readForm(pasta('formEditalFiart'), { permitirSubpastas: true });
 
   assert.deepEqual(form.eventos, []);
 });
@@ -132,4 +132,30 @@ test('readForm aponta o html que existe em subpasta quando não há na raiz', as
 
   assert.ok(erro instanceof Error);
   assert.match(erro.message, /Diretorias\/formDiretorias\.html/);
+});
+
+test('readForm recusa anexo em subpasta, que o servidor não aceita', async () => {
+  // Medido no homolog da CETENCO: enviar fileName com "/" faz o servidor
+  // responder "O sistema não pode encontrar o caminho especificado". Falhar
+  // aqui poupa a viagem e diz o que fazer.
+  const erro = await readForm(pasta('formEditalFiart')).catch((e: Error) => e);
+
+  assert.ok(erro instanceof Error);
+  assert.match(erro.message, /js\/lib\/select2\.min\.js/);
+  assert.match(erro.message, /subpasta/i);
+});
+
+test('readForm aceita subpasta quando se pede explicitamente', async () => {
+  const form = await readForm(pasta('formEditalFiart'), { permitirSubpastas: true });
+
+  assert.equal(form.anexos.length, 3);
+});
+
+test('readForm recusa html principal sem tag form', async () => {
+  // O servidor responde "Formulário não possui tag form". Pré-checar evita
+  // publicar pela metade e dá a mensagem no lugar certo.
+  const erro = await readForm(pasta('formSemTagForm')).catch((e: Error) => e);
+
+  assert.ok(erro instanceof Error);
+  assert.match(erro.message, /tag <form>/i);
 });

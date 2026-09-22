@@ -26,6 +26,7 @@ export interface FonteForm {
 export interface OpcoesLeitura {
   principal?: string;
   tamanhoMaximo?: number;
+  permitirSubpastas?: boolean;
 }
 
 /** A TOTVS desaconselha base64 em filecontent para arquivos grandes. */
@@ -80,7 +81,21 @@ export async function readForm(
     });
   }
 
+  if (!opcoes.permitirSubpastas) {
+    const emSubpasta = anexos.filter((a) => a.fileName.includes('/'));
+    if (emSubpasta.length > 0) {
+      throw new ErroFluigctl(
+        `o servidor recusa anexo em subpasta ("O sistema não pode encontrar o ` +
+          `caminho especificado"). Achate estes arquivos na raiz da pasta e ` +
+          `ajuste as referências no HTML:\n  ` +
+          emSubpasta.map((a) => a.fileName).join('\n  '),
+        6,
+      );
+    }
+  }
+
   marcaPrincipal(anexos, nome, opcoes.principal);
+  exigeTagForm(anexos);
 
   return {
     nome,
@@ -168,6 +183,25 @@ function marcaPrincipal(anexos: AnexoForm[], nome: string, pedido?: string): voi
       htmlsNaRaiz.map((a) => a.fileName).join(', '),
     6,
   );
+}
+
+/**
+ * O Fluig lê o HTML principal para montar os campos e recusa a publicação com
+ * "Formulário não possui tag form" se não houver uma. Checar aqui evita a
+ * viagem e coloca a mensagem perto da causa.
+ */
+function exigeTagForm(anexos: AnexoForm[]): void {
+  const principal = anexos.find((a) => a.principal);
+  if (!principal) return;
+
+  const html = Buffer.from(principal.filecontent, 'base64').toString('utf8');
+  if (!/<form[\s>]/i.test(html)) {
+    throw new ErroFluigctl(
+      `${principal.fileName} não tem a tag <form> — o Fluig a exige para montar ` +
+        `os campos do formulário e recusa a publicação sem ela`,
+      6,
+    );
+  }
 }
 
 async function leEventos(pasta: string): Promise<EventoForm[]> {

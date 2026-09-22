@@ -45,8 +45,12 @@ export async function login(
 }
 
 /**
- * Revalida a sessão. O endpoint responde 200 mesmo sem sessão válida,
- * devolvendo a tela de login — por isso a checagem é do corpo, não do status.
+ * Revalida a sessão.
+ *
+ * O endpoint responde 200 mesmo sem sessão válida, devolvendo a tela de login,
+ * então a checagem é do corpo e nunca do status. O formato do corpo varia: o
+ * Fluig 1.8 do CETENCO devolve `{"response":"pong"}`, e há servidores que
+ * devolvem só o texto `pong`. Os dois valem.
  */
 export async function ping(baseUrl: string, cookie: string): Promise<boolean> {
   const resposta = await fetch(`${baseUrl}/portal/p/api/servlet/ping`, {
@@ -55,7 +59,14 @@ export async function ping(baseUrl: string, cookie: string): Promise<boolean> {
     redirect: 'manual',
   });
 
-  return (await resposta.text()).trim() === 'pong';
+  const corpo = (await resposta.text()).trim();
+  if (corpo === 'pong') return true;
+
+  try {
+    return (JSON.parse(corpo) as { response?: string }).response === 'pong';
+  } catch {
+    return false;
+  }
 }
 
 export async function findUserByLogin(

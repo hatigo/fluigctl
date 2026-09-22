@@ -1,6 +1,7 @@
 import { serverUrl, type Server } from '../config.js';
 import { confirmProduction, type PromptSenha } from '../guard.js';
-import { datasetClient } from '../fluig/dataset-service.js';
+import { datasetClient, loadDatasetDescription } from '../fluig/dataset-service.js';
+import { login } from '../fluig/session.js';
 import { datasetNameFromFile, decideDataset } from '../push/dataset-resolve.js';
 import { readDatasetFile } from '../push/dataset-source.js';
 
@@ -36,14 +37,23 @@ export async function pushDataset(
   const impl = readDatasetFile(arquivo);
   const bytes = Buffer.byteLength(impl, 'utf8');
 
-  const cliente = await datasetClient(serverUrl(server), server.companyId, server.username, senha);
+  const url = serverUrl(server);
+  const cliente = await datasetClient(url, server.companyId, server.username, senha);
   const { acao } = decideDataset(nome, await cliente.listCustom(), opcoes.create ?? false);
 
   if (opcoes.dryRun) return { nome, acao, bytes };
 
   await confirmProduction(server, senha, `push dataset ${nome} (${acao})`, opcoes.prompt);
 
-  const descricao = opcoes.description ?? nome;
+  // Num update sem descrição explícita, preserva a que está no servidor: o
+  // web service grava o que receber, então o default ingênuo apagaria a
+  // descrição do dataset do cliente.
+  let descricao = opcoes.description;
+  if (descricao === undefined && acao === 'update') {
+    const cookie = await login(url, server.username, senha);
+    descricao = await loadDatasetDescription(url, cookie, nome);
+  }
+  descricao ??= nome;
   if (acao === 'create') await cliente.add(nome, descricao, impl);
   else await cliente.update(nome, descricao, impl);
 
