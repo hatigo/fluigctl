@@ -4,7 +4,7 @@
   "description": "CLI para subir datasets e formulários no TOTVS Fluig",
   "type": "module",
   "bin": {
-    "fluigctl": "./dist/cli.js"
+    "fluigctl": "./dist/src/cli.js"
   },
   "engines": {
     "node": ">=22"
