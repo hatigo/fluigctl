@@ -26,7 +26,6 @@ export interface FonteForm {
 export interface OpcoesLeitura {
   principal?: string;
   tamanhoMaximo?: number;
-  permitirSubpastas?: boolean;
 }
 
 /** A TOTVS desaconselha base64 em filecontent para arquivos grandes. */
@@ -81,21 +80,9 @@ export async function readForm(
     });
   }
 
-  if (!opcoes.permitirSubpastas) {
-    const emSubpasta = anexos.filter((a) => a.fileName.includes('/'));
-    if (emSubpasta.length > 0) {
-      throw new ErroFluigctl(
-        `o servidor recusa anexo em subpasta ("O sistema não pode encontrar o ` +
-          `caminho especificado"). Achate estes arquivos na raiz da pasta e ` +
-          `ajuste as referências no HTML:\n  ` +
-          emSubpasta.map((a) => a.fileName).join('\n  '),
-        6,
-      );
-    }
-  }
-
   marcaPrincipal(anexos, nome, opcoes.principal);
   exigeTagForm(anexos);
+  achataSubpastas(anexos);
 
   return {
     nome,
@@ -183,6 +170,42 @@ function marcaPrincipal(anexos: AnexoForm[], nome: string, pedido?: string): voi
       htmlsNaRaiz.map((a) => a.fileName).join(', '),
     6,
   );
+}
+
+/**
+ * Envia cada anexo pelo nome do arquivo, sem a subpasta — como a extensão
+ * Fluiggers faz.
+ *
+ * O servidor recusa fileName com "/" ("O sistema não pode encontrar o caminho
+ * especificado", medido no homolog da CETENCO), mas guarda o anexo pelo nome e
+ * o formulário publicado continua achando `libs/select2.min.js`. Achatar é o
+ * que torna publicável a pasta como ela está no repositório.
+ *
+ * Dois arquivos com o mesmo nome em pastas diferentes virariam um só no
+ * servidor, e a extensão deixa o último sobrescrever o primeiro em silêncio.
+ * Aqui isso para a publicação.
+ */
+function achataSubpastas(anexos: AnexoForm[]): void {
+  const porNome = new Map<string, string[]>();
+  for (const anexo of anexos) {
+    const nome = posix.basename(anexo.fileName);
+    porNome.set(nome, [...(porNome.get(nome) ?? []), anexo.fileName]);
+  }
+
+  const repetidos = [...porNome.values()].filter((caminhos) => caminhos.length > 1);
+  if (repetidos.length > 0) {
+    throw new ErroFluigctl(
+      `o Fluig guarda os anexos do formulário só pelo nome, e estes caminhos ` +
+        `virariam o mesmo anexo:\n  ` +
+        repetidos.map((caminhos) => caminhos.join(' e ')).join('\n  ') +
+        `\nRenomeie um deles antes de publicar.`,
+      6,
+    );
+  }
+
+  for (const anexo of anexos) {
+    anexo.fileName = posix.basename(anexo.fileName);
+  }
 }
 
 /**

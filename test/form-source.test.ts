@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 
 import { readForm } from '../src/push/form-source.js';
+import { ErroFluigctl } from '../src/errors.js';
 
 function pasta(nome: string): string {
   return fileURLToPath(new URL(`./fixtures/forms/${nome}`, import.meta.url));
@@ -63,11 +64,14 @@ test('readForm aceita html com nome diferente da pasta', async () => {
   assert.equal(form.anexos.find((a) => a.principal)!.fileName, 'formInternoAprovadores.html');
 });
 
-test('readForm preserva o caminho relativo dos assets em subpasta', async () => {
-  const form = await readForm(pasta('formEditalFiart'), { permitirSubpastas: true });
+test('readForm envia os assets de subpasta só pelo nome, como a extensão', async () => {
+  // O servidor recusa fileName com "/" ("O sistema não pode encontrar o
+  // caminho especificado", medido no homolog da CETENCO). A extensão Fluiggers
+  // manda o nome do arquivo, e o formulário publicado acha o asset assim.
+  const form = await readForm(pasta('formEditalFiart'));
 
   const nomes = form.anexos.map((a) => a.fileName).sort();
-  assert.deepEqual(nomes, ['css/style.css', 'formEditalFiart.html', 'js/lib/select2.min.js']);
+  assert.deepEqual(nomes, ['formEditalFiart.html', 'select2.min.js', 'style.css']);
 });
 
 test('readForm desempata dois html pelo que tem o nome da pasta', () => {
@@ -116,7 +120,7 @@ test('readForm devolve todos os eventos da pasta events', async () => {
 });
 
 test('readForm devolve lista de eventos vazia quando não há pasta events', async () => {
-  const form = await readForm(pasta('formEditalFiart'), { permitirSubpastas: true });
+  const form = await readForm(pasta('formEditalFiart'));
 
   assert.deepEqual(form.eventos, []);
 });
@@ -134,21 +138,14 @@ test('readForm aponta o html que existe em subpasta quando não há na raiz', as
   assert.match(erro.message, /Diretorias\/formDiretorias\.html/);
 });
 
-test('readForm recusa anexo em subpasta, que o servidor não aceita', async () => {
-  // Medido no homolog da CETENCO: enviar fileName com "/" faz o servidor
-  // responder "O sistema não pode encontrar o caminho especificado". Falhar
-  // aqui poupa a viagem e diz o que fazer.
-  const erro = await readForm(pasta('formEditalFiart')).catch((e: Error) => e);
+test('readForm recusa dois arquivos que virariam o mesmo anexo', async () => {
+  // Achatados, lib/util.js e util.js seriam um anexo só no servidor. A
+  // extensão deixa um sobrescrever o outro; aqui a publicação para.
+  const erro = await readForm(pasta('formNomeRepetido')).catch((e: Error) => e);
 
-  assert.ok(erro instanceof Error);
-  assert.match(erro.message, /js\/lib\/select2\.min\.js/);
-  assert.match(erro.message, /subpasta/i);
-});
-
-test('readForm aceita subpasta quando se pede explicitamente', async () => {
-  const form = await readForm(pasta('formEditalFiart'), { permitirSubpastas: true });
-
-  assert.equal(form.anexos.length, 3);
+  assert.ok(erro instanceof ErroFluigctl);
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /lib\/util\.js e util\.js/);
 });
 
 test('readForm recusa html principal sem tag form', async () => {
