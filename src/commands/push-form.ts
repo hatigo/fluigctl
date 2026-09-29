@@ -26,6 +26,11 @@ export interface OpcoesPushForm {
   datasetName?: string;
   persistenceType?: 'form' | 'list';
   descriptionField?: string;
+  /**
+   * Descrição do formulário no servidor. Sem ela vale o nome da pasta — e um form
+   * criado com outro nome (ex.: pelo Studio) seria renomeado para o da pasta.
+   */
+  description?: string;
   principal?: string;
   versionOption?: '0' | '2';
   dryRun?: boolean;
@@ -115,7 +120,7 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
 
     await cliente.updateForm({
       documentId: decisao.documentId,
-      cardDescription: fonte.nome,
+      cardDescription: opcoes.description ?? fonte.nome,
       descriptionField: opcoes.descriptionField ?? '',
       datasetName: opcoes.datasetName ?? `ds${fonte.nome}`,
       anexos: fonte.anexos,
@@ -129,7 +134,7 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
   const documentId = await cliente.createForm({
     parentDocumentId: opcoes.parentId!,
     documentDescription: fonte.nome,
-    cardDescription: fonte.nome,
+    cardDescription: opcoes.description ?? fonte.nome,
     datasetName: opcoes.datasetName!,
     anexos: fonte.anexos,
     eventos: fonte.eventos,

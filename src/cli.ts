@@ -30,7 +30,7 @@ const USO = `fluigctl — sobe datasets, formulários e scripts de processo para
   fluigctl server test <nome>
 
   fluigctl push dataset <arquivo.js> --server <nome> [--create] [--description D] [--dry-run]
-  fluigctl push form <pasta/> --server <nome> [--document-id N] [--principal A]
+  fluigctl push form <pasta/> --server <nome> [--document-id N] [--principal A] [--description D]
                               (--keep-version | --new-version) [--dry-run]
                               [--create --parent-id N --dataset-name D --persistence-type form|list]
   fluigctl push process <processId> --server <nome> [--workflow <pasta>] [--dry-run]
@@ -279,6 +279,7 @@ async function comandoPush(argv: string[]): Promise<void> {
 type ValoresPush = {
   server?: string | undefined;
   create?: boolean | undefined;
+  description?: string | undefined;
   'dry-run'?: boolean | undefined;
   'document-id'?: string | undefined;
   'parent-id'?: string | undefined;
@@ -341,6 +342,7 @@ async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<
     ...(values['description-field'] === undefined
       ? {}
       : { descriptionField: values['description-field'] }),
+    ...(values.description === undefined ? {} : { description: values.description }),
     ...(values.principal === undefined ? {} : { principal: values.principal }),
     ...(versionOption === undefined ? {} : { versionOption }),
     dryRun: values['dry-run'] ?? false,

@@ -185,3 +185,18 @@ test('push form recusa atualizar sem escolha de versão, sem escrever nada', asy
     await a.fluig.close();
   }
 });
+
+test('push form com --description mantém a descrição do servidor em vez do nome da pasta', async () => {
+  const a = await ambiente();
+
+  try {
+    await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '0',
+      description: 'outroNome', prompt: async () => '',
+    });
+    const corpo = escritas(a.fluig)[0]!.body;
+    assert.match(corpo, /<cardDescription>outroNome<\/cardDescription>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
