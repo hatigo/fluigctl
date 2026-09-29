@@ -12,6 +12,7 @@ import {
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushForm } from './commands/push-form.js';
+import { pushProcess } from './commands/push-process.js';
 import { importCandidates, scanServersJson } from './import.js';
 import { decideVersionOption } from './push/form-resolve.js';
 import { promptPassword } from './prompt.js';
@@ -19,7 +20,7 @@ import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
 import { ErroFluigctl } from './errors.js';
 
-const USO = `fluigctl — sobe datasets e formulários para o TOTVS Fluig
+const USO = `fluigctl — sobe datasets, formulários e scripts de processo para o TOTVS Fluig
 
   fluigctl server ls
   fluigctl server add <nome> --host H [--port P] [--ssl] --user U [--prod]
@@ -32,6 +33,10 @@ const USO = `fluigctl — sobe datasets e formulários para o TOTVS Fluig
   fluigctl push form <pasta/> --server <nome> [--document-id N] [--principal A]
                               (--keep-version | --new-version) [--dry-run]
                               [--create --parent-id N --dataset-name D --persistence-type form|list]
+  fluigctl push process <processId> --server <nome> [--workflow <pasta>] [--dry-run]
+                              [--no-release] [--save-export <arquivo.xml>] [--base <export.xml>]
+      publica os scripts de workflow/scripts/<processId>.*.js num processo que já existe;
+      diagrama e atividades continuam sendo publicados pelo Fluig Studio
 
 A senha de cada servidor vem de variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD).
 Nenhuma senha é gravada em disco.`;
@@ -215,9 +220,10 @@ async function comandoServer(argv: string[]): Promise<void> {
 
 async function comandoPush(argv: string[]): Promise<void> {
   const tipo = argv[0];
-  if (tipo !== 'dataset' && tipo !== 'form') {
-    throw new ErroFluigctl(`push aceita "dataset" ou "form" — recebi "${tipo ?? ''}"`, 2);
+  if (tipo !== 'dataset' && tipo !== 'form' && tipo !== 'process') {
+    throw new ErroFluigctl(`push aceita "dataset", "form" ou "process" — recebi "${tipo ?? ''}"`, 2);
   }
+  if (tipo === 'process') return pushProcessCli(argv.slice(1));
 
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
@@ -359,6 +365,68 @@ async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<
     r.acao === 'update'
       ? `${r.nome} atualizado em ${alvo}, documentId ${r.documentId} — ${detalhe}.`
       : `${r.nome} criado em ${alvo} com documentId ${r.documentId} — ${detalhe}.`,
+  );
+}
+
+async function pushProcessCli(argv: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      workflow: { type: 'string', default: 'workflow' },
+      'dry-run': { type: 'boolean', default: false },
+      'no-release': { type: 'boolean', default: false },
+      'save-export': { type: 'string' },
+      base: { type: 'string' },
+    },
+  });
+
+  const processId = positionals[0];
+  if (!processId || !values.server) {
+    throw new ErroFluigctl(
+      'uso: fluigctl push process <processId> --server <nome> [--workflow <pasta>] [--dry-run] [--no-release]',
+      2,
+    );
+  }
+
+  const servidor = resolveServer(loadConfig(), values.server);
+  const senha = resolvePassword(servidor);
+
+  const r = await pushProcess({
+    server: servidor,
+    senha,
+    processId,
+    pastaWorkflow: values.workflow,
+    dryRun: values['dry-run'],
+    liberar: !values['no-release'],
+    ...(values['save-export'] === undefined ? {} : { salvarExport: values['save-export'] }),
+    ...(values.base === undefined ? {} : { base: values.base }),
+    prompt: promptPassword,
+  });
+
+  const alvo = `${values.server} (${serverUrl(servidor)})`;
+  const lista = (ids: string[]) => (ids.length ? ids.join(', ') : '-');
+  console.log(`${processId} em ${alvo}`);
+  console.log(`  alterados            ${lista(r.alterados)}`);
+  console.log(`  iguais               ${lista(r.iguais)}`);
+  if (r.semScriptLocal.length) console.log(`  sem script local     ${lista(r.semScriptLocal)} (ficam como estão)`);
+  if (r.semEventoNoServidor.length) {
+    console.log(`  sem evento no servidor ${lista(r.semEventoNoServidor)} (evento novo: exporte pelo Studio)`);
+  }
+
+  if (values['dry-run']) {
+    console.log(r.alterados.length ? '[dry-run] Nada foi enviado.' : '[dry-run] Nada a publicar.');
+    return;
+  }
+  if (!r.publicado) {
+    console.log('Nada a publicar: os scripts do servidor já são os do repositório.');
+    return;
+  }
+  console.log(
+    r.liberado === null
+      ? `Publicado; versão nova em edição (--no-release). Import: ${r.mensagemImport || '-'}`
+      : `Publicado e liberado. Import: ${r.mensagemImport || '-'} · Liberação: ${r.mensagemLiberacao || '-'}`,
   );
 }
 
