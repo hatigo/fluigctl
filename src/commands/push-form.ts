@@ -62,9 +62,10 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
     server.userCode,
   );
 
+  const catalogo = await cliente.listForms();
   const decisao = decideForm({
     nome: fonte.nome,
-    catalogo: await cliente.listForms(),
+    catalogo,
     ...(opcoes.documentId === undefined ? {} : { documentId: opcoes.documentId }),
     ...(fonte.documentIdDaPasta === undefined
       ? {}
@@ -118,11 +119,31 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
       );
     }
 
+    // Sem --dataset-name vale o dataset que o formulário já tem no servidor: um form criado com
+    // outro nome (ex.: pelo Studio) é recusado com ds<pasta> se esse nome já for de outro form.
+    const noServidor = catalogo.find((f) => f.documentId === decisao.documentId);
+
+    // O servidor recusa um nome de dataset que já é de outro formulário, mas só depois de desativar
+    // o dataset atual deste (visto no HML: dsformSolicitacaoReembolso ficou inativo). Recusar aqui.
+    if (opcoes.datasetName !== undefined) {
+      const dono = catalogo.find(
+        (f) => f.datasetName === opcoes.datasetName && f.documentId !== decisao.documentId,
+      );
+      if (dono) {
+        throw new ErroFluigctl(
+          `o dataset "${opcoes.datasetName}" já é do formulário ${dono.documentId} ` +
+            `("${dono.documentDescription}"). Mandar esse nome desativa o dataset atual do ` +
+            `formulário ${decisao.documentId} antes de o servidor recusar.`,
+          6,
+        );
+      }
+    }
+
     await cliente.updateForm({
       documentId: decisao.documentId,
       cardDescription: opcoes.description ?? fonte.nome,
       descriptionField: opcoes.descriptionField ?? '',
-      datasetName: opcoes.datasetName ?? `ds${fonte.nome}`,
+      datasetName: opcoes.datasetName ?? (noServidor?.datasetName || `ds${fonte.nome}`),
       anexos: fonte.anexos,
       eventos: fonte.eventos,
       versionOption,

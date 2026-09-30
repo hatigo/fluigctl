@@ -17,6 +17,7 @@ const env = (c: string) =>
 const LISTA = env(
   `<ns:getCardIndexesWithoutApproverResponse xmlns:ns="${NS}"><result>
      <item><documentId>8</documentId><documentDescription>formSolicitacaoCompras</documentDescription><datasetName>dsformSolicitacaoCompras</datasetName></item>
+     <item><documentId>902</documentId><documentDescription>formSolicitacaoReembolso</documentDescription><datasetName>dsformSolicitacaoReembolso</datasetName></item>
    </result></ns:getCardIndexesWithoutApproverResponse>`,
 );
 const okMsg = (op: string, id = 8) =>
@@ -196,6 +197,53 @@ test('push form com --description mantém a descrição do servidor em vez do no
     });
     const corpo = escritas(a.fluig)[0]!.body;
     assert.match(corpo, /<cardDescription>outroNome<\/cardDescription>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('push form na atualização mantém o dataset do servidor em vez de ds<pasta>', async () => {
+  const a = await ambiente();
+
+  try {
+    await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), documentId: 902, versionOption: '2',
+      prompt: async () => '',
+    });
+    const corpo = escritas(a.fluig)[0]!.body;
+    assert.match(corpo, /<datasetName>dsformSolicitacaoReembolso<\/datasetName>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('push form com --dataset-name na atualização usa o nome informado', async () => {
+  const a = await ambiente();
+
+  try {
+    await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '0',
+      datasetName: 'dsOutro', prompt: async () => '',
+    });
+    const corpo = escritas(a.fluig)[0]!.body;
+    assert.match(corpo, /<datasetName>dsOutro<\/datasetName>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('push form recusa, sem escrever, dataset que já é de outro formulário', async () => {
+  const a = await ambiente();
+
+  try {
+    await assert.rejects(
+      pushForm({
+        server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), documentId: 902, versionOption: '0',
+        datasetName: 'dsformSolicitacaoCompras', prompt: async () => '',
+      }),
+      (e: Error & { codigo?: number }) => e.codigo === 6 && /dsformSolicitacaoCompras/.test(e.message) && /8/.test(e.message),
+    );
+    assert.equal(escritas(a.fluig).length, 0);
   } finally {
     await a.fluig.close();
   }
