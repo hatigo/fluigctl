@@ -121,8 +121,9 @@ cria bloco que falta.
 
 - Blobs XStream aninhados dentro de atributos (`org.eclipse.bpmn2.impl.*`,
   `com.totvs.tds.ecm.workflow.model.*`).
-- `>` cru dentro de valor de atributo: regex perde ~60% dos atributos. Precisa
-  de um parser XML de verdade — e dependência nova é decisão do dono.
+- `>` cru dentro de valor de atributo: uma regex ingênua perde ~60% dos
+  atributos. O tokenizer precisa consumir o valor entre aspas inteiro (ver
+  Decisões, item 1).
 - Codificação: `.process` é ASCII com referências numéricas, o ecm30 é UTF-8
   sem declaração, o servidor exporta latin1 e lê UTF-8 no import (o incidente
   do "?" registrado em `src/commands/push-process.ts`).
@@ -135,10 +136,11 @@ servidor. Versão é substituída, não apagada.
 
 Cada fase só termina com o teste diferencial verde nos 74 pares.
 
-### 1. `fluigctl convert process <arquivo.process>`
+### 1. `fluigctl push diagram <arquivo.process> --dry-run --save-xml <arquivo>`
 
-Offline: lê o `.process`, grava o XML. A alavanca é o harness diferencial: compara, normalizado (ordem de atributos,
-espaço, PKs de versão), o XML gerado com o ecm30 que o Studio exportou.
+Offline, sem sessão: lê o `.process`, grava o XML. A alavanca é o harness
+diferencial: compara, normalizado (ordem de atributos, espaço, PKs de versão),
+o XML gerado com o ecm30 que o Studio exportou.
 Ordem de cobertura: o que o MVP já cobre → gateways + condições → eventos
 intermediários, incluindo temporizadores → tarefas de serviço + eventos de erro
 → anotações e bendpoints.
@@ -155,11 +157,12 @@ propriedades avançadas (filhos 7, 13, 14, 16, 17, 18).
 **Aceite:** os 74 pares batem nos 20 filhos, e os 10 estados de subprocesso
 geram `SubProcessFieldRelationship` igual ao do Studio.
 
-### 3. `push process --diagram` (ou equivalente)
+### 3. `fluigctl push diagram <arquivo.process> --server <s>`
 
-XML gerado + scripts pelo `aplicarScripts` existente, pelo mesmo caminho de
-hoje: `createVersion` → `importProcess` → `releaseProcess`. Antes de enviar,
-confere no destino `formId`, categoria e alvos de subprocesso.
+Só atualiza processo que já existe, como o `push process` de hoje. XML gerado
+mais os scripts pelo `aplicarScripts` existente, pelo mesmo caminho:
+`createVersion` → `importProcess` → `releaseProcess`. Antes de enviar, confere
+no destino `formId` (Decisões, item 4), categoria e alvos de subprocesso.
 
 Primeiro no homolog, com um processo descartável. O gate de produção não muda.
 
@@ -170,12 +173,32 @@ enviado não vale logo depois do import: no HML da Cetenco o export devolveu a
 versão nova com os eventos antigos (ver o comentário no fim de
 `src/commands/push-process.ts`).
 
-## Decisões em aberto (do dono)
+## Decisões (30/09/2026)
 
-- Dependência de parser XML: qual, e se entra.
-- Forma do comando: `convert process` + `push process --diagram`, ou outra.
-- O que fazer com os 2 `.process` inválidos e com `BpmnGroup`.
-- Resolver `formId` pelo nome do formulário, como o fluig-cd faz, ou exigir o id.
+"Fazer como o fluig-cd faz."
+
+1. **Parser: sem dependência.** Tokenizer próprio, como o `tokenize` de
+   `processConverter.ts`: a regex de tag consome valores entre aspas
+   (`"[^"]*"`), então `>` dentro de atributo não quebra. Os ~60% perdidos
+   medidos antes vieram de uma regex ingênua de contagem, não desse tokenizer.
+   Entidades são decodificadas (o `.process` usa referências numéricas).
+2. **Comando recebe o arquivo:**
+   `fluigctl push diagram <arquivo.process> --server <s> [--dry-run] [--save-xml <arquivo>] [--no-release]`.
+   O `processId` é lido de dentro do `.process` — nome do arquivo ≠ `processId`
+   em 13/118. O `convert` da fase 1 é `push diagram --dry-run --save-xml`,
+   offline e sem sessão: não resolve `formId` pelo nome, grava o XML com o que
+   o arquivo tem e avisa. Os scripts continuam entrando pelo `aplicarScripts`
+   (`workflow/scripts/<processId>.*.js`).
+3. **Não suportado é erro explícito** listando os tipos, como no fluig-cd. Vale
+   para os 2 `.process` inválidos e para `BpmnGroup`.
+4. **`formId` como no fluig-cd:** `cardIndex` numérico é usado direto; senão,
+   procura pelo `documentDescription` do formulário no servidor de destino.
+   Desvio de propósito: o fluig-cd segue com `formId` 0 quando não acha; o
+   `fluigctl` recusa com código 6 antes de enviar. Nome achado em mais de um
+   formulário também recusa com 6.
+5. **Processo novo fica fora da fase 3.** O fluig-cd cria com `newProcess`
+   quando não existe; aqui só se atualiza processo existente, como no
+   `push process`. Revisitar depois.
 
 ## Fora de escopo
 
