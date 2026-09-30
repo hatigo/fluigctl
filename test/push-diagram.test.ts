@@ -426,8 +426,8 @@ test('valor sem mapeamento conferido continua recusado com código 6', () => {
     [FASE1.replace('&lt;runType>HOUR', '&lt;runType>WEEK'), /gatilho não suportado em intermediatetimer14/],
     [FASE1.replace('type="126"', 'type="121"'), /BpmnGateway \(type 121\)/],
     [
-      FASE1.replace('<bpmn2:BpmnEndEvent', '<bpmn2:BpmnIntermediateEvent id="intermediatelink40" name="L" type="42" sequenceAttached="0" signalId="0"/>\n  <bpmn2:BpmnEndEvent'),
-      /BpmnIntermediateEvent \(type 42\)/,
+      FASE1.replace('<bpmn2:BpmnEndEvent', '<bpmn2:BpmnIntermediateEvent id="intermediatelink40" name="L" type="44" sequenceAttached="0" signalId="0"/>\n  <bpmn2:BpmnEndEvent'),
+      /BpmnIntermediateEvent \(type 44\)/,
     ],
     [
       FASE1.replace('&lt;targetTask>task8&lt;/targetTask>', '&lt;targetTask>task8&lt;/targetTask>&#xA;    &lt;mechanism>Usu&#xe1;rio&lt;/mechanism>'),
@@ -525,4 +525,121 @@ test('script com caractere de controle fora de tab, LF e CR é recusado com cód
   assert.equal(erro.codigo, 6);
   assert.match(erro.message, /script servicetask5 com caractere de controle U\+0001/);
   assert.doesNotThrow(() => converterDiagrama(FASE1, { companyId: 1, scripts: new Map([['servicetask5', 'a\tb\r\nc']]) }));
+});
+
+/** Diagrama sintético de eventos de link: pool, lane, nós com forma e fluxos. */
+function diagramaDeLink(nos: [tipo: string, id: string, attrs: string][], fluxos: [id: string, de: string, para: string][]): string {
+  const forma = (id: string, x: number, y: number, dentro = '') =>
+    `    <children xsi:type="pi:ContainerShape" visible="true" active="true">\n` +
+    `      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="40" height="40" x="${x}" y="${y}"/>\n` +
+    `      <link businessObjects="${id}"/>\n${dentro}    </children>\n`;
+  const extra = 'extendedFields="&lt;list/>"';
+  return [
+    FASE1.split('\n').slice(0, 2).join('\n'),
+    '  <pi:Diagram visible="true" gridUnit="10" diagramTypeId="BPMNdiagram" name="processoLink" snapToGrid="true" version="0.16.0">',
+    '    <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1000" height="1000"/>',
+    forma('bpmnpool1', 10, 10, forma('bpmnswimlane2', 30, 0)).trimEnd(),
+    ...nos.map(([, id], i) => forma(id, 100 + i * 50, 50).trimEnd()),
+    '  </pi:Diagram>',
+    '  <bpmn2:BpmnPool id="bpmnpool1" name="Link" cores="FFFFFF"/>',
+    '  <bpmn2:BpmnSwimLane id="bpmnswimlane2" name="Todos"/>',
+    ...nos.map(([tipo, id, attrs]) => `  <bpmn2:${tipo} id="${id}" name="${id}" ${extra} ${attrs}/>`),
+    '  <bpmn2:BpmnProcess id="processoLink" name="Processo Link" version="1" cardIndex="99" extendedFields="&lt;list/>"/>',
+    ...fluxos.map(([id, de, para]) => `  <bpmn2:SequenceFlow id="${id}" name="" sourceRef="${de}" targetRef="${para}" atividadeFluxo="" atividadeRetorno="" ${extra}/>`),
+    '</xmi:XMI>',
+  ].join('\n');
+}
+
+const INICIO: [string, string, string] = ['BpmnStartEvent', 'startevent1', 'type="10" signalId="0"'];
+const TAREFA = (id: string): [string, string, string] => ['BpmnTask', id, 'type="80" loopType="0" authNotify="true" esforcoCalculo="0"'];
+const FIM: [string, string, string] = ['BpmnEndEvent', 'endevent8', 'type="60" signalId="0"'];
+const LANCA = (id: string, alvo: string): [string, string, string] =>
+  ['BpmnIntermediateEvent', id, `type="36" sequenceAttached="0" signalId="0"${alvo ? ` linkId="${alvo}"` : ''}`];
+const CAPTURA = (id: string): [string, string, string] =>
+  ['BpmnIntermediateEvent', id, 'type="42" sequenceAttached="0" signalId="0"'];
+
+/** Um lançamento (3) com um fluxo de entrada, um recebimento (4). */
+const LINK_SIMPLES = diagramaDeLink(
+  [INICIO, TAREFA('task2'), LANCA('intermediatelink3', 'intermediatelinkreceive4'), CAPTURA('intermediatelinkreceive4'), ['BpmnEndEvent', 'endevent5', 'type="60" signalId="0"']],
+  [['flow10', 'startevent1', 'task2'], ['flow11', 'task2', 'intermediatelink3'], ['flow12', 'intermediatelinkreceive4', 'endevent5']],
+);
+
+/** Dois lançamentos (5 e 6) para o mesmo recebimento (7); o 5 tem dois fluxos de entrada. */
+const LINK_VARIOS = diagramaDeLink(
+  [
+    INICIO, TAREFA('task2'), TAREFA('task3'), TAREFA('task4'),
+    LANCA('intermediatelink5', 'intermediatelinkreceive7'), LANCA('intermediatelink6', 'intermediatelinkreceive7'),
+    CAPTURA('intermediatelinkreceive7'), FIM,
+  ],
+  [
+    ['flow20', 'startevent1', 'task2'], ['flow21', 'task2', 'task3'], ['flow22', 'task2', 'intermediatelink6'],
+    ['flow23', 'task3', 'task4'], ['flow24', 'task3', 'intermediatelink5'], ['flow30', 'task4', 'intermediatelink5'],
+    ['flow40', 'intermediatelinkreceive7', 'endevent8'],
+  ],
+);
+
+const linksDe = (xml: string) =>
+  filhosDaRaiz(xml)[4]!.filhos.map((l) => [
+    texto(l, 'processLinkPK', 'linkSequence'), texto(l, 'initialStateSequence'), texto(l, 'finalStateSequence'),
+  ].join(':'));
+
+test('evento de link: o fluxo que chega no 36 vira um ProcessLink do 36 ao 42, sem name', () => {
+  const r = converterDiagrama(LINK_SIMPLES, { companyId: 1 });
+  assert.deepEqual(linksDe(r.xml), ['10:1:2', '11:2:3', '12:4:5', '13:3:4']);
+  assert.equal(r.contagens.links, 4);
+  const sintetico = filhosDaRaiz(r.xml)[4]!.filhos.find((l) => texto(l, 'processLinkPK', 'linkSequence') === '13')!;
+  assert.deepEqual(
+    sintetico.filhos.map((f) => f.nome),
+    ['processLinkPK', 'actionLabel', 'returnPermited', 'initialStateSequence', 'finalStateSequence', 'returnLabel', 'automaticLink', 'defaultLink', 'type'],
+  );
+  assert.equal(texto(sintetico, 'processLinkPK', 'version'), '1');
+  assert.equal(texto(sintetico, 'returnPermited'), 'false');
+  assert.equal(texto(sintetico, 'type'), '0');
+  const estados = porCampo(filhosDaRaiz(r.xml)[2]!, 'processStatePK', 'sequence');
+  for (const [seq, tipo] of [['3', '36'], ['4', '42']] as const) {
+    assert.equal(texto(estados.get(seq)!, 'bpmnType'), tipo);
+    assert.equal(texto(estados.get(seq)!, 'stateType'), '0');
+    assert.equal(texto(estados.get(seq)!, 'instruction'), 'Evento intermediário do processo');
+    assert.equal(texto(estados.get(seq)!, 'signalId'), '0');
+    assert.equal(texto(estados.get(seq)!, 'parentSequence'), '0');
+    assert.equal(texto(estados.get(seq)!, 'initialState'), 'false');
+  }
+});
+
+test('evento de link: um link por fluxo de entrada, em ordem do sufixo do fluxo, com sequence max+1, max+2...', () => {
+  const links = linksDe(converterDiagrama(LINK_VARIOS, { companyId: 1 }).xml);
+  // Maior sufixo do arquivo: flow40. A ordem é a do fluxo de entrada (22, 24, 30), não a do lançamento (6, 5, 5).
+  assert.deepEqual(links.slice(-3), ['41:6:7', '42:5:7', '43:5:7']);
+  assert.equal(links.length, 7 + 3);
+});
+
+test('evento de link recusado: sem linkId, linkId que não resolve, linkId fora de um 36, saída do 36, 42 órfão', () => {
+  const casos: [string, RegExp][] = [
+    [LINK_SIMPLES.replace(' linkId="intermediatelinkreceive4"', ''), /evento de link intermediatelink3 sem um único recebimento/],
+    [LINK_SIMPLES.replace('linkId="intermediatelinkreceive4"', 'linkId="intermediatelinkreceive9"'), /evento de link intermediatelink3 sem um único recebimento/],
+    [LINK_SIMPLES.replace('linkId="intermediatelinkreceive4"', 'linkId="task2"'), /evento de link intermediatelink3 sem um único recebimento/],
+    [LINK_SIMPLES.replace('type="42" sequenceAttached="0"', 'type="42" linkId="task2" sequenceAttached="0"'), /intermediatelinkreceive4 anexado a outro elemento/],
+    [
+      LINK_SIMPLES.replace('</xmi:XMI>', '  <bpmn2:SequenceFlow id="flow13" name="" sourceRef="intermediatelink3" targetRef="endevent5" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>\n</xmi:XMI>'),
+      /evento de link intermediatelink3 \(36\) com fluxo de saída/,
+    ],
+    [
+      LINK_SIMPLES.replace('</xmi:XMI>', '  <bpmn2:SequenceFlow id="flow13" name="" sourceRef="task2" targetRef="intermediatelinkreceive4" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>\n</xmi:XMI>'),
+      /evento de link intermediatelinkreceive4 \(42\) com fluxo de entrada/,
+    ],
+    [LINK_SIMPLES.replace('linkId="intermediatelinkreceive4"', 'sequenceAttached="0"'), /sem um único recebimento/],
+    [
+      diagramaDeLink(
+        [INICIO, CAPTURA('intermediatelinkreceive4'), ['BpmnEndEvent', 'endevent5', 'type="60" signalId="0"']],
+        [['flow10', 'startevent1', 'endevent5'], ['flow12', 'intermediatelinkreceive4', 'endevent5']],
+      ),
+      /evento de link intermediatelinkreceive4 \(42\) sem nenhum 36 apontando/,
+    ],
+  ];
+  for (const [diagrama, motivo] of casos) {
+    assert.notEqual(diagrama, LINK_SIMPLES);
+    const erro = erroDe(() => converterDiagrama(diagrama, { companyId: 1 }));
+    assert.equal(erro.codigo, 6, String(motivo));
+    assert.match(erro.message, motivo);
+  }
 });

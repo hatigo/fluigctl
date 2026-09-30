@@ -26,6 +26,10 @@
  * "Gabarito" é o par em que a versão, os estados e os links do ecm30 são
  * exatamente os do `.process`: nos outros, o ecm30 é de outra versão do
  * diagrama e a diferença não diz nada sobre o conversor.
+ *
+ * "Mesma versão" é o par que tem versão e estados iguais, mas o ecm30 tem links
+ * que o `.process` não tem (os `ProcessLink`s que o Studio cria entre eventos
+ * de link 36/42). Não entra no gabarito; é reportado à parte.
  */
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -54,7 +58,7 @@ const IGNORADOS: { entidade: string; campo: string; motivo: string }[] = [
 
 const FILHOS_COMPARADOS = [0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 15, 19] as const;
 const TIPOS_COBERTOS = new Set([
-  '10', '80', '81', '82', '84', '87', '32', '35', '37', '41', '43', '120', '126', '127', '60', '64', '65', '68',
+  '10', '80', '81', '82', '84', '87', '32', '35', '36', '37', '41', '42', '43', '120', '126', '127', '60', '64', '65', '68',
 ]);
 const TIPOS_DE_NO = new Set([
   'BpmnStartEvent', 'BpmnTask', 'BpmnEndEvent', 'BpmnGateway', 'BpmnIntermediateEvent', 'BpmnSubProcess',
@@ -207,6 +211,10 @@ async function main(argv: string[]): Promise<void> {
   const contagemCampos = new Map<string, { n: number; exemplo: Diferenca }>();
   const resumo = { pares: pares.length, ilegiveis: 0, gabarito: 0, suportados: 0, suportadosOk: 0, gabaritoOk: 0 };
   const okPorFilho = new Map<number, number>(FILHOS_COMPARADOS.map((f) => [f, 0]));
+  const mv = {
+    pares: 0, ok: 0, comLink: 0, comLinkSlot4: 0, comLinkTodos: 0,
+    porFilho: new Map<number, number>(), divergencias: [] as string[],
+  };
   const scripts = { iguais: 0, diferentes: [] as string[], semArquivo: 0, soLocal: 0, gabIguais: 0, gabDiferentes: 0 };
 
   for (const par of pares) {
@@ -253,6 +261,15 @@ async function main(argv: string[]): Promise<void> {
       iguais(seqs.nos, new Set(estadosStudio.map((e) => campo(e, 'processStatePK.sequence')))) &&
       iguais(seqs.fluxos, new Set(linksStudio.map((l) => campo(l, 'processLinkPK.linkSequence'))));
     if (gabarito) resumo.gabarito++;
+    const linksDoStudio = new Set(linksStudio.map((l) => campo(l, 'processLinkPK.linkSequence')));
+    const mesmaVersao =
+      !gabarito &&
+      versaoDiagrama === campo(sPDV, 'processDefinitionVersionPK.version') &&
+      iguais(seqs.nos, new Set(estadosStudio.map((e) => campo(e, 'processStatePK.sequence')))) &&
+      [...seqs.fluxos].every((x) => linksDoStudio.has(x));
+    const comLinkDeEvento = diagrama.objetos.some(
+      (o) => o.tipo === 'BpmnIntermediateEvent' && (o.attrs['type'] === '36' || o.attrs['type'] === '42'),
+    );
 
     const cobertos = new Set(
       estadosStudio.filter((e) => TIPOS_COBERTOS.has(campo(e, 'bpmnType'))).map((e) => campo(e, 'processStatePK.sequence')),
@@ -322,9 +339,21 @@ async function main(argv: string[]): Promise<void> {
       }
     }
 
+    if (mesmaVersao) {
+      mv.pares++;
+      if (total === 0) mv.ok++;
+      if (comLinkDeEvento) {
+        mv.comLink++;
+        if (difsPorFilho.get(4)!.length === 0) mv.comLinkSlot4++;
+        if (total === 0) mv.comLinkTodos++;
+        for (const [f, d] of difsPorFilho) if (d.length === 0) mv.porFilho.set(f, (mv.porFilho.get(f) ?? 0) + 1);
+        for (const d of [...difsPorFilho.values()].flat()) mv.divergencias.push(`${nome}: ${d.chave}  studio=${JSON.stringify(d.esperado)}  gerado=${JSON.stringify(d.obtido)}`);
+      }
+    }
+
     const filhosTexto = [...difsPorFilho].map(([f, d]) => `${f}:${d.length === 0 ? 'ok' : d.length}`).join(' ');
     console.log(
-      `${total === 0 ? 'ok   ' : 'diff '} ${gabarito ? 'gabarito' : 'antigo  '} ${nome}  [${filhosTexto}]` +
+      `${total === 0 ? 'ok   ' : 'diff '} ${gabarito ? 'gabarito' : mesmaVersao ? 'mesmaver' : 'antigo  '} ${nome}  [${filhosTexto}]` +
         (suportado ? '' : `  unsupported: ${naoSuportados.filter((n) => !n.startsWith('fluxo ')).join('; ')}`),
     );
     if (detalhe !== undefined && nome.includes(detalhe)) {
@@ -341,6 +370,12 @@ async function main(argv: string[]): Promise<void> {
   console.log(`  só com elementos suportados   ${resumo.suportados} (batem inteiros: ${resumo.suportadosOk})`);
   console.log(`  gabarito, parte coberta batendo em todos os filhos comparados: ${resumo.gabaritoOk}/${resumo.gabarito}`);
   console.log(`  gabarito por filho: ${[...okPorFilho].map(([f, n]) => `${f}=${n}/${resumo.gabarito}`).join('  ')}`);
+  console.log(`  mesma versão (estados iguais, links a mais no ecm30): ${mv.pares} pares, ${mv.ok} batem inteiros`);
+  console.log(
+    `  mesma versão com evento de link 36/42: ${mv.comLink}; slot 4 igual em ${mv.comLinkSlot4}, todos os filhos comparados em ${mv.comLinkTodos}`,
+  );
+  console.log(`  mesma versão com evento de link, por filho: ${FILHOS_COMPARADOS.map((f) => `${f}=${mv.porFilho.get(f) ?? 0}/${mv.comLink}`).join('  ')}`);
+  for (const d of mv.divergencias) console.log(`      mesma versão diverge: ${d}`);
   console.log(`  campos ignorados: ${IGNORADOS.length ? IGNORADOS.map((i) => `${i.entidade}.${i.campo}`).join(', ') : 'nenhum'}`);
   console.log(
     `  scripts (filho 6, contra workflow/scripts): ${scripts.iguais} iguais, ${scripts.diferentes.length} diferentes, ` +

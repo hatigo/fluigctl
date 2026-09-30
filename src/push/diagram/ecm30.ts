@@ -73,11 +73,11 @@ const FINS = new Set(['60', '64', '65', '68']);
 const GATEWAYS: Record<string, number> = { '120': 1, '126': 3, '127': 4 };
 /**
  * 32 temporizador, 35 condicional, 37/41 sinal (envio/recebimento), 43 erro
- * anexado a tarefa de serviço. O link (36/42) fica de fora: o Studio cria um
- * `ProcessLink` que não está no `.process` para ligar os dois lados, com um
- * sequence que ele mesmo inventa (e repete a cada gravação em vários pares).
+ * anexado a tarefa de serviço, 36/42 link (envio/recebimento). O link não tem
+ * campo próprio no estado: o Studio liga os dois lados com `ProcessLink`s que
+ * não estão no `.process` (ver `linksDeEvento`).
  */
-const INTERMEDIARIOS = new Set(['32', '35', '37', '41', '43']);
+const INTERMEDIARIOS = new Set(['32', '35', '36', '37', '41', '42', '43']);
 /** O sinal não usa o nome na descrição: o Studio grava um texto fixo mais o `signalId`. */
 const DESCRICAO_SINAL: Record<string, string> = {
   '37': 'Intermediário Sinal ',
@@ -568,8 +568,14 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
         (a['linkId'] !== undefined && a['linkId'] !== a['parentTask'])) {
         recusar(`evento de erro ${id} sem vínculo coerente com a tarefa de serviço`);
       }
-    } else if ((a['sequenceAttached'] ?? '0') !== '0' || a['parentTask'] !== undefined || a['linkId'] !== undefined) {
+    } else if ((a['sequenceAttached'] ?? '0') !== '0' || a['parentTask'] !== undefined ||
+      (a['linkId'] !== undefined && a['type'] !== '36')) {
       recusar(`evento intermediário ${id} anexado a outro elemento`);
+    }
+    if (a['type'] === '36') {
+      const capturas = intermediarios.filter((c) => c.attrs['type'] === '42' && c.attrs['id'] === a['linkId']);
+      if (!a['linkId'] || capturas.length !== 1) recusar(`evento de link ${id} sem um único recebimento (42) em linkId`);
+      if (fluxos.some((f) => f.attrs['sourceRef'] === id)) recusar(`evento de link ${id} (36) com fluxo de saída`);
     }
     if (a['type'] !== '37' && a['type'] !== '41' && (a['signalId'] ?? '0') !== '0') recusar(`signalId em ${id}`);
   }
@@ -803,6 +809,48 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     if (movimento.length === MOVIMENTO.length) for (const m of MOVIMENTO) campos.push([m, a[m] ?? '']);
     else if (movimento.length > 0) recusar(`fluxo ${a['id']} com só parte de ${MOVIMENTO.join('/')}`);
     return campos;
+  });
+
+  /*
+   * Link (36/42): o Studio grava, para cada fluxo que chega num 36, um
+   * `ProcessLink` do 36 ao 42 apontado por `linkId`. Esse link não existe como
+   * `SequenceFlow`; o sequence dele é o maior sufixo numérico de id do arquivo
+   * (nós e fluxos) + 1, + 2..., na ordem do sufixo do fluxo de entrada (todos os
+   * 36 juntos). Nada no estado guarda o `linkId`, e o link não leva `<name>`
+   * (ao contrário dos de fluxo). Medido em 29 links de 10 pares.
+   */
+  const capturasApontadas = new Set<string>();
+  const sinteticos = fluxosDeEstado
+    .flatMap((f) => {
+      const lancamento = nos.get(f.attrs['targetRef'] ?? '');
+      if (lancamento?.tipo !== 'BpmnIntermediateEvent' || lancamento.attrs['type'] !== '36') return [];
+      const captura = intermediarios.find((c) => c.attrs['type'] === '42' && c.attrs['id'] === lancamento.attrs['linkId']);
+      if (!captura) return [];
+      capturasApontadas.add(captura.attrs['id'] ?? '');
+      return [{ entrada: sufixo(f.attrs['id']), de: sufixo(lancamento.attrs['id']), para: sufixo(captura.attrs['id']) }];
+    })
+    .sort((x, y) => x.entrada - y.entrada);
+  for (const o of intermediarios.filter((c) => c.attrs['type'] === '42')) {
+    const id = o.attrs['id'] ?? '';
+    if (!capturasApontadas.has(id)) recusar(`evento de link ${id} (42) sem nenhum 36 apontando para ele`);
+    if (fluxos.some((f) => f.attrs['targetRef'] === id)) recusar(`evento de link ${id} (42) com fluxo de entrada`);
+  }
+  const maiorSufixo = Math.max(0, ...objetos.filter((o) => o.tipo !== 'BpmnProcess').map((o) => sufixo(o.attrs['id'])));
+  const sequenciasDeFluxo = new Set(fluxosCobertos.map((f) => sufixo(f.attrs['id'])));
+  sinteticos.forEach((l, i) => {
+    const sequencia = maiorSufixo + 1 + i;
+    if (sequenciasDeFluxo.has(sequencia)) recusar(`link de evento com sequence ${sequencia} repetido`);
+    links.push([
+      ['processLinkPK', pk([['linkSequence', sequencia]])],
+      ['actionLabel', ''],
+      ['returnPermited', false],
+      ['initialStateSequence', l.de],
+      ['finalStateSequence', l.para],
+      ['returnLabel', ''],
+      ['automaticLink', false],
+      ['defaultLink', false],
+      ['type', 0],
+    ]);
   });
 
   /*

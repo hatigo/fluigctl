@@ -260,7 +260,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 240 testes, sem rede e sem servidor Fluig
+npm test        # 243 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

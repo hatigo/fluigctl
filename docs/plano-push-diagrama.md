@@ -250,6 +250,30 @@ scripts de `workflow/scripts/` (filho 6). O harness compara agora os filhos 0–
   `controlsAttachmentsSecurity`/`processAttachmentSecurity`/`notifyManagerComplements`/
   `deadlineTime`/`activeProcess` do processo (nenhum em par).
 
+**Estado (30/09/2026, terceiro corte).** Entram os eventos de link 36/42. O
+estado não guarda o `linkId`; o Studio cria, para cada fluxo que chega num 36,
+um `ProcessLink` do 36 ao 42 apontado por `linkId`, sem `<name>`, que não existe
+como `SequenceFlow`. O sequence é o maior sufixo numérico de id do arquivo (nós
+e fluxos) + 1, + 2..., na ordem do sufixo do fluxo de entrada, valendo para
+todos os 36 juntos. Sem `linkId` que resolva para um único 42, 36 com fluxo de
+saída, `linkId` fora de um 36, 42 sem nenhum 36 apontando ou com fluxo de
+entrada: recusa com código 6 (nenhum desses casos aparece nos `.process`).
+
+- O harness ganhou a classe "mesma versão": versão e estados iguais aos do
+  `.process`, com links a mais no ecm30. São 15 pares, 13 batem inteiros; dos 10
+  com evento de link, os 10 batem no filho 4 (29 links) e 8 em todos os filhos
+  comparados. Sobram a posição de lane editada depois do export (1 par) e,
+  em outro, a atribuição "Associado" (não suportada) e a cor de lane.
+- Só um par tem 36 com mais de um fluxo de entrada; a regra de ordem fica
+  assumida a partir dele.
+- Gabarito segue em 57, 50 batendo em todos os filhos comparados (não muda em
+  relação ao corte anterior; a diferença para os números acima é que o
+  critério é todos os filhos, e não só 0, 1, 2, 4, 8 e 11).
+- Dos 255 `.process`, 126 convertem sem recusa (eram 109). Por arquivos
+  afetados: `descriptorFields` (54), fluxo ligado a elemento não suportado (33),
+  `appsConfiguration` (33), subprocesso (28), `attachmentRules` (17),
+  atribuição "Associado" (9).
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
