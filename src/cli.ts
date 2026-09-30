@@ -13,6 +13,7 @@ import { addServer, listServers, removeServer, setProd } from './commands/server
 import { pushDataset } from './commands/push-dataset.js';
 import { pushForm } from './commands/push-form.js';
 import { pushProcess } from './commands/push-process.js';
+import { pushWidget } from './commands/push-widget.js';
 import { importCandidates, scanServersJson } from './import.js';
 import { decideVersionOption } from './push/form-resolve.js';
 import { promptPassword } from './prompt.js';
@@ -20,7 +21,7 @@ import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
 import { ErroFluigctl } from './errors.js';
 
-const USO = `fluigctl — sobe datasets, formulários e scripts de processo para o TOTVS Fluig
+const USO = `fluigctl — sobe datasets, formulários, widgets e scripts de processo para o TOTVS Fluig
 
   fluigctl server ls
   fluigctl server add <nome> --host H [--port P] [--ssl] --user U [--prod]
@@ -37,6 +38,8 @@ const USO = `fluigctl — sobe datasets, formulários e scripts de processo para
                               [--no-release] [--save-export <arquivo.xml>] [--base <export.xml>]
       publica os scripts de workflow/scripts/<processId>.*.js num processo que já existe;
       diagrama e atividades continuam sendo publicados pelo Fluig Studio
+  fluigctl push widget <wcm/widget/nome> --server <nome> [--dry-run]
+      empacota a widget num .war e envia; o servidor instala ou atualiza em segundo plano
 
 A senha de cada servidor vem de variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD).
 Nenhuma senha é gravada em disco.`;
@@ -220,10 +223,14 @@ async function comandoServer(argv: string[]): Promise<void> {
 
 async function comandoPush(argv: string[]): Promise<void> {
   const tipo = argv[0];
-  if (tipo !== 'dataset' && tipo !== 'form' && tipo !== 'process') {
-    throw new ErroFluigctl(`push aceita "dataset", "form" ou "process" — recebi "${tipo ?? ''}"`, 2);
+  if (tipo !== 'dataset' && tipo !== 'form' && tipo !== 'process' && tipo !== 'widget') {
+    throw new ErroFluigctl(
+      `push aceita "dataset", "form", "process" ou "widget" — recebi "${tipo ?? ''}"`,
+      2,
+    );
   }
   if (tipo === 'process') return pushProcessCli(argv.slice(1));
+  if (tipo === 'widget') return pushWidgetCli(argv.slice(1));
 
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
@@ -429,6 +436,41 @@ async function pushProcessCli(argv: string[]): Promise<void> {
     r.liberado === null
       ? `Publicado; versão nova em edição (--no-release). Import: ${r.mensagemImport || '-'}`
       : `Publicado e liberado. Import: ${r.mensagemImport || '-'} · Liberação: ${r.mensagemLiberacao || '-'}`,
+  );
+}
+
+async function pushWidgetCli(argv: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+
+  const pasta = positionals[0];
+  if (!pasta || !values.server) {
+    throw new ErroFluigctl('uso: fluigctl push widget <wcm/widget/nome> --server <nome> [--dry-run]', 2);
+  }
+
+  const servidor = resolveServer(loadConfig(), values.server);
+  const senha = resolvePassword(servidor);
+
+  const r = await pushWidget({
+    server: servidor,
+    senha,
+    pasta,
+    dryRun: values['dry-run'],
+    prompt: promptPassword,
+  });
+
+  const detalhe = `${r.nome}.war — ${r.entradas} arquivo(s), ${r.bytes} bytes`;
+  console.log(
+    values['dry-run']
+      ? `[dry-run] ${detalhe} seria enviado para ${r.url}. Nada foi enviado.`
+      : `${detalhe} enviado para ${values.server} (${serverUrl(servidor)}). ` +
+          'A instalação acontece em segundo plano no servidor.',
   );
 }
 

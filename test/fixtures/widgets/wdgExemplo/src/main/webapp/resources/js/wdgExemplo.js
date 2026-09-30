@@ -1,0 +1,1 @@
+var wdgExemplo = SuperWidget.extend({});

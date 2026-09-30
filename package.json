@@ -7,7 +7,7 @@
     "fluigctl": "./dist/src/cli.js"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.2"
   },
   "scripts": {
     "build": "tsc",

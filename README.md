@@ -13,9 +13,10 @@ script.
 | `server import` (lê `.vscode/servers.json` da Fluiggers) | pronto |
 | `push dataset` | pronto |
 | `push form` | pronto |
+| `push widget` | pronto (widgets sem Java) |
 
-Fora de escopo por enquanto: `pull`, widget, evento global e mecanismo de
-atribuição.
+Fora de escopo por enquanto: `pull`, layout WCM, widget com código Java,
+evento global e mecanismo de atribuição.
 
 ## Instalação
 
@@ -40,6 +41,9 @@ fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --keep-vers
 fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --new-version
 fluigctl push form forms/formNovo --server cetenco-hml \
   --create --parent-id 5 --dataset-name dsformNovo --persistence-type form
+
+fluigctl push widget wcm/widget/wdgAniversariantes --server cetenco-hml --dry-run
+fluigctl push widget wcm/widget/wdgAniversariantes --server cetenco-hml
 ```
 
 `server add` descobre `companyId` e `userCode` sozinho, consultando o servidor.
@@ -140,6 +144,46 @@ Rodado contra as 657 pastas de formulário reais dos 12 workspaces: 646 lidas
 sem erro, 11 recusadas com motivo — 8 sem `.html` nenhum e 3 com dois `.html`
 sem desempate. Nenhuma publicaria o `.metadata` junto.
 
+## Publicando um widget
+
+`push widget` recebe a pasta da widget (`wcm/widget/<nome>`), monta o `.war` em
+memória — sem Maven — e envia pelo mesmo endpoint da extensão Fluiggers,
+`/portal/api/rest/wcmservice/rest/product/uploadfile`, com a sessão do portal.
+O nome da widget é o nome da pasta. Não há `--create`: o servidor instala se a
+widget não existe e atualiza se existe.
+
+O pacote segue o mapeamento da extensão, sem compressão:
+
+| origem | no `.war` |
+|---|---|
+| `src/main/webapp/WEB-INF/*.xml` | `WEB-INF/` |
+| `src/main/resources/*.*` | `WEB-INF/classes/` |
+| `src/main/webapp/resources/**` | `resources/`, com as subpastas |
+
+Diferenças de propósito em relação à extensão:
+
+- todos os arquivos vão em bytes crus — a extensão lê `src/main/resources`
+  como UTF-8 e corrompe `.properties` gravado em latin1;
+- `.metadata` e dotfiles ficam de fora, como no `push form`;
+- pasta sem `src/main/webapp/WEB-INF` ou sem
+  `src/main/resources/application.info` é recusada com código 3;
+- widget com arquivo em `src/main/java` é recusada com código 6, antes de
+  qualquer chamada de rede: as classes precisam do build do Maven, e o
+  `fluigctl` não compila Java. Publique essas pelo Fluig Studio ou Maven.
+
+`--dry-run` monta o pacote e mostra nome, número de arquivos, tamanho e a URL
+de destino, sem abrir sessão nem enviar nada.
+
+**A instalação é assíncrona.** Uma resposta de sucesso quer dizer que o servidor
+aceitou o `.war`; a widget é instalada ou atualizada em segundo plano, e o
+`fluigctl` não espera por isso. Uma resposta com `message` é erro do servidor e
+sai com código 7.
+
+Rodado (só o empacotamento) contra as 160 entradas de `wcm/widget/` dos
+workspaces: 147 empacotadas, todas aprovadas por `unzip -t`; 7 recusadas por
+terem Java; 6 recusadas por não serem pasta de widget (dois `.zip`, um `.txt`,
+duas pastas só com `target/` e uma sem `WEB-INF`).
+
 ## Códigos de saída
 
 | | |
@@ -190,7 +234,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 68 testes, sem rede e sem servidor Fluig
+npm test        # 206 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
