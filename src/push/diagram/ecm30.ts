@@ -20,7 +20,8 @@ import { decodificarEntidades, escaparTexto, filhos, lerXml, type No } from './x
  * Fase 1: pool, lane, início, tarefas (de usuário e de serviço), gateways
  * exclusivo/paralelo/join com condições, eventos intermediários (temporizador,
  * condicional, sinal, erro anexado), fim, anotação, fluxo de sequência,
- * bendpoints e — quando quem chama passa — os scripts. Qualquer outra coisa é
+ * bendpoints, campos descritores, configuração de app e — quando quem chama
+ * passa — os scripts. Qualquer outra coisa é
  * recusada com código 6 listando o que falta — nunca um XML parcial.
  */
 
@@ -93,10 +94,14 @@ const CONFIGURACAO_DO_CAMINHO = 'mecanismoAtribuicaoConfiguracao';
 
 /** Atributos que alimentam filhos ainda não gerados: presentes, o XML ficaria incompleto. */
 const ATRIBUTOS_NAO_SUPORTADOS: Record<string, string> = {
-  appsConfiguration: 'configuração de app (appsConfiguration)',
   attachmentRules: 'regras de anexo (attachmentRules)',
-  descriptorFields: 'campos descritores (descriptorFields)',
 };
+/** Única tarefa com `appsConfiguration` conferida contra o Studio: a de usuário (80). */
+const TAREFA_COM_APP = '80';
+/** `appKey` e `appField` que aparecem nos pares; `approve` e `reject` guardam um número (vazio ou sequence). */
+const APP_CHAVE = 'approval';
+const APP_CAMPOS = ['title', 'description', 'highlight', 'approve', 'reject'];
+const APP_CAMPOS_NUMERICOS = new Set(['approve', 'reject']);
 
 const EM_ATRASO = ['Responsavel', 'Requisitante', 'Gestor'].flatMap((quem) =>
   ['', 'Tolerancia', 'Frequencia'].map((sufixo) => `emAtrasoNotificar${quem}${sufixo}`),
@@ -124,7 +129,7 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     'id', 'name', 'version', 'cardIndex', 'managerMechanism', 'managerAssignmentController', 'category',
     'volume', 'expedient', 'instruction', 'complementsLevel', 'notifyResponsibleComplements',
     'notifyRequisitionerComplements', 'publicProcess', 'mobileReady', 'inheritFormSecurity',
-    'descriptionVersion', 'updateAttachment', 'uniquecardversion', 'extendedFields',
+    'descriptionVersion', 'updateAttachment', 'uniquecardversion', 'extendedFields', 'descriptorFields',
     // Só do Studio: o ecm30 não tem onde guardar, e keyWord sai sempre vazio (118/118).
     'serverId', 'author', 'formSource', 'formType', 'keyWord',
   ],
@@ -138,7 +143,7 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     'managerAssignmentControllerString', 'loopType', 'authNotify', 'expediente', 'atividadeConjunta',
     'consenso', 'selecionaColaboradores', 'esforcoCalculo', 'executionAttempts', 'frequency', 'instrucoes',
     'prazoConclusao', 'deadlineFieldName', 'notificaRequisitante', 'notificaGestor', 'inibeOpcaoTransferir',
-    'confirmarSenha', ...EM_ATRASO, ...EXPIRACAO,
+    'confirmarSenha', 'appsConfiguration', ...EM_ATRASO, ...EXPIRACAO,
   ],
   BpmnEndEvent: ['id', 'name', 'incoming', 'type', 'extendedFields', 'signalId', 'notificaRequisitante'],
   BpmnGateway: ['id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'condition'],
@@ -203,6 +208,74 @@ function folhas(no: No): Map<string, string> | undefined {
     campos.set(f.nome, f.texto);
   }
   return campos;
+}
+
+type Lido<T> = { valor: T } | { erro: string };
+
+/**
+ * `descriptorFields` do processo: `<list>` de `BpmnProcessFormField`, cada um
+ * com `id`, `label` e `cardIndex`. O Studio não grava o `cardIndex` (rótulo do
+ * formulário, vazio ou não) no ecm30 — ver o harness. Classe, campo ou
+ * estrutura fora disto: erro, nunca descarte silencioso.
+ */
+function lerDescritores(blob: string): Lido<{ id: string; label: string }[]> {
+  const raiz = arvoreDoBlob(blob);
+  if (!raiz || raiz.nome !== 'list' || Object.keys(raiz.attrs).length > 0) return { erro: 'descriptorFields ilegível' };
+  if (raiz.filhos.length === 0) return { erro: 'descriptorFields sem nenhum campo' };
+  const itens: { id: string; label: string }[] = [];
+  const vistos = new Set<string>();
+  for (const no of raiz.filhos) {
+    if (no.nome !== 'org.eclipse.bpmn2.impl.BpmnProcessFormField') return { erro: `descriptorFields com ${no.nome}` };
+    const f = Object.keys(no.attrs).length === 0 ? folhas(no) : undefined;
+    const extra = f ? [...f.keys()].find((k) => !['id', 'label', 'cardIndex'].includes(k)) : undefined;
+    if (!f || extra !== undefined) return { erro: `descriptorFields com campo ${extra ?? 'fora da forma'}` };
+    const id = f.get('id');
+    const label = f.get('label');
+    if (!id || label === undefined) return { erro: 'descriptorFields com campo sem id ou sem label' };
+    if (vistos.has(id)) return { erro: `descriptorFields com id ${id} repetido` };
+    vistos.add(id);
+    itens.push({ id, label });
+  }
+  return { valor: itens };
+}
+
+/**
+ * `appsConfiguration` da tarefa: `<map>` com uma `<entry>` (`<string>` appKey +
+ * `<list>` de `BpmnProcessAppConfiguration` com `appField` e `description`).
+ */
+function lerAppsConfiguracao(blob: string): Lido<{ chave: string; campo: string; descricao: string }[]> {
+  const raiz = arvoreDoBlob(blob);
+  const entrada = raiz?.filhos[0];
+  if (!raiz || raiz.nome !== 'map' || Object.keys(raiz.attrs).length > 0 || raiz.filhos.length !== 1 ||
+    !entrada || entrada.nome !== 'entry' || Object.keys(entrada.attrs).length > 0) {
+    return { erro: 'appsConfiguration fora da forma (um <entry> em <map>)' };
+  }
+  const [chaveNo, listaNo, ...sobra] = entrada.filhos;
+  if (sobra.length > 0 || chaveNo?.nome !== 'string' || chaveNo.filhos.length > 0 || listaNo?.nome !== 'list' ||
+    Object.keys(listaNo.attrs).length > 0) {
+    return { erro: 'appsConfiguration com <entry> fora da forma (<string> e <list>)' };
+  }
+  if (chaveNo.texto !== APP_CHAVE) return { erro: `appsConfiguration com appKey "${chaveNo.texto}"` };
+  if (listaNo.filhos.length === 0) return { erro: 'appsConfiguration sem nenhum campo' };
+  const itens: { chave: string; campo: string; descricao: string }[] = [];
+  for (const no of listaNo.filhos) {
+    if (no.nome !== 'org.eclipse.bpmn2.documentacional.BpmnProcessAppConfiguration') {
+      return { erro: `appsConfiguration com ${no.nome}` };
+    }
+    const f = Object.keys(no.attrs).length === 0 ? folhas(no) : undefined;
+    const extra = f ? [...f.keys()].find((k) => k !== 'appField' && k !== 'description') : undefined;
+    if (!f || extra !== undefined) return { erro: `appsConfiguration com campo ${extra ?? 'fora da forma'}` };
+    const campo = f.get('appField') ?? '';
+    const descricao = f.get('description');
+    if (!APP_CAMPOS.includes(campo)) return { erro: `appsConfiguration com appField "${campo}"` };
+    if (descricao === undefined) return { erro: `appsConfiguration sem description em ${campo}` };
+    if (APP_CAMPOS_NUMERICOS.has(campo) && descricao !== '' && !/^\d+$/.test(descricao)) {
+      return { erro: `appsConfiguration com ${campo} não numérico` };
+    }
+    if (itens.some((i) => i.campo === campo)) return { erro: `appsConfiguration com appField ${campo} repetido` };
+    itens.push({ chave: chaveNo.texto, campo, descricao });
+  }
+  return { valor: itens };
 }
 
 interface Atribuicao {
@@ -368,6 +441,10 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     }
     const ext = o.attrs['extendedFields'];
     if (ext && !/^<list\s*\/>$/.test(ext.trim())) recusar('propriedades estendidas (extendedFields)');
+    if (o.attrs['appsConfiguration'] && (o.tipo !== 'BpmnTask' || o.attrs['type'] !== TAREFA_COM_APP)) {
+      recusar(`appsConfiguration em ${o.attrs['id'] ?? o.tipo} (type ${o.attrs['type'] ?? '?'}), só conferido na tarefa 80`);
+    }
+    if (o.attrs['descriptorFields'] && o.tipo !== 'BpmnProcess') recusar(`descriptorFields em ${o.attrs['id'] ?? o.tipo}`);
   }
 
   const caixa = (id: string): Caixa => {
@@ -948,6 +1025,49 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     });
   }
 
+  /*
+   * Campos descritores → `ProcessFormField` (filho 14): PK sem versão, `slotId`
+   * a partir de 1 na ordem do blob. Configuração de app → `ProcessAppConfiguration`
+   * (filho 17), uma linha por campo, por tarefa na ordem do arquivo, com
+   * `processVersion` = versão do .process. Atributo vazio ou ausente: filho vazio.
+   */
+  const camposDeFormulario: Campo[][] = [];
+  if (p['descriptorFields']) {
+    const lido = lerDescritores(p['descriptorFields']);
+    if ('erro' in lido) recusar(lido.erro);
+    else {
+      lido.valor.forEach((d, i) => {
+        camposDeFormulario.push([
+          ['processFormFieldPK', [['companyId', companyId], ['processId', processId], ['fieldId', d.id]]],
+          ['fieldDescription', d.label],
+          ['slotId', i + 1],
+        ]);
+      });
+    }
+  }
+  const configuracoesDeApp: Campo[][] = [];
+  for (const o of tarefas) {
+    const blob = o.attrs['appsConfiguration'];
+    if (!blob || o.attrs['type'] !== TAREFA_COM_APP) continue;
+    const lido = lerAppsConfiguracao(blob);
+    if ('erro' in lido) {
+      recusar(`${lido.erro} em ${o.attrs['id']}`);
+      continue;
+    }
+    for (const c of lido.valor) {
+      configuracoesDeApp.push([
+        ['id', 0],
+        ['tenantId', 0],
+        ['processId', processId],
+        ['processVersion', versao],
+        ['stateSequence', sufixo(o.attrs['id'])],
+        ['appKey', c.chave],
+        ['appField', c.campo],
+        ['description', c.descricao],
+      ]);
+    }
+  }
+
   const gestor = atribuicaoDe(processo, p['managerMechanism'], p['managerAssignmentController']);
 
   /*
@@ -1053,10 +1173,10 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     lista('ProcessLinkBend', bends),
     lista('ProcessStateTrigger', gatilhos),
     vazio,
-    vazio,
+    lista('ProcessFormField', camposDeFormulario),
     lista('ProcessStateService', servicos),
     vazio,
-    vazio,
+    lista('ProcessAppConfiguration', configuracoesDeApp),
     vazio,
     lista('ConditionProcessAutomaticRules', regras),
   ];

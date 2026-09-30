@@ -274,6 +274,43 @@ entrada: recusa com código 6 (nenhum desses casos aparece nos `.process`).
   `appsConfiguration` (33), subprocesso (28), `attachmentRules` (17),
   atribuição "Associado" (9).
 
+**Estado (30/09/2026, quarto corte).** Entram `descriptorFields` (filho 14) e
+`appsConfiguration` (filho 17). O harness compara os dois filhos, inclusive a
+ordem das linhas, e reporta cada um à parte.
+
+- `descriptorFields` é atributo do `BpmnProcess`: `<list>` de
+  `org.eclipse.bpmn2.impl.BpmnProcessFormField` com `id`, `label` e `cardIndex`.
+  Vira um `ProcessFormField` por campo: `processFormFieldPK` (`companyId`,
+  `processId`, `fieldId`; sem versão), `fieldDescription` = `label` e `slotId`
+  = posição no blob, a partir de 1. O `cardIndex` (rótulo do formulário, vazio
+  ou não) não vai ao ecm30: 6 dos 15 gabaritos com o atributo o têm preenchido e
+  batem do mesmo jeito. Em pares com versão diferente a ordem do Studio difere
+  da do blob (3 pares); nos gabaritos é sempre a do blob.
+- `appsConfiguration` **não** é do processo: é atributo da tarefa de usuário (80
+  em 55 casos; 81 em 1, sem par). Mapa XStream com uma `<entry>` (`<string>` =
+  `appKey`, só `approval`) e uma `<list>` de `BpmnProcessAppConfiguration`
+  (`appField`: `title`, `description`, `highlight`, `approve`, `reject`; mais
+  `description`). Vira um `ProcessAppConfiguration` por campo: `id` 0,
+  `tenantId` 0, `processId`, `processVersion` = versão do `.process` (igual à da
+  PDV nos 6 pares que têm o filho), `stateSequence` = sufixo da tarefa, `appKey`,
+  `appField`, `description` (vazio sai `<description></description>`). Uma
+  tarefa atrás da outra, na ordem do arquivo; a ordem dos campos é a do blob.
+- Recusa com código 6: classe, campo ou `appKey`/`appField` fora da lista acima,
+  `id` repetido, `<list/>` ou `<map>` sem campo (nunca visto), mais de uma
+  `<entry>`, `approve`/`reject` não numéricos e `appsConfiguration` em tarefa
+  que não seja a 80.
+- Harness, nos gabaritos com o atributo (ou com linhas no Studio): filho 14
+  bate em 15/15, filho 17 em 2/2 (mesma versão: 14 em 2/2, 17 sem nenhum par).
+  Gabarito inteiro: 51/57 e mesma versão 13/15, os mesmos números do HEAD anterior
+  (medido de novo; o corte anterior registrava 50).
+- Amostra pequena no filho 17: só 6 pares têm linhas, 2 deles gabarito. Nos dois
+  as tarefas estão em ordem crescente de sufixo, então "ordem do arquivo" e
+  "ordem do sufixo" não se distinguem; `description` vazio vem de um gabarito.
+- Dos 255 `.process`, 180 convertem sem recusa (eram 126). Por arquivos
+  afetados: fluxo ligado a elemento não suportado (33), subprocesso (28: 23 do
+  tipo 100 e 5 do 101), `attachmentRules` (17), atribuição "Associado" (9),
+  condição para destino não suportado (13).
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

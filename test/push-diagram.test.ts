@@ -643,3 +643,121 @@ test('evento de link recusado: sem linkId, linkId que não resolve, linkId fora 
     assert.match(erro.message, motivo);
   }
 });
+
+/** Põe um blob XStream num atributo do `.process`. */
+const comoAtributo = (blob: string) => blob.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;').replace(/\n/g, '&#xA;');
+
+const CAMPO_FORM = (id: string, label: string, cardIndex = '') =>
+  `  <org.eclipse.bpmn2.impl.BpmnProcessFormField>\n    <id>${id}</id>\n    <label>${label}</label>\n    <cardIndex>${cardIndex}</cardIndex>\n  </org.eclipse.bpmn2.impl.BpmnProcessFormField>`;
+const DESCRITORES = (...campos: string[]) => `<list>\n${campos.join('\n')}\n</list>`;
+
+const CAMPO_APP = (campo: string, descricao: string) =>
+  `      <org.eclipse.bpmn2.documentacional.BpmnProcessAppConfiguration>\n        <appField>${campo}</appField>\n        <description>${descricao}</description>\n      </org.eclipse.bpmn2.documentacional.BpmnProcessAppConfiguration>`;
+const APPS = (...campos: string[]) =>
+  `<map>\n  <entry>\n    <string>approval</string>\n    <list>\n${campos.join('\n')}\n    </list>\n  </entry>\n</map>`;
+
+const comDescritores = (blob: string) =>
+  PROCESSO.replace('<bpmn2:BpmnProcess id="processoTeste"', `<bpmn2:BpmnProcess descriptorFields="${comoAtributo(blob)}" id="processoTeste"`);
+const comApps = (tarefa: string, blob: string) =>
+  PROCESSO.replace(`<bpmn2:BpmnTask id="${tarefa}"`, `<bpmn2:BpmnTask appsConfiguration="${comoAtributo(blob)}" id="${tarefa}"`);
+
+test('descriptorFields: um ProcessFormField por campo, slotId de 1 na ordem do blob, sem versão na PK', () => {
+  const blob = DESCRITORES(CAMPO_FORM('valor', 'Valor total'), CAMPO_FORM('periodo', 'Per&#xed;odo &amp; ano', '7 - formTeste'), CAMPO_FORM('contrato', 'Contrato'));
+  const campos = filhosDaRaiz(converterDiagrama(comDescritores(blob), { companyId: 5 }).xml)[14]!.filhos;
+  assert.deepEqual(campos.map((c) => c.nome), ['ProcessFormField', 'ProcessFormField', 'ProcessFormField']);
+  assert.deepEqual(campos.map((c) => texto(c, 'processFormFieldPK', 'fieldId')), ['valor', 'periodo', 'contrato']);
+  assert.deepEqual(campos.map((c) => texto(c, 'slotId')), ['1', '2', '3']);
+  assert.equal(texto(campos[0]!, 'processFormFieldPK', 'companyId'), '5');
+  assert.equal(texto(campos[0]!, 'processFormFieldPK', 'processId'), 'processoTeste');
+  assert.equal(texto(campos[0]!, 'processFormFieldPK', 'version'), '<ausente>');
+  assert.equal(texto(campos[1]!, 'fieldDescription'), 'Período & ano');
+  assert.deepEqual(campos[0]!.filhos.map((f) => f.nome), ['processFormFieldPK', 'fieldDescription', 'slotId']);
+  assert.deepEqual(campos[0]!.filhos[0]!.filhos.map((f) => f.nome), ['companyId', 'processId', 'fieldId']);
+});
+
+test('descriptorFields e appsConfiguration vazios ou ausentes deixam os filhos 14 e 17 vazios', () => {
+  for (const xml of [
+    converterDiagrama(PROCESSO, { companyId: 1 }).xml,
+    converterDiagrama(PROCESSO.replace('<bpmn2:BpmnProcess id=', '<bpmn2:BpmnProcess descriptorFields="" id='), { companyId: 1 }).xml,
+    converterDiagrama(PROCESSO.replace('<bpmn2:BpmnTask id="task5"', '<bpmn2:BpmnTask appsConfiguration="" id="task5"'), { companyId: 1 }).xml,
+  ]) {
+    const filhos = filhosDaRaiz(xml);
+    assert.equal(filhos[14]!.filhos.length, 0);
+    assert.equal(filhos[17]!.filhos.length, 0);
+  }
+});
+
+test('appsConfiguration: uma linha por campo e por tarefa, com a versão do .process e o sequence da tarefa', () => {
+  const blob = APPS(CAMPO_APP('title', ''), CAMPO_APP('description', '@[form:descr] &amp; mais'), CAMPO_APP('approve', '125'), CAMPO_APP('reject', ''));
+  const outro = APPS(CAMPO_APP('highlight', '@[form:valor]'), CAMPO_APP('approve', '8'));
+  const xml = comApps('task7', outro).replace('<bpmn2:BpmnTask id="task5"', `<bpmn2:BpmnTask appsConfiguration="${comoAtributo(blob)}" id="task5"`);
+  const linhas = filhosDaRaiz(converterDiagrama(xml, { companyId: 1 }).xml)[17]!.filhos;
+  assert.deepEqual(
+    linhas.map((l) => [texto(l, 'stateSequence'), texto(l, 'appField'), texto(l, 'description')].join('|')),
+    ['5|title|', '5|description|@[form:descr] & mais', '5|approve|125', '5|reject|', '7|highlight|@[form:valor]', '7|approve|8'],
+  );
+  assert.deepEqual(linhas[0]!.filhos.map((f) => f.nome), [
+    'id', 'tenantId', 'processId', 'processVersion', 'stateSequence', 'appKey', 'appField', 'description',
+  ]);
+  for (const l of linhas) {
+    assert.equal(texto(l, 'id'), '0');
+    assert.equal(texto(l, 'tenantId'), '0');
+    assert.equal(texto(l, 'processId'), 'processoTeste');
+    assert.equal(texto(l, 'processVersion'), '3');
+    assert.equal(texto(l, 'appKey'), 'approval');
+  }
+});
+
+test('descriptorFields fora da forma conferida é recusado com código 6, sem XML parcial', () => {
+  const campo = CAMPO_FORM('valor', 'Valor');
+  const casos: [string, RegExp][] = [
+    [`<list>\n  <org.eclipse.bpmn2.impl.BpmnProcessOutraCoisa>\n    <id>a</id>\n  </org.eclipse.bpmn2.impl.BpmnProcessOutraCoisa>\n</list>`, /descriptorFields com org\.eclipse\.bpmn2\.impl\.BpmnProcessOutraCoisa/],
+    [DESCRITORES(campo.replace('</cardIndex>', '</cardIndex>\n    <tipo>x</tipo>')), /descriptorFields com campo tipo/],
+    [DESCRITORES(campo.replace(/<label>.*<\/label>\n/, '')), /sem id ou sem label/],
+    [DESCRITORES(campo.replace('<label>Valor</label>', '<label><b>Valor</b></label>')), /descriptorFields com campo fora da forma/],
+    [DESCRITORES(campo, CAMPO_FORM('valor', 'Outro')), /id valor repetido/],
+    ['<list/>', /sem nenhum campo/],
+    ['<map>\n</map>', /descriptorFields ilegível/],
+    ['<list>\n  <org.eclipse.bpmn2.impl.BpmnProcessFormField>\n', /descriptorFields ilegível/],
+  ];
+  for (const [blob, motivo] of casos) {
+    const erro = erroDe(() => converterDiagrama(comDescritores(blob), { companyId: 1 }));
+    assert.equal(erro.codigo, 6, blob);
+    assert.match(erro.message, motivo);
+  }
+  // Em outro objeto que não o processo, o atributo também não é aceito.
+  const naTarefa = PROCESSO.replace('<bpmn2:BpmnTask id="task5"', `<bpmn2:BpmnTask descriptorFields="${comoAtributo(DESCRITORES(campo))}" id="task5"`);
+  const erro = erroDe(() => converterDiagrama(naTarefa, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /atributo descriptorFields em task5/);
+});
+
+test('appsConfiguration fora da forma conferida é recusado com código 6, sem XML parcial', () => {
+  const ok = CAMPO_APP('approve', '1');
+  const classe = 'org.eclipse.bpmn2.documentacional.BpmnProcessAppConfiguration';
+  const casos: [string, RegExp][] = [
+    [APPS(CAMPO_APP('outro', 'x')), /appField "outro"/],
+    [APPS(ok.replace('</description>', '</description>\n        <extra>1</extra>')), /campo extra/],
+    [APPS(ok).replace(classe + '>\n        <appField', 'com.exemplo.Outra>\n        <appField').replace(`</${classe}>`, '</com.exemplo.Outra>'), /appsConfiguration com com\.exemplo\.Outra/],
+    [APPS(ok).replace('<string>approval</string>', '<string>outro</string>'), /appKey "outro"/],
+    [APPS(CAMPO_APP('approve', 'abc')), /approve não numérico/],
+    [APPS(ok, CAMPO_APP('approve', '2')), /appField approve repetido/],
+    [APPS(ok.replace(/\s*<description>.*<\/description>/, '')), /sem description em approve/],
+    [APPS(), /sem nenhum campo/],
+    [APPS(ok).replace('</entry>', '</entry>\n  <entry>\n    <string>approval</string>\n    <list/>\n  </entry>'), /fora da forma/],
+    [APPS(ok).replace('<map>', '<map versao="1">'), /fora da forma/],
+    ['<map>\n  <entry>\n', /fora da forma/],
+  ];
+  for (const [blob, motivo] of casos) {
+    const erro = erroDe(() => converterDiagrama(comApps('task5', blob), { companyId: 1 }));
+    assert.equal(erro.codigo, 6, blob);
+    assert.match(erro.message, motivo);
+    assert.match(erro.message, /task5/);
+  }
+  // Só a tarefa de usuário 80 foi conferida contra o Studio.
+  const naTarefa81 = comApps('task5', APPS(ok)).replace(/(<bpmn2:BpmnTask appsConfiguration="[^"]*" id="task5"[^>]*?)type="80"/, '$1type="81"');
+  assert.notEqual(naTarefa81, comApps('task5', APPS(ok)));
+  const erro = erroDe(() => converterDiagrama(naTarefa81, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /appsConfiguration em task5 \(type 81\)/);
+});

@@ -56,7 +56,9 @@ const IGNORADOS: { entidade: string; campo: string; motivo: string }[] = [
   },
 ];
 
-const FILHOS_COMPARADOS = [0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 15, 19] as const;
+const FILHOS_COMPARADOS = [0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 14, 15, 17, 19] as const;
+/** Filhos cuja ordem no ecm30 também é comparada (a do Studio precisa ser reproduzida). */
+const COM_ORDEM = new Set<number>([14, 17]);
 const TIPOS_COBERTOS = new Set([
   '10', '80', '81', '82', '84', '87', '32', '35', '36', '37', '41', '42', '43', '120', '126', '127', '60', '64', '65', '68',
 ]);
@@ -76,7 +78,9 @@ const CHAVES: Record<number, { chave: (n: No) => string; coberto?: string }> = {
     chave: (n) => `${campo(n, 'processStateTriggerPK.stateSequence')}/${campo(n, 'processStateTriggerPK.triggerSequence')}`,
     coberto: 'processStateTriggerPK.stateSequence',
   },
+  14: { chave: (n) => campo(n, 'processFormFieldPK.fieldId') },
   15: { chave: (n) => campo(n, 'sequence'), coberto: 'sequence' },
+  17: { chave: (n) => `${campo(n, 'stateSequence')}/${campo(n, 'appField')}`, coberto: 'stateSequence' },
   19: {
     chave: (n) => `${campo(n, 'sequence')}/${campo(n, 'expressionOrder')}/${campo(n, 'ruleOrder')}`,
     coberto: 'sequence',
@@ -84,7 +88,7 @@ const CHAVES: Record<number, { chave: (n: No) => string; coberto?: string }> = {
 };
 const NOMES: Record<number, string> = {
   3: 'ConditionProcessState', 9: 'ProcessComponGraf', 10: 'ProcessLinkAssoc', 12: 'ProcessStateTrigger',
-  15: 'ProcessStateService', 19: 'ConditionProcessAutomaticRules',
+  14: 'ProcessFormField', 15: 'ProcessStateService', 17: 'ProcessAppConfiguration', 19: 'ConditionProcessAutomaticRules',
 };
 
 interface Par {
@@ -215,6 +219,10 @@ async function main(argv: string[]): Promise<void> {
     pares: 0, ok: 0, comLink: 0, comLinkSlot4: 0, comLinkTodos: 0,
     porFilho: new Map<number, number>(), divergencias: [] as string[],
   };
+  /** Filhos 14 e 17 nos pares (gabarito e mesma versão) em que o .process ou o Studio os preenchem. */
+  const preenchidos = new Map<string, { gab: number; gabOk: number; mv: number; mvOk: number; falhas: string[] }>(
+    [14, 17].map((f) => [`${f}`, { gab: 0, gabOk: 0, mv: 0, mvOk: 0, falhas: [] }]),
+  );
   const scripts = { iguais: 0, diferentes: [] as string[], semArquivo: 0, soLocal: 0, gabIguais: 0, gabDiferentes: 0 };
 
   for (const par of pares) {
@@ -303,6 +311,13 @@ async function main(argv: string[]): Promise<void> {
         const { chave, coberto } = CHAVES[f]!;
         const doStudio = coberto ? s.filhos.filter(deEstadoCoberto(coberto)) : s.filhos;
         compararEntidades(NOMES[f]!, porChave(doStudio, chave, 'Studio', difs), porChave(g.filhos, chave, 'gerado', difs), difs);
+        if (COM_ORDEM.has(f)) {
+          const doGerado = g.filhos.map(chave);
+          const ordemStudio = doStudio.map(chave);
+          if (ordemStudio.join('|') !== doGerado.join('|') && [...ordemStudio].sort().join('|') === [...doGerado].sort().join('|')) {
+            difs.push({ chave: `${NOMES[f]}: ordem`, esperado: ordemStudio.join(' '), obtido: doGerado.join(' ') });
+          }
+        }
       } else {
         const chave = (n: No) => `${campo(n, 'processLinkBendPK.linkSequence')}/${campo(n, 'processLinkBendPK.bendSequence')}`;
         const doStudio = s.filhos.filter((b) => seqLinks.has(campo(b, 'processLinkBendPK.linkSequence')));
@@ -351,6 +366,21 @@ async function main(argv: string[]): Promise<void> {
       }
     }
 
+    for (const f of [14, 17]) {
+      const atributo = diagrama.objetos.some((o) => Boolean(o.attrs[f === 14 ? 'descriptorFields' : 'appsConfiguration']));
+      if (!(atributo || studio[f]!.filhos.length > 0) || !(gabarito || mesmaVersao)) continue;
+      const c = preenchidos.get(`${f}`)!;
+      const difs = difsPorFilho.get(f)!;
+      if (gabarito) {
+        c.gab++;
+        if (difs.length === 0) c.gabOk++;
+      } else {
+        c.mv++;
+        if (difs.length === 0) c.mvOk++;
+      }
+      for (const d of difs) c.falhas.push(`${nome}: ${d.chave}  studio=${JSON.stringify(d.esperado)}  gerado=${JSON.stringify(d.obtido)}`);
+    }
+
     const filhosTexto = [...difsPorFilho].map(([f, d]) => `${f}:${d.length === 0 ? 'ok' : d.length}`).join(' ');
     console.log(
       `${total === 0 ? 'ok   ' : 'diff '} ${gabarito ? 'gabarito' : mesmaVersao ? 'mesmaver' : 'antigo  '} ${nome}  [${filhosTexto}]` +
@@ -370,6 +400,12 @@ async function main(argv: string[]): Promise<void> {
   console.log(`  só com elementos suportados   ${resumo.suportados} (batem inteiros: ${resumo.suportadosOk})`);
   console.log(`  gabarito, parte coberta batendo em todos os filhos comparados: ${resumo.gabaritoOk}/${resumo.gabarito}`);
   console.log(`  gabarito por filho: ${[...okPorFilho].map(([f, n]) => `${f}=${n}/${resumo.gabarito}`).join('  ')}`);
+  for (const [f, c] of preenchidos) {
+    console.log(
+      `  filho ${f} nos pares com o atributo ou com linhas no Studio: gabarito ${c.gabOk}/${c.gab}, mesma versão ${c.mvOk}/${c.mv}`,
+    );
+    for (const d of c.falhas) console.log(`      filho ${f} diverge: ${d}`);
+  }
   console.log(`  mesma versão (estados iguais, links a mais no ecm30): ${mv.pares} pares, ${mv.ok} batem inteiros`);
   console.log(
     `  mesma versão com evento de link 36/42: ${mv.comLink}; slot 4 igual em ${mv.comLinkSlot4}, todos os filhos comparados em ${mv.comLinkTodos}`,
