@@ -107,7 +107,7 @@ export function semDeclaracaoXml(xml: string): string {
  * vira "?" (o "—" de um comentário chega ao servidor como "?"). Sem isso, todo
  * script com um travessão apareceria como alterado para sempre.
  */
-function normalizar(codigo: string): string {
+export function normalizar(codigo: string): string {
   return Array.from(codigo.replace(/\r\n?/g, '\n').replace(/\s+$/, ''))
     .map((c) => ((c.codePointAt(0) ?? 0) > 0xff ? '?' : c))
     .join('');
@@ -129,7 +129,7 @@ function decodificar(texto: string): string {
  * a definição trafega em ISO-8859-1, e um caractere fora dela seria trocado
  * por "?" no caminho.
  */
-function codificar(texto: string): string {
+export function codificar(texto: string): string {
   let saida = '';
   for (const c of texto.replace(/\r\n?/g, '\n')) {
     const ponto = c.codePointAt(0) ?? 0;

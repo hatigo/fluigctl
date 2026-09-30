@@ -14,6 +14,7 @@ script.
 | `push dataset` | pronto |
 | `push form` | pronto |
 | `push widget` | pronto (widgets sem Java) |
+| `push diagram` | só `--dry-run`, fase 1 |
 
 Fora de escopo por enquanto: `pull`, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
@@ -184,6 +185,31 @@ workspaces: 147 empacotadas, todas aprovadas por `unzip -t`; 7 recusadas por
 terem Java; 6 recusadas por não serem pasta de widget (dois `.zip`, um `.txt`,
 duas pastas só com `target/` e uma sem `WEB-INF`).
 
+## Convertendo um diagrama
+
+```sh
+fluigctl push diagram workflow/diagrams/meuProcesso.process --server cetenco-hml \
+  --dry-run --save-xml /tmp/meuProcesso.xml
+```
+
+Converte o `.process` no XML que o servidor importa (o formato do
+`.ecm30.xml` do Studio), sem rede e sem senha: do servidor só se usa o
+`companyId` do cadastro. Nada é publicado ainda — sem `--dry-run` o comando sai
+com código 2. `cardIndex` numérico vira o `formId`; um nome fica 0, com aviso.
+
+Por enquanto cobre pool, lane, início, tarefas de usuário e de serviço,
+gateways exclusivo/paralelo/join com condições, eventos intermediários
+(temporizador, condicional, sinal, erro anexado), fim, anotação, fluxo de
+sequência e bendpoints. Evento de link, subprocesso, campos descritores,
+configuração de app, regras de anexo e atribuição não conferida são recusados
+com código 6, listando o que falta — nunca sai XML parcial. Os scripts entram
+no XML quando há `workflow/scripts/<processId>.*.js` ao lado de
+`workflow/diagrams/`; sem a pasta, o comando avisa.
+
+O plano, as fases e o que foi medido estão em `docs/plano-push-diagrama.md`.
+`npm run diff-diagramas [raiz]` compara a conversão com os `.ecm30.xml` do Studio
+de uma pasta de workspaces, sem escrever nela.
+
 ## Códigos de saída
 
 | | |
@@ -234,7 +260,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 206 testes, sem rede e sem servidor Fluig
+npm test        # 240 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

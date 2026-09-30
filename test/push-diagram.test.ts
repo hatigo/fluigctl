@@ -1,0 +1,528 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { fakeFluig } from './helpers/fake-fluig.js';
+import { pushDiagram } from '../src/commands/push-diagram.js';
+import type { Server } from '../src/config.js';
+import { ErroFluigctl } from '../src/errors.js';
+import { converterDiagrama } from '../src/push/diagram/ecm30.js';
+import { lerXml, type No } from '../src/push/diagram/xml.js';
+
+const FIXTURES = fileURLToPath(new URL('./fixtures/diagrams/', import.meta.url));
+const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+const PROCESSO = readFileSync(join(FIXTURES, 'processoTeste.process'), 'latin1');
+
+const SERVER: Server = {
+  host: 'fluig.local', port: 8080, ssl: false, username: 'integracao',
+  companyId: 7, userCode: 'Integracao.Fluig', passwordEnv: 'FLUIG_DIAGRAMA_TESTE_PASSWORD',
+};
+
+async function codigoDe(p: Promise<unknown>): Promise<number | undefined> {
+  try {
+    await p;
+    return undefined;
+  } catch (erro) {
+    return erro instanceof ErroFluigctl ? erro.codigo : -1;
+  }
+}
+
+function erroDe(fn: () => unknown): ErroFluigctl {
+  try {
+    fn();
+  } catch (erro) {
+    if (erro instanceof ErroFluigctl) return erro;
+    throw erro;
+  }
+  assert.fail('esperava ErroFluigctl');
+}
+
+/** Os 20 filhos da raiz do XML gerado. */
+function filhosDaRaiz(xml: string): No[] {
+  return lerXml(xml).filhos[0]!.filhos;
+}
+
+const texto = (no: No, ...caminho: string[]): string =>
+  caminho.reduce<No | undefined>((n, nome) => n?.filhos.find((f) => f.nome === nome), no)?.texto ?? '<ausente>';
+
+test('o tokenizer não encerra a tag num ">" dentro de atributo e decodifica as entidades', () => {
+  const raiz = lerXml('<?xml version="1.0"?><a v="x > y &amp; &#xe7;&#227; &lt;b/>" w="2"><b/></a>');
+  const a = raiz.filhos[0]!;
+  assert.equal(a.nome, 'a');
+  assert.deepEqual(a.attrs, { v: 'x > y & çã <b/>', w: '2' });
+  assert.deepEqual(a.filhos.map((f) => f.nome), ['b']);
+});
+
+test('XML malformado é recusado com código 6, sem árvore parcial', () => {
+  assert.equal(erroDe(() => lerXml('<a><b></a>')).codigo, 6);
+  assert.equal(erroDe(() => converterDiagrama('<<<<<<< HEAD\n<xmi:XMI/>', { companyId: 1 })).codigo, 6);
+});
+
+test('início → tarefas → fim numa pool com lanes sai no formato do Studio', () => {
+  const r = converterDiagrama(PROCESSO, { companyId: 1 });
+  assert.equal(r.xml, readFileSync(join(FIXTURES, 'processoTeste.ecm30.xml'), 'utf8'));
+
+  const filhos = filhosDaRaiz(r.xml);
+  assert.equal(filhos.length, 20);
+  assert.deepEqual(
+    filhos.map((f, i) => (f.filhos.length === 0 ? `${i}:vazio` : `${i}:${f.nome === 'list' ? f.filhos[0]!.nome : f.nome}`)),
+    [
+      '0:ProcessDefinition', '1:ProcessDefinitionVersion', '2:ProcessState', '3:vazio', '4:ProcessLink',
+      '5:vazio', '6:vazio', '7:vazio', '8:SwimLane', '9:vazio', '10:vazio', '11:ProcessLinkBend',
+      '12:vazio', '13:vazio', '14:vazio', '15:vazio', '16:vazio', '17:vazio', '18:vazio', '19:vazio',
+    ],
+  );
+  assert.deepEqual(r.contagens, { estados: 4, links: 3, raias: 3, dobras: 2, condicoes: 0, eventos: 0, anotacoes: 0 });
+  assert.equal(r.processId, 'processoTeste');
+});
+
+test('sequence da lane é a posição entre pools e lanes, não o sufixo do id', () => {
+  const raias = filhosDaRaiz(converterDiagrama(PROCESSO, { companyId: 1 }).xml)[8]!.filhos;
+  const porNome = new Map(raias.map((r) => [texto(r, 'stateName'), r]));
+
+  const aprovacao = porNome.get('Aprovação')!; // id bpmnswimlane9
+  assert.equal(texto(aprovacao, 'swimLanePK', 'sequence'), '3');
+  assert.equal(texto(aprovacao, 'parentSequence'), '1');
+  assert.equal(texto(aprovacao, 'type'), '2');
+  // Posição da lane é absoluta: pool (10,10) + lane (30,150).
+  assert.equal(texto(aprovacao, 'positionX'), '40');
+  assert.equal(texto(aprovacao, 'positionY'), '160');
+  assert.equal(texto(aprovacao, 'color'), 'FFFFFF', 'lane sem cores fica branca');
+});
+
+test('PK de estado, link e lane usa version 1; a PDV e os bends usam a versão do .process', () => {
+  const filhos = filhosDaRaiz(converterDiagrama(PROCESSO, { companyId: 1 }).xml);
+  const pdv = filhos[1]!;
+  assert.equal(texto(pdv, 'processDefinitionVersionPK', 'version'), '3');
+  assert.equal(texto(pdv, 'processDefinitionVersionPK', 'processId'), 'Processo de Teste');
+
+  for (const estado of filhos[2]!.filhos) assert.equal(texto(estado, 'processStatePK', 'version'), '1');
+  for (const link of filhos[4]!.filhos) assert.equal(texto(link, 'processLinkPK', 'version'), '1');
+  for (const raia of filhos[8]!.filhos) assert.equal(texto(raia, 'swimLanePK', 'version'), '1');
+  for (const bend of filhos[11]!.filhos) assert.equal(texto(bend, 'processLinkBendPK', 'version'), '3');
+});
+
+test('companyId vem de quem chama, não do arquivo', () => {
+  const pd = filhosDaRaiz(converterDiagrama(PROCESSO, { companyId: 42 }).xml)[0]!;
+  assert.equal(texto(pd, 'processDefinitionPK', 'companyId'), '42');
+});
+
+test('atribuição: Pool Grupo vira <Group> e Executor Atividade vira BaseActivity + Returns', () => {
+  const estados = filhosDaRaiz(converterDiagrama(PROCESSO, { companyId: 1 }).xml)[2]!.filhos;
+  const porSequencia = new Map(estados.map((e) => [texto(e, 'processStatePK', 'sequence'), e]));
+
+  const grupo = porSequencia.get('5')!;
+  assert.equal(texto(grupo, 'engineAllocationId'), 'Pool Grupo');
+  assert.equal(
+    texto(grupo, 'engineAllocationConfiguration'),
+    '<AssignmentController><Group>APROVADORES</Group></AssignmentController>',
+  );
+
+  const executor = porSequencia.get('7')!;
+  assert.equal(texto(executor, 'engineAllocationId'), 'Executor Atividade');
+  assert.equal(
+    texto(executor, 'engineAllocationConfiguration'),
+    '<AssignmentController><BaseActivity>4</BaseActivity><Returns>Last</Returns></AssignmentController>',
+  );
+});
+
+test('tarefa sem managerMechanism não leva os campos de atribuição', () => {
+  const semMecanismo = PROCESSO.replace(
+    / managerMechanism="Executor Atividade" managerAssignmentControllerString="[^"]*"/,
+    '',
+  );
+  const estados = filhosDaRaiz(converterDiagrama(semMecanismo, { companyId: 1 }).xml)[2]!.filhos;
+  const tarefa = estados.find((e) => texto(e, 'processStatePK', 'sequence') === '7')!;
+  assert.ok(!tarefa.filhos.some((f) => f.nome.startsWith('engineAllocation')));
+});
+
+test('elemento não suportado é recusado com código 6, listando o tipo', () => {
+  const comSubprocesso = PROCESSO.replace(
+    '<bpmn2:BpmnEndEvent',
+    '<bpmn2:BpmnSubProcess id="subprocess12" name="Filho" type="100"/>\n  <bpmn2:BpmnEndEvent',
+  );
+  const erro = erroDe(() => converterDiagrama(comSubprocesso, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /BpmnSubProcess \(type 100\)/);
+});
+
+test('atribuição que não foi conferida contra o Studio é recusada com código 6', () => {
+  const retornoDois = PROCESSO.replace(
+    'AssignmentControllerExecutorMechanism>&#xA;  &lt;idNode>startevent4&lt;/idNode>&#xA;  &lt;returns>1',
+    'AssignmentControllerExecutorMechanism>&#xA;  &lt;idNode>startevent4&lt;/idNode>&#xA;  &lt;returns>2',
+  );
+  const erro = erroDe(() => converterDiagrama(retornoDois, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /AssignmentControllerExecutorMechanism em task7/);
+});
+
+test('cardIndex por nome: formId 0 e aviso de que será resolvido no destino', () => {
+  const r = converterDiagrama(PROCESSO.replace('cardIndex="1234"', 'cardIndex="Formulario de Teste"'), { companyId: 1 });
+  assert.equal(r.formId, 0);
+  assert.equal(texto(filhosDaRaiz(r.xml)[1]!, 'formId'), '0');
+  assert.match(r.avisos.join('\n'), /pelo nome \("Formulario de Teste"\).*resolvido pelo nome/);
+});
+
+test('push diagram sem --dry-run é recusado com código 2', async () => {
+  assert.equal(await codigoDe(pushDiagram({ server: SERVER, arquivo: join(FIXTURES, 'processoTeste.process') })), 2);
+});
+
+test('--save-xml grava o XML gerado', async () => {
+  const destino = join(mkdtempSync(join(tmpdir(), 'fluigctl-diagrama-')), 'saida.xml');
+  const r = await pushDiagram({ server: SERVER, arquivo: join(FIXTURES, 'processoTeste.process'), dryRun: true, salvarXml: destino });
+  assert.equal(readFileSync(destino, 'utf8'), r.xml);
+});
+
+function rodarCli(args: string[], env: NodeJS.ProcessEnv): Promise<{ codigo: number; saida: string }> {
+  return new Promise((ok) => {
+    execFile(process.execPath, [CLI, ...args], { env }, (erro, stdout, stderr) => {
+      ok({ codigo: erro ? Number(erro.code) : 0, saida: stdout + stderr });
+    });
+  });
+}
+
+test('CLI: dry-run com cardIndex por nome avisa, não pede senha e não faz nenhuma requisição', async () => {
+  const fluig = await fakeFluig({});
+  try {
+    const url = new URL(fluig.url);
+    const config = mkdtempSync(join(tmpdir(), 'fluigctl-cfg-'));
+    mkdirSync(join(config, 'fluigctl'));
+    writeFileSync(
+      join(config, 'fluigctl', 'servers.json'),
+      JSON.stringify({
+        version: 1,
+        servers: {
+          teste: { ...SERVER, host: url.hostname, port: Number(url.port) },
+        },
+      }),
+    );
+    const arquivo = join(config, 'processoTeste.process');
+    writeFileSync(arquivo, PROCESSO.replace('cardIndex="1234"', 'cardIndex="Formulario de Teste"'), 'latin1');
+
+    const env = { PATH: process.env['PATH'] ?? '', XDG_CONFIG_HOME: config };
+    const r = await rodarCli(['push', 'diagram', arquivo, '--server', 'teste', '--dry-run'], env);
+
+    assert.equal(r.codigo, 0, r.saida);
+    assert.match(r.saida, /processoTeste versão 3/);
+    assert.match(r.saida, /companyId 7/);
+    assert.match(r.saida, /aviso: o formulário está referenciado pelo nome/);
+    assert.match(r.saida, /\[dry-run\] Nada foi enviado/);
+    assert.equal(fluig.requests.length, 0);
+
+    const semDryRun = await rodarCli(['push', 'diagram', arquivo, '--server', 'teste'], env);
+    assert.equal(semDryRun.codigo, 2);
+    assert.match(semDryRun.saida, /ainda não implementada \(fase 3\); use --dry-run/);
+    assert.equal(fluig.requests.length, 0);
+  } finally {
+    await fluig.close();
+  }
+});
+
+test('atributo que a conversão não conhece é recusado com código 6, em vez de descartado', () => {
+  const erro = erroDe(() =>
+    converterDiagrama(PROCESSO.replace('<bpmn2:BpmnTask id="task7"', '<bpmn2:BpmnTask novoAtributo="x" id="task7"'), { companyId: 1 }),
+  );
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /atributo novoAtributo em task7/);
+});
+
+test('atribuição do gestor do processo não suportada é recusada, e não vira campo vazio', () => {
+  const gestorAssociado = PROCESSO.replace(
+    /managerAssignmentController="&lt;org\.eclipse\.bpmn2\.impl\.AssignmentControllerGroup>[^"]*"/,
+    'managerAssignmentController="&lt;org.eclipse.bpmn2.impl.AssignmentControllerAssociated>&#xA;  &lt;type>OR&lt;/type>&#xA;&lt;/org.eclipse.bpmn2.impl.AssignmentControllerAssociated>"',
+  );
+  assert.notEqual(gestorAssociado, PROCESSO);
+  const erro = erroDe(() => converterDiagrama(gestorAssociado, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /AssignmentControllerAssociated em processoTeste/);
+});
+
+test('filho dentro de objeto bpmn2 ou elemento desconhecido na raiz é recusado com código 6', () => {
+  const comFilho = PROCESSO.replace(
+    '<bpmn2:BpmnEndEvent id="endevent6" name="Fim" incoming="flow11" type="60" extendedFields="&lt;list/>" signalId="0"/>',
+    '<bpmn2:BpmnEndEvent id="endevent6" name="Fim" incoming="flow11" type="60" signalId="0"><eventDefinitions/></bpmn2:BpmnEndEvent>',
+  );
+  assert.notEqual(comFilho, PROCESSO);
+  const e1 = erroDe(() => converterDiagrama(comFilho, { companyId: 1 }));
+  assert.equal(e1.codigo, 6);
+  assert.match(e1.message, /elementos filhos \(<eventDefinitions>\)/);
+
+  const naRaiz = PROCESSO.replace('</xmi:XMI>', '  <outro:Coisa id="x1"/>\n</xmi:XMI>');
+  const erro = erroDe(() => converterDiagrama(naRaiz, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /<outro:Coisa> na raiz/);
+});
+
+test('arquivo com byte fora do ASCII é recusado com código 6, dizendo onde', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fluigctl-ascii-'));
+  const arquivo = join(dir, 'acento.process');
+  writeFileSync(arquivo, PROCESSO.replace('name="Fim"', 'name="Término"'), 'utf8');
+  await assert.rejects(
+    () => pushDiagram({ server: SERVER, arquivo, dryRun: true }),
+    (erro: unknown) => erro instanceof ErroFluigctl && erro.codigo === 6 && /não é ASCII: byte 0xc3 na posição \d+ \(linha \d+\)/.test(erro.message),
+  );
+});
+
+test('sequence de estado ou de link repetido pelo sufixo do id é recusado com código 6', () => {
+  const estadoRepetido = PROCESSO.replaceAll('endevent6', 'endevent5');
+  const e1 = erroDe(() => converterDiagrama(estadoRepetido, { companyId: 1 }));
+  assert.equal(e1.codigo, 6);
+  assert.match(e1.message, /estado com sequence 5 repetido \(task5, endevent5\)/);
+
+  const linkRepetido = PROCESSO.replaceAll('flow11', 'fluxo8');
+  const e2 = erroDe(() => converterDiagrama(linkRepetido, { companyId: 1 }));
+  assert.equal(e2.codigo, 6);
+  assert.match(e2.message, /fluxo com sequence 8 repetido \(flow8, fluxo8\)/);
+});
+
+test('CDATA, DOCTYPE e texto solto entre elementos são recusados com código 6', () => {
+  for (const xml of [
+    '<a><![CDATA[x]]></a>',
+    '<!DOCTYPE a><a/>',
+    '<a>solto<b/></a>',
+    '<a><b/>solto</a>',
+    '<a/>depois',
+  ]) {
+    assert.equal(erroDe(() => lerXml(xml)).codigo, 6, xml);
+  }
+  assert.equal(lerXml('<a>\n  <b>texto de folha</b>\n</a>').filhos[0]!.filhos[0]!.texto, 'texto de folha');
+});
+
+const FASE1 = readFileSync(join(FIXTURES, 'processoFase1.process'), 'latin1');
+
+/** Entidades de um filho da raiz, indexadas por um campo (caminho separado por ponto). */
+function porCampo(filho: No, ...caminho: string[]): Map<string, No> {
+  return new Map(filho.filhos.map((e) => [texto(e, ...caminho), e]));
+}
+
+const nomes = (no: No): string[] => no.filhos.map((f) => f.nome);
+
+test('gateway exclusivo: estado automático e condições por regra e por expressão', () => {
+  const filhos = filhosDaRaiz(converterDiagrama(FASE1, { companyId: 1 }).xml);
+  const gateway = porCampo(filhos[2]!, 'processStatePK', 'sequence').get('7')!;
+  assert.deepEqual(nomes(gateway), [
+    'processStatePK', 'stateName', 'stateDescription', 'joint', 'initialState', 'transferAttachments',
+    'subProcessId', 'formFolder', 'automatic', 'positionX', 'positionY', 'inhibitTransfer', 'stateType',
+    'bpmnType', 'signalId', 'openInstances', 'destinationStates', 'digitalSignature',
+  ]);
+  assert.equal(texto(gateway, 'stateType'), '1');
+  assert.equal(texto(gateway, 'automatic'), 'true');
+
+  const condicoes = porCampo(filhos[3]!, 'conditionProcessStatePK', 'expressionOrder');
+  const porRegra = condicoes.get('1')!;
+  assert.equal(texto(porRegra, 'conditionProcessStatePK', 'version'), '2', 'PK da condição leva a versão do .process');
+  assert.equal(texto(porRegra, 'conditionProcessStatePK', 'sequence'), '7');
+  assert.equal(texto(porRegra, 'condition'), 'false');
+  assert.equal(texto(porRegra, 'destinationSequenceId'), '8');
+  assert.equal(texto(porRegra, 'conditionType'), '1');
+
+  const porExpressao = condicoes.get('2')!;
+  assert.equal(texto(porExpressao, 'condition'), 'hAPI.getCardValue("aprovado") != "sim"');
+  assert.equal(texto(porExpressao, 'destinationSequenceId'), '10');
+  assert.equal(texto(porExpressao, 'conditionType'), '0');
+
+  const regras = filhos[19]!.filhos;
+  assert.equal(regras.length, 1, 'só a condição por regra tem regra');
+  assert.deepEqual(
+    regras[0]!.filhos.map((f) => `${f.nome}=${f.texto}`),
+    ['sequence=7', 'expressionOrder=1', 'ruleOrder=1', 'field=aprovado', 'value=sim', 'operator=1', 'valueType=1'],
+  );
+});
+
+test('o sequence da regra é o do gateway, não o que o blob guarda', () => {
+  const blobVelho = FASE1.replace('&lt;sequence>7&lt;/sequence>', '&lt;sequence>0&lt;/sequence>');
+  assert.notEqual(blobVelho, FASE1);
+  const regra = filhosDaRaiz(converterDiagrama(blobVelho, { companyId: 1 }).xml)[19]!.filhos[0]!;
+  assert.equal(texto(regra, 'sequence'), '7');
+});
+
+test('paralelo e join viram stateType 3 e 4, sem condição', () => {
+  const filhos = filhosDaRaiz(converterDiagrama(FASE1, { companyId: 1 }).xml);
+  const estados = porCampo(filhos[2]!, 'processStatePK', 'sequence');
+  for (const [sequencia, tipo] of [['10', '3'], ['13', '4']] as const) {
+    assert.equal(texto(estados.get(sequencia)!, 'stateType'), tipo);
+    assert.equal(texto(estados.get(sequencia)!, 'automatic'), 'false');
+  }
+  assert.deepEqual([...porCampo(filhos[3]!, 'conditionProcessStatePK', 'sequence').keys()], ['7']);
+});
+
+test('temporizador: evento automático e gatilho com runType numérico', () => {
+  const filhos = filhosDaRaiz(converterDiagrama(FASE1, { companyId: 1 }).xml);
+  const timer = porCampo(filhos[2]!, 'processStatePK', 'sequence').get('14')!;
+  assert.equal(texto(timer, 'stateType'), '0');
+  assert.equal(texto(timer, 'automatic'), 'true');
+  assert.equal(texto(timer, 'instruction'), 'Evento intermediário do processo');
+  assert.equal(texto(timer, 'parentSequence'), '0');
+
+  const gatilhos = filhos[12]!.filhos;
+  assert.equal(gatilhos.length, 1);
+  assert.deepEqual(
+    gatilhos[0]!.filhos.slice(1).map((f) => `${f.nome}=${f.texto}`),
+    ['runType=1', 'type=2', 'timeTrigger=8:30:0', 'frequencia=02'],
+  );
+  assert.equal(texto(gatilhos[0]!, 'processStateTriggerPK', 'version'), '2');
+  assert.equal(texto(gatilhos[0]!, 'processStateTriggerPK', 'stateSequence'), '14');
+  assert.equal(texto(gatilhos[0]!, 'processStateTriggerPK', 'triggerSequence'), '0');
+});
+
+test('tarefa de serviço: executionType e ProcessStateService; o erro anexado aponta para ela', () => {
+  const filhos = filhosDaRaiz(converterDiagrama(FASE1, { companyId: 1 }).xml);
+  const estados = porCampo(filhos[2]!, 'processStatePK', 'sequence');
+  assert.equal(texto(estados.get('5')!, 'executionType'), '1');
+  assert.equal(texto(estados.get('6')!, 'bpmnType'), '43');
+  assert.equal(texto(estados.get('6')!, 'parentSequence'), '5');
+  assert.equal(texto(estados.get('6')!, 'automatic'), 'false');
+
+  const servicos = filhos[15]!.filhos;
+  assert.equal(servicos.length, 1);
+  assert.deepEqual(
+    servicos[0]!.filhos.map((f) => `${f.nome}=${f.texto}`),
+    [
+      'companyId=1', 'processId=processoFase1', 'version=1', 'sequence=5', 'attempts=3',
+      'sucessFullMessage=Integração executada com sucesso', 'serviceName=', 'frequency=1', 'frequencyType=0',
+    ],
+  );
+});
+
+test('evento de erro que não bate com a tarefa de serviço é recusado com código 6', () => {
+  const erro = erroDe(() => converterDiagrama(FASE1.replace('sequenceAttached="5"', 'sequenceAttached="9"'), { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /evento de erro intermediateerror6 sem vínculo coerente/);
+});
+
+test('anotação vira ProcessComponGraf e o fluxo dela, ProcessLinkAssoc — não ProcessLink', () => {
+  const filhos = filhosDaRaiz(converterDiagrama(FASE1, { companyId: 1 }).xml);
+  const anotacao = filhos[9]!.filhos[0]!;
+  assert.equal(texto(anotacao, 'componType'), '1');
+  assert.equal(texto(anotacao, 'processComponGrafPK', 'componGrafSequence'), '16');
+  assert.equal(texto(anotacao, 'stateName'), 'Confira antes');
+  assert.equal(texto(anotacao, 'positionX'), '420');
+
+  const associacao = filhos[10]!.filhos[0]!;
+  assert.equal(texto(associacao, 'processLinkAssocPK', 'linkSequence'), '32');
+  assert.equal(texto(associacao, 'initialStateSequence'), '16');
+  assert.equal(texto(associacao, 'finalStateSequence'), '8');
+  assert.ok(!porCampo(filhos[4]!, 'processLinkPK', 'linkSequence').has('32'));
+});
+
+test('movementTitle/Description/AccessLinkDescription vazios saem no ProcessLink; preenchidos são recusados', () => {
+  const links = porCampo(filhosDaRaiz(converterDiagrama(FASE1, { companyId: 1 }).xml)[4]!, 'processLinkPK', 'linkSequence');
+  assert.deepEqual(nomes(links.get('21')!).slice(-4), ['type', 'movementTitle', 'movementDescription', 'movementAccessLinkDescription']);
+  assert.equal(texto(links.get('21')!, 'movementTitle'), '');
+  assert.equal(nomes(links.get('22')!).at(-1), 'type', 'sem os atributos, o link não leva os campos');
+
+  const preenchido = FASE1.replace('movementTitle=""', 'movementTitle="Solicita&#xe7;&#xe3;o enviada"');
+  const erro = erroDe(() => converterDiagrama(preenchido, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /movementTitle="Solicitação enviada" em flow21/);
+});
+
+test('valor sem mapeamento conferido continua recusado com código 6', () => {
+  const casos: [string, RegExp][] = [
+    [FASE1.replace('&lt;runType>HOUR', '&lt;runType>WEEK'), /gatilho não suportado em intermediatetimer14/],
+    [FASE1.replace('type="126"', 'type="121"'), /BpmnGateway \(type 121\)/],
+    [
+      FASE1.replace('<bpmn2:BpmnEndEvent', '<bpmn2:BpmnIntermediateEvent id="intermediatelink40" name="L" type="42" sequenceAttached="0" signalId="0"/>\n  <bpmn2:BpmnEndEvent'),
+      /BpmnIntermediateEvent \(type 42\)/,
+    ],
+    [
+      FASE1.replace('&lt;targetTask>task8&lt;/targetTask>', '&lt;targetTask>task8&lt;/targetTask>&#xA;    &lt;mechanism>Usu&#xe1;rio&lt;/mechanism>'),
+      /atribuição Usuário na condição 1 de exclusivegateway7/,
+    ],
+    [FASE1.replace('scriptFileName="processoFase1.servicetask5.js"', 'scriptFileName="outro.servicetask5.js"'), /scriptFileName "outro.servicetask5.js"/],
+  ];
+  for (const [diagrama, motivo] of casos) {
+    assert.notEqual(diagrama, FASE1);
+    const erro = erroDe(() => converterDiagrama(diagrama, { companyId: 1 }));
+    assert.equal(erro.codigo, 6, String(motivo));
+    assert.match(erro.message, motivo);
+  }
+});
+
+test('scripts viram WorkflowProcessEvent por eventId, codificados como no aplicarScripts', () => {
+  const scripts = new Map([
+    ['servicetask5', 'function servicetask5() {\r\n  return "a" < "b — c";\r\n}\r\n'],
+    ['afterProcessCreate', 'function afterProcessCreate() {}'],
+  ]);
+  const r = converterDiagrama(FASE1, { companyId: 3, scripts });
+  const eventos = filhosDaRaiz(r.xml)[6]!.filhos;
+  assert.deepEqual(eventos.map((e) => texto(e, 'workflowProcessEventPK', 'eventId')), ['afterProcessCreate', 'servicetask5']);
+  assert.deepEqual(
+    eventos[1]!.filhos[0]!.filhos.map((f) => `${f.nome}=${f.texto}`),
+    ['companyId=3', 'eventId=servicetask5', 'processId=processoFase1', 'version=1'],
+  );
+  assert.equal(texto(eventos[1]!, 'eventDescription'), 'function servicetask5() {\n  return "a" < "b — c";\n}\n');
+  assert.match(r.xml, /return &quot;a&quot; &lt; &quot;b &#8212; c&quot;;/, 'fora do latin1 vira referência numérica');
+  assert.equal(r.contagens.eventos, 2);
+  assert.deepEqual(r.avisos, []);
+
+  const semServico = converterDiagrama(FASE1, { companyId: 3, scripts: new Map([['afterProcessCreate', 'x']]) });
+  assert.match(semServico.avisos.join('\n'), /servicetask5 não tem script local/);
+});
+
+test('dry-run lê os scripts de workflow/scripts ao lado de workflow/diagrams; sem a pasta, avisa', async () => {
+  const workflow = join(mkdtempSync(join(tmpdir(), 'fluigctl-fase1-')), 'workflow');
+  mkdirSync(join(workflow, 'diagrams'), { recursive: true });
+  const arquivo = join(workflow, 'diagrams', 'processoFase1.process');
+  writeFileSync(arquivo, FASE1, 'latin1');
+
+  const semPasta = await pushDiagram({ server: SERVER, arquivo, dryRun: true });
+  assert.equal(filhosDaRaiz(semPasta.xml)[6]!.filhos.length, 0);
+  assert.match(semPasta.avisos.join('\n'), /pasta de scripts não encontrada.*sai sem os scripts/);
+
+  mkdirSync(join(workflow, 'scripts'));
+  writeFileSync(join(workflow, 'scripts', 'processoFase1.servicetask5.js'), 'function servicetask5() {}\n');
+  writeFileSync(join(workflow, 'scripts', 'outroProcesso.beforeStateEntry.js'), 'function beforeStateEntry() {}\n');
+  const comPasta = await pushDiagram({ server: SERVER, arquivo, dryRun: true });
+  assert.deepEqual(
+    filhosDaRaiz(comPasta.xml)[6]!.filhos.map((e) => texto(e, 'workflowProcessEventPK', 'eventId')),
+    ['servicetask5'],
+  );
+  assert.deepEqual(comPasta.avisos, []);
+});
+
+test('regra ou condição que geraria campo inválido ou PK repetida é recusada com código 6', () => {
+  const regras = /&lt;rules>([\s\S]*?)&lt;\/rules>/.exec(FASE1)![1]!;
+  const casos: [string, RegExp][] = [
+    [FASE1.replace('&lt;operator>1&lt;/operator>', '&lt;operator>EQ&lt;/operator>'), /regra de condição não suportada em exclusivegateway7/],
+    [FASE1.replace('&lt;valueType>1&lt;/valueType>', '&lt;valueType>&lt;/valueType>'), /regra de condição não suportada em exclusivegateway7/],
+    [FASE1.replace(/&#xA;\s*&lt;field>aprovado&lt;\/field>/, ''), /regra de condição não suportada em exclusivegateway7/],
+    [FASE1.replace('&lt;order>2&lt;/order>', '&lt;order>1&lt;/order>'), /condição com order 1 repetido em exclusivegateway7/],
+    [FASE1.replace(regras, regras + regras), /regra com ruleOrder 1 repetido na condição 1 de exclusivegateway7/],
+    [FASE1.replace('&lt;targetTask>task8&lt;', '&lt;targetTask>bpmnswimlane2&lt;'), /condição 1 de exclusivegateway7 incompleta ou para destino não suportado/],
+    [FASE1.replace('&lt;targetTask>task8&lt;', '&lt;targetTask>task11&lt;'), /condição 1 de exclusivegateway7 aponta para task11, sem fluxo do gateway até lá/],
+  ];
+  for (const [diagrama, motivo] of casos) {
+    assert.notEqual(diagrama, FASE1, String(motivo));
+    const erro = erroDe(() => converterDiagrama(diagrama, { companyId: 1 }));
+    assert.equal(erro.codigo, 6, String(motivo));
+    assert.match(erro.message, motivo);
+  }
+});
+
+test('fluxo ou associação com pool ou lane numa das pontas é recusado com código 6', () => {
+  const casos: [string, RegExp][] = [
+    [FASE1.replace('sourceRef="task8" targetRef="endevent15"', 'sourceRef="task8" targetRef="bpmnpool1"'), /fluxo flow30 ligado a elemento não suportado/],
+    [FASE1.replace('sourceRef="startevent4" targetRef="servicetask5"', 'sourceRef="bpmnswimlane2" targetRef="servicetask5"'), /fluxo flow20 ligado a elemento não suportado/],
+    [FASE1.replace('sourceRef="annotationtask16" targetRef="task8"', 'sourceRef="annotationtask16" targetRef="bpmnpool1"'), /fluxo flow32 ligado a elemento não suportado/],
+    [FASE1.replace('sourceRef="annotationtask16" targetRef="task8"', 'sourceRef="task8" targetRef="annotationtask16"'), /fluxo flow32 ligado a elemento não suportado/],
+  ];
+  for (const [diagrama, motivo] of casos) {
+    assert.notEqual(diagrama, FASE1, String(motivo));
+    const erro = erroDe(() => converterDiagrama(diagrama, { companyId: 1 }));
+    assert.equal(erro.codigo, 6, String(motivo));
+    assert.match(erro.message, motivo);
+  }
+});
+
+test('script com caractere de controle fora de tab, LF e CR é recusado com código 6', () => {
+  const scripts = new Map([['servicetask5', 'var a = "\u0001";\n']]);
+  const erro = erroDe(() => converterDiagrama(FASE1, { companyId: 1, scripts }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /script servicetask5 com caractere de controle U\+0001/);
+  assert.doesNotThrow(() => converterDiagrama(FASE1, { companyId: 1, scripts: new Map([['servicetask5', 'a\tb\r\nc']]) }));
+});

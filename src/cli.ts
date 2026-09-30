@@ -11,6 +11,7 @@ import {
 } from './config.js';
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { pushDataset } from './commands/push-dataset.js';
+import { pushDiagram } from './commands/push-diagram.js';
 import { pushForm } from './commands/push-form.js';
 import { pushProcess } from './commands/push-process.js';
 import { pushWidget } from './commands/push-widget.js';
@@ -40,6 +41,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e scripts de proc
       diagrama e atividades continuam sendo publicados pelo Fluig Studio
   fluigctl push widget <wcm/widget/nome> --server <nome> [--dry-run]
       empacota a widget num .war e envia; o servidor instala ou atualiza em segundo plano
+  fluigctl push diagram <arquivo.process> --server <nome> --dry-run [--save-xml <arquivo>]
+      converte o diagrama no XML que o servidor importa, sem rede e sem senha;
+      por enquanto só --dry-run (fase 1 de docs/plano-push-diagrama.md)
 
 A senha de cada servidor vem de variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD).
 Nenhuma senha é gravada em disco.`;
@@ -223,14 +227,15 @@ async function comandoServer(argv: string[]): Promise<void> {
 
 async function comandoPush(argv: string[]): Promise<void> {
   const tipo = argv[0];
-  if (tipo !== 'dataset' && tipo !== 'form' && tipo !== 'process' && tipo !== 'widget') {
+  if (tipo !== 'dataset' && tipo !== 'form' && tipo !== 'process' && tipo !== 'widget' && tipo !== 'diagram') {
     throw new ErroFluigctl(
-      `push aceita "dataset", "form", "process" ou "widget" — recebi "${tipo ?? ''}"`,
+      `push aceita "dataset", "form", "process", "widget" ou "diagram" — recebi "${tipo ?? ''}"`,
       2,
     );
   }
   if (tipo === 'process') return pushProcessCli(argv.slice(1));
   if (tipo === 'widget') return pushWidgetCli(argv.slice(1));
+  if (tipo === 'diagram') return pushDiagramCli(argv.slice(1));
 
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
@@ -472,6 +477,50 @@ async function pushWidgetCli(argv: string[]): Promise<void> {
       : `${detalhe} enviado para ${values.server} (${serverUrl(servidor)}). ` +
           'A instalação acontece em segundo plano no servidor.',
   );
+}
+
+async function pushDiagramCli(argv: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      'dry-run': { type: 'boolean', default: false },
+      'save-xml': { type: 'string' },
+    },
+  });
+
+  const arquivo = positionals[0];
+  if (!arquivo || !values.server) {
+    throw new ErroFluigctl(
+      'uso: fluigctl push diagram <arquivo.process> --server <nome> --dry-run [--save-xml <arquivo>]',
+      2,
+    );
+  }
+
+  // Sem resolvePassword: o dry-run do diagrama não abre sessão, só usa o companyId do cadastro.
+  const servidor = resolveServer(loadConfig(), values.server);
+
+  const r = await pushDiagram({
+    server: servidor,
+    arquivo,
+    dryRun: values['dry-run'],
+    ...(values['save-xml'] === undefined ? {} : { salvarXml: values['save-xml'] }),
+  });
+
+  const c = r.contagens;
+  console.log(`${r.processId} versão ${r.versao} para ${values.server} (companyId ${servidor.companyId})`);
+  console.log(`  formId               ${r.formId}`);
+  console.log(`  estados              ${c.estados}`);
+  console.log(`  links                ${c.links}`);
+  console.log(`  raias                ${c.raias}`);
+  console.log(`  bendpoints           ${c.dobras}`);
+  console.log(`  condições            ${c.condicoes}`);
+  console.log(`  anotações            ${c.anotacoes}`);
+  console.log(`  scripts              ${c.eventos}`);
+  for (const aviso of r.avisos) console.log(`aviso: ${aviso}`);
+  if (values['save-xml']) console.log(`XML gravado em ${values['save-xml']}.`);
+  console.log('[dry-run] Nada foi enviado.');
 }
 
 async function main(argv: string[]): Promise<void> {

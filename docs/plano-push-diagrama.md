@@ -23,7 +23,7 @@ Já existe um conversor MVP no fluiglocaldev (StrategiConsultoria),
 `fluig-cd/src/core/processConverter.ts`, ~600 linhas. Cobre pool, lane,
 início, tarefa, fim e fluxo de sequência; recusa gateway, evento intermediário
 e subprocesso. Isso dá **44 de 255** diagramas reais. A numeração de lanes
-(contador) e a versão da PK dele diferem das do Studio.
+por contador dele bate com a do Studio (medido na fase 1); a versão da PK não.
 
 ### Estrutura do `.ecm30.xml`
 
@@ -56,8 +56,9 @@ Contagem = total de elementos somando os 118. Referência pequena:
 
 ### Mapeamento `.process` → ecm30
 
-- `sequence` = sufixo numérico do id no `.process` (`task5` → 5; `flow31` →
-  `linkSequence` 31).
+- `sequence` de estado e link = sufixo numérico do id no `.process` (`task5` →
+  5; `flow31` → `linkSequence` 31). Sufixo repetido (`task5` e `endevent5`) é
+  recusado.
 - `bpmnType` = `type` do `.process`; `stateType` é derivado:
 
   | `type` | `stateType` |
@@ -77,19 +78,53 @@ Contagem = total de elementos somando os 118. Referência pequena:
   `ExecutorMechanism` → `<BaseActivity>N</BaseActivity><Returns>Last</Returns>`).
 - Tarefa de serviço (82) → `executionType` + `ProcessStateService` +
   `WorkflowProcessEvent` com `eventId=servicetaskN`; o evento de erro anexado
-  (43) leva `parentSequence`.
+  (43) leva `parentSequence` = sequence da tarefa. No `ProcessStateService`,
+  `frequency` 0 ou ausente sai 1 e `frequencyType` ausente sai 0 (460 tarefas);
+  `serviceName` só sai quando o `.process` tem o atributo (8 sem ele, 8 sem o campo).
 - `condition` do gateway (`ConditionImpl` em XStream) → `ConditionProcessState`
-  (`conditionType` 1 = regras, 0 = expressão) + `ConditionProcessAutomaticRules`.
+  (`conditionType` 1 = regras, 0 = expressão; `condition` = `expression`, ausente
+  quando o blob não a tem) + `ConditionProcessAutomaticRules`. A PK da condição
+  leva a versão do `.process`, como a PDV (850/850 com versão ≠ 1). O `sequence`
+  da regra é o do gateway, não o do blob: 16 regras em pares têm 0 no blob e o
+  sequence do gateway no ecm30. `mechanism` + `mecanismoAtribuicaoConfiguracao`
+  no caminho → `engineAllocationConfiguration`/`engineAllocationId` na condição,
+  no formato do estado (6/6 nos pares). Exclusivo sem condição não gera nenhum
+  `ConditionProcessState` (um par gabarito com dois desses).
+- Gateway: o estado só tem 17 campos (sem prazo, atribuição nem notificação),
+  415/415. `automatic` é `true` só no exclusivo (369/369); paralelo 3 e join 4
+  saem `false`.
+- Evento intermediário: todos os campos são constantes nos 863 estados, menos
+  nome, posição, `automatic` (só o 32), `signalId` e `parentSequence`. O sinal
+  não usa o nome na descrição: 37 → `Intermediário Sinal <signalId>`, 41 →
+  `Intermediário Recebimento Sinal <signalId>`, com instrução própria (8/8).
+- Evento de link (36 → 42 por `linkId`): o Studio cria um `ProcessLink` que não
+  está no `.process`, com sequence acima do maior sufixo do diagrama, e em
+  vários pares repete o link a cada gravação (até 3 por evento). Como a regra
+  não é reproduzível, 36/42 seguem recusados.
 - `SequenceFlow` → `ProcessLink`: `fluxoAutomatico` → `automaticLink`,
   `permiteRetorno` → `returnPermited`, `atividadeFluxo`/`atividadeRetorno` →
   `actionLabel`/`returnLabel`, `defaultLink`. Link de anotação →
   `ProcessLinkAssoc`; bendpoints → `ProcessLinkBend`.
 - Pool/lane → `SwimLane`: pool `type=1`, lane `type=2` com `parentSequence`,
-  cor de `cores`, posição da lane absoluta = `x` da pool + `x` relativo da lane.
-- `BpmnTriggerData` do temporizador → `ProcessStateTrigger` (`runType` numérico).
+  cor de `cores`, posição da lane absoluta = `x`/`y` da pool + `x`/`y` relativo
+  da lane. O `sequence` da raia **não** é o sufixo do id: é a posição entre
+  pools e lanes, na ordem do arquivo, a partir de 1 (`swimlane13` sai 4 quando
+  é a quarta raia; 15 pares só batem assim, nenhum só pelo sufixo).
+- `BpmnTriggerData` do temporizador → `ProcessStateTrigger`: `runType`
+  MINUTE 0 / HOUR 1 / DAY 2, `type` 2 (temporizador) ou 3 (condicional, 35, com
+  `value` = `<processId>.<id>.js` mesmo sem `scriptCondition` no blob),
+  `frequencia` crua, `timeTrigger` só se o blob tem. A PK leva a versão do
+  `.process`; `triggerSequence` conta 0, 1, 2... na ordem do arquivo (10 pares
+  com mais de um). `type` 0 é o `messageData` da tarefa de e-mail — uma única
+  mensagem em todos os workspaces, então segue recusado.
+- `movementTitle`/`movementDescription`/`movementAccessLinkDescription` no
+  fluxo: quando o `.process` tem os três, o `ProcessLink` leva os três depois de
+  `type` (7/7 nos pares, todos vazios). No fluxo de anotação somem. Nenhum par
+  tem valor preenchido, então preenchido é recusado.
 - Subprocesso → `subProcessId` + `SubProcessFieldRelationship` (só 10 estados
   de subprocesso em todos os ecm30).
-- Anotação → `ProcessComponGraf`.
+- Anotação (`BpmnAnnotation` type 0) → `ProcessComponGraf` (`componType` 1,
+  sequence = sufixo, posição absoluta); o fluxo que sai dela → `ProcessLinkAssoc`.
 - `BpmnGroup` (5 no total, nenhum em par) não tem correspondente encontrado.
 
 ### O que não está no `.process`
@@ -105,6 +140,7 @@ processo-alvo de cada subprocesso.
 |---|---|
 | `ProcessDefinitionVersion.processId` = `processDescription` | 118/118 |
 | `PDV.version` = versão do `.process`, mas toda PK de State/Link/Lane usa `version=1` | 118/118 |
+| a PK do `ProcessLinkBend` usa a versão do `.process`, como a PDV | todos os ecm30 com bend |
 | nome do arquivo ≠ `processId` | 13/118 |
 
 **Frescor do ecm30 local.** O `mtime` não serve: 80 de 96 pares estão a menos de 60 s um do outro — é a
@@ -115,7 +151,10 @@ fluxos, 64.
 38 diferentes, 80 sem arquivo. O `aplicarScripts` de `src/push/process-events.ts`
 funciona sobre o XML gerado **desde que** o conversor emita um
 `WorkflowProcessEvent` com `<eventDescription>` para cada script — ele não
-cria bloco que falta.
+cria bloco que falta. Por isso o conversor emite um bloco por arquivo
+`<processId>.<eventId>.js` (o Studio inclui todo arquivo da pasta, até
+o script de uma tarefa que não existe mais), com a codificação do
+`aplicarScripts`; a ordem do Studio é de HashMap, então sai por eventId.
 
 ## O que é difícil
 
@@ -148,6 +187,68 @@ intermediários, incluindo temporizadores → tarefas de serviço + eventos de e
 **Aceite:** os 74 pares batem nos filhos 0–4, 6, 8–12, 15 e 19; o que não bate
 é listado por par e por filho, sem erro silencioso; os 2 `.process` inválidos e
 qualquer tipo não mapeado são recusados com mensagem.
+
+**Estado (30/09/2026, primeiro corte).** `push diagram --dry-run` cobre pool,
+lane, início, tarefa de usuário (80/81/84/87), fim (60/64/65/68), fluxo de
+sequência, bendpoints e atribuição Grupo/Papel/Usuário/Campo/Executor/Custom.
+Todo o resto é recusado com código 6 — inclusive atributo desconhecido, objeto
+sem forma, sequence repetido e arquivo fora do ASCII. `npm run diff-diagramas`
+é o harness. Números sobre `~/fluig/workspaces`:
+
+- 96 pares; 1 ilegível; 57 "gabarito" (versão, nós e links iguais — o critério
+  de 74 não exigia versão igual, e 12 pares tinham o `.process` uma versão à
+  frente do ecm30).
+- Só 2 pares têm apenas elementos cobertos; 1 bate inteiro (byte a byte com o
+  Studio), o outro tem ecm30 de outro diagrama.
+- Em modo parcial (compara só o que é coberto), 54/57 gabaritos batem nos
+  filhos 0, 1, 2, 4, 8 e 11. Sobram posição/`mobileReady` editados depois do
+  export (2 pares) e a atribuição "Associado", não suportada (1 par).
+- Campo ignorado na comparação: só `formIdV2` (omitido de propósito, ver
+  fluig-cd).
+- Dos 255 `.process`, 18 convertem sem recusa. O maior bloqueio nos simples são
+  `movementTitle`/`movementDescription`/`movementAccessLinkDescription` nos
+  fluxos: o Studio quase nunca os grava, e a regra ainda não se sabe.
+
+**Estado (30/09/2026, segundo corte).** Entram tarefa de serviço (82) com
+`ProcessStateService`, gateways 120/126/127 com `ConditionProcessState` e
+`ConditionProcessAutomaticRules` (inclusive atribuição por caminho), eventos
+intermediários 32/35/37/41/43 com `ProcessStateTrigger`, anotação
+(`ProcessComponGraf` + `ProcessLinkAssoc`), os campos `movement*` vazios e os
+scripts de `workflow/scripts/` (filho 6). O harness compara agora os filhos 0–4,
+8–12, 15 e 19, e o 6 à parte.
+
+- 42 pares têm só elementos cobertos (eram 2); 34 batem inteiros. Dos 35
+  gabaritos entre eles, 34 batem em todos os filhos; o que sobra
+  (um par de pedido) é `mobileReady` editado depois do export. Os outros 7 são
+  pares "antigo": só a versão das PKs difere.
+- Por filho, nos 57 gabaritos (parte coberta): 0=57, 1=55, 2=55, 3=57, 4=57,
+  8=57, 9=57, 10=57, 11=56, 12=53, 15=57, 19=57. Sobram: posição e `mobileReady`
+  editados depois do export (um par de pagamento e o de pedido), a
+  atribuição "Associado" (um par de solicitação de equipamento) e o
+  `messageData` da tarefa de e-mail, recusado (4 cópias do mesmo processo de
+  pagamento).
+- Scripts contra `workflow/scripts/`: 809 iguais, 28 diferentes (script local
+  desatualizado — listados pelo harness, não normalizados), 25 eventos do
+  Studio sem arquivo local, 11 arquivos locais sem evento no Studio. O harness
+  passa os dois lados por `normalizar`, então a diferença entre referência
+  numérica (o que o conversor grava) e "?" (o que o Studio grava) para
+  caractere fora do latin1 fica escondida de propósito — ver o incidente do "?"
+  em `src/commands/push-process.ts`. Script com caractere de controle que não
+  seja tab, LF ou CR é recusado: não cabe em XML 1.0.
+- Campo ignorado: continua só `formIdV2`.
+- Dos 255 `.process`, 109 convertem sem recusa (eram 18). O que mais bloqueia,
+  em arquivos afetados: fluxo ligado a elemento não suportado (64, efeito dos
+  outros), `descriptorFields` (54), evento de link 36/42 (41), `appsConfiguration`
+  (33), condição para destino não suportado (32), subprocesso (28),
+  `attachmentRules` (17), atribuição "Associado" (9). Sozinhos, `descriptorFields`
+  bloqueia 29 e `appsConfiguration` 15 — ambos fase 2.
+- Seguem recusados sem evidência nos pares: `messageData` (uma única mensagem
+  em todos os workspaces), `movement*` preenchido, `scriptFileName` de outro
+  processo, `scriptFileName` na tarefa de script (87, sem nenhum estado 87 nos
+  ecm30), `expression` no fluxo, fluxo sem origem (5 cópias de um processo de cotação;
+  o Studio grava o link sem `initialStateSequence`), gateway 121, e
+  `controlsAttachmentsSecurity`/`processAttachmentSecurity`/`notifyManagerComplements`/
+  `deadlineTime`/`activeProcess` do processo (nenhum em par).
 
 ### 2. O resto da definição
 
