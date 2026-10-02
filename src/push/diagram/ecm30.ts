@@ -143,6 +143,8 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     'volume', 'expedient', 'instruction', 'complementsLevel', 'notifyResponsibleComplements',
     'notifyRequisitionerComplements', 'publicProcess', 'mobileReady', 'inheritFormSecurity',
     'descriptionVersion', 'updateAttachment', 'uniquecardversion', 'extendedFields', 'descriptorFields',
+    // Prazo do processo em minutos, como o das tarefas: vira segundos (1 par: 2160 → 129600, 1440 → 86400).
+    'deadlineTime', 'warningTime',
     // Só do Studio: o ecm30 não tem onde guardar, e keyWord sai sempre vazio (118/118).
     'serverId', 'author', 'formSource', 'formType', 'keyWord',
   ],
@@ -397,6 +399,8 @@ function lerRegrasDeAnexo(blob: string): Lido<{ operador: string; quantidade: st
 interface Atribuicao {
   id?: string;
   configuracao?: string;
+  /** Aceito por analogia, sem par que o confirme: vira aviso no resultado. */
+  aviso?: string;
 }
 
 /**
@@ -420,7 +424,48 @@ const comConfiguracao = (id: string, configuracao: string | undefined): Atribuic
  */
 function atribuicao(mecanismo: string, blob: string, idsPorSufixo: (id: string) => number): Atribuicao | undefined {
   const lido = lerBlob(blob);
+  if (lido?.classe === 'AssignmentControllerAssociated') return atribuicaoAssociada(mecanismo, blob, idsPorSufixo);
   return lido ? atribuicaoLida(mecanismo, lido, idsPorSufixo) : undefined;
+}
+
+const PREFIXO_ATRIBUICAO = 'org.eclipse.bpmn2.impl.';
+
+/**
+ * "Associado": lista de atribuições simples combinadas por `type`. O Studio grava
+ * `<AssociatedController ConditionAssociated="AND">` com um `<ControlXML
+ * TypeAssociated="<mecanismo>">` por controlador, cada um com o
+ * `<AssignmentController>` da atribuição simples (6/6 estados nos pares, com
+ * Grupo, Papel e Executor). Só entra controlador cuja forma simples foi
+ * conferida; `OR` não aparece em par e vai com aviso.
+ */
+function atribuicaoAssociada(mecanismo: string, blob: string, idsPorSufixo: (id: string) => number): Atribuicao | undefined {
+  const raiz = arvoreDoBlob(blob);
+  if (!raiz || raiz.nome !== `${PREFIXO_ATRIBUICAO}AssignmentControllerAssociated` || Object.keys(raiz.attrs).length > 0) {
+    return undefined;
+  }
+  const nomes = raiz.filhos.map((f) => f.nome).sort().join(',');
+  if (nomes !== 'controllers,mechanismName,type') return undefined;
+  const tipo = raiz.filhos.find((f) => f.nome === 'type')!;
+  const lista = raiz.filhos.find((f) => f.nome === 'controllers')!;
+  if (tipo.filhos.length > 0 || !['AND', 'OR'].includes(tipo.texto)) return undefined;
+  if (lista.filhos.length === 0 || JSON.stringify(lista.attrs) !== '{"class":"list"}') return undefined;
+
+  const partes: string[] = [];
+  for (const no of lista.filhos) {
+    const classe = no.nome.startsWith(PREFIXO_ATRIBUICAO) ? no.nome.slice(PREFIXO_ATRIBUICAO.length) : '';
+    const campos = Object.keys(no.attrs).length === 0 ? folhas(no) : undefined;
+    const nome = campos?.get('mechanismName');
+    if (!classe || classe === 'AssignmentControllerAssociated' || !campos || !nome || /[<>&"']/.test(nome)) return undefined;
+    const simples = atribuicaoLida(nome, { classe, campos: Object.fromEntries(campos) }, idsPorSufixo);
+    if (!simples?.configuracao?.startsWith('<AssignmentController>')) return undefined;
+    partes.push(`<ControlXML TypeAssociated="${nome}">${simples.configuracao}</ControlXML>`);
+  }
+
+  return {
+    id: mecanismo,
+    configuracao: `<AssociatedController ConditionAssociated="${tipo.texto}">${partes.join('')}</AssociatedController>`,
+    ...(tipo.texto === 'OR' ? { aviso: 'atribuição "Associado" com OR: não há par do Studio que a confira' } : {}),
+  };
 }
 
 function atribuicaoLida(
@@ -598,7 +643,8 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       recusar(`atribuição ${lerBlob(blob)?.classe ?? nome} em ${o.attrs['id']}`);
       return {};
     }
-    return a;
+    if (a.aviso) avisos.push(`${a.aviso} (${o.attrs['id']})`);
+    return { ...(a.id === undefined ? {} : { id: a.id }), ...(a.configuracao === undefined ? {} : { configuracao: a.configuracao }) };
   };
 
   const estado = (o: ObjetoBpmn): Campo[] => {
@@ -1415,8 +1461,8 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ['complementsLevel', p['complementsLevel'] || 1],
     ['notifyRequisitionerComplements', booleano(p['notifyRequisitionerComplements'], false)],
     ['notifyManagerComplements', false],
-    ['deadlineTime', 0],
-    ['warningDeadlineTime', 0],
+    ['deadlineTime', segundos(p['deadlineTime'], 0)],
+    ['warningDeadlineTime', segundos(p['warningTime'], 0)],
     ['notifyAuthorityComplements', booleano(p['notifyResponsibleComplements'], false)],
   );
 

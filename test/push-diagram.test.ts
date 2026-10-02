@@ -828,3 +828,54 @@ test('appsConfiguration fora da forma conferida é recusado com código 6, sem X
   assert.equal(erro.codigo, 6);
   assert.match(erro.message, /appsConfiguration em task5 \(type 81\)/);
 });
+
+/** Troca a atribuição da task7 por um blob "Associado" com os controladores dados. */
+function comAssociado(tipo: string, ...controladores: string[]): string {
+  const blob = `<org.eclipse.bpmn2.impl.AssignmentControllerAssociated>\n  <type>${tipo}</type>\n  <controllers class="list">\n` +
+    controladores.join('\n') + `\n  </controllers>\n  <mechanismName>Associado</mechanismName>\n</org.eclipse.bpmn2.impl.AssignmentControllerAssociated>`;
+  return PROCESSO.replace(
+    /managerMechanism="Executor Atividade" managerAssignmentControllerString="[^"]*"/,
+    `managerMechanism="Associado" managerAssignmentControllerString="${comoAtributo(blob)}"`,
+  );
+}
+const GRUPO = (g: string) => `    <org.eclipse.bpmn2.impl.AssignmentControllerGroup>\n      <groupId>${g}</groupId>\n      <mechanismName>Grupo</mechanismName>\n    </org.eclipse.bpmn2.impl.AssignmentControllerGroup>`;
+const PAPEL = (r: string) => `    <org.eclipse.bpmn2.impl.AssignmentControllerRole>\n      <roleId>${r}</roleId>\n      <mechanismName>Papel</mechanismName>\n    </org.eclipse.bpmn2.impl.AssignmentControllerRole>`;
+const EXECUTOR = `    <org.eclipse.bpmn2.impl.AssignmentControllerExecutorMechanism>\n      <idNode>startevent4</idNode>\n      <returns>0</returns>\n      <mechanismName>Executor Atividade</mechanismName>\n    </org.eclipse.bpmn2.impl.AssignmentControllerExecutorMechanism>`;
+
+const atribuicaoDaTask7 = (xml: string) => {
+  const estado = filhosDaRaiz(xml)[2]!.filhos.find((e) => texto(e, 'processStatePK', 'sequence') === '7')!;
+  return [texto(estado, 'engineAllocationId'), texto(estado, 'engineAllocationConfiguration')];
+};
+
+test('atribuição "Associado" vira AssociatedController com um ControlXML por controlador, como no Studio', () => {
+  const r = converterDiagrama(comAssociado('AND', GRUPO('Fabricação Planta 1'), GRUPO('Fabricação Planta 2'), PAPEL('Gestor')), { companyId: 1 });
+  assert.deepEqual(atribuicaoDaTask7(r.xml), [
+    'Associado',
+    '<AssociatedController ConditionAssociated="AND"><ControlXML TypeAssociated="Grupo"><AssignmentController><Group>Fabricação Planta 1</Group></AssignmentController></ControlXML>' +
+      '<ControlXML TypeAssociated="Grupo"><AssignmentController><Group>Fabricação Planta 2</Group></AssignmentController></ControlXML>' +
+      '<ControlXML TypeAssociated="Papel"><AssignmentController><Role>Gestor</Role></AssignmentController></ControlXML></AssociatedController>',
+  ]);
+  assert.deepEqual(r.avisos.filter((a) => /Associado/.test(a)), []);
+
+  const executor = converterDiagrama(comAssociado('AND', EXECUTOR), { companyId: 1 });
+  assert.equal(
+    atribuicaoDaTask7(executor.xml)[1],
+    '<AssociatedController ConditionAssociated="AND"><ControlXML TypeAssociated="Executor Atividade"><AssignmentController><BaseActivity>4</BaseActivity><Returns>First</Returns></AssignmentController></ControlXML></AssociatedController>',
+  );
+});
+
+test('"Associado" com OR é aceito, mas avisa que nenhum par o confere', () => {
+  const r = converterDiagrama(comAssociado('OR', PAPEL('Gestor')), { companyId: 1 });
+  assert.match(atribuicaoDaTask7(r.xml)[1]!, /^<AssociatedController ConditionAssociated="OR">/);
+  assert.match(r.avisos.join('\n'), /Associado" com OR.*task7/);
+});
+
+test('"Associado" com controlador não conferido, aninhado ou tipo desconhecido é recusado', () => {
+  const colegaGrupo = `    <org.eclipse.bpmn2.impl.AssignmentControllerColleagueGroup>\n      <groupId>X</groupId>\n      <mechanismName>Colaborador do Grupo</mechanismName>\n    </org.eclipse.bpmn2.impl.AssignmentControllerColleagueGroup>`;
+  const aninhado = `    <org.eclipse.bpmn2.impl.AssignmentControllerAssociated>\n      <type>AND</type>\n      <mechanismName>Associado</mechanismName>\n    </org.eclipse.bpmn2.impl.AssignmentControllerAssociated>`;
+  for (const diagrama of [comAssociado('AND', colegaGrupo), comAssociado('AND', aninhado), comAssociado('XOR', PAPEL('Gestor')), comAssociado('AND')]) {
+    const erro = erroDe(() => converterDiagrama(diagrama, { companyId: 1 }));
+    assert.equal(erro.codigo, 6);
+    assert.match(erro.message, /atribuição AssignmentControllerAssociated em task7/);
+  }
+});

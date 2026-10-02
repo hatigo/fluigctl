@@ -359,6 +359,31 @@ atributo repetido (nenhum dos 475 `.process` tem).
   investigar (1).
 - 349/475 `.process` convertem sem recusa (eram 329).
 
+**Estado (02/10/2026, sétimo corte).** Entram a atribuição "Associado" e o
+prazo do processo.
+
+- "Associado" (`AssignmentControllerAssociated`) vira `<AssociatedController
+  ConditionAssociated="<type>">` com um `<ControlXML TypeAssociated="<mecanismo>">`
+  por controlador, cada um com o `<AssignmentController>` da atribuição simples
+  (6/6 estados nos pares: `AND` com Grupo, Papel e Executor). Só entra
+  controlador cuja forma simples foi conferida (Grupo, Papel, Usuário, Campo,
+  Executor); `ColleagueGroup`, aninhado e tipo fora de `AND`/`OR` recusam. `OR`
+  (23 controladores, nenhum em par) entra com aviso no resultado. Vale só para
+  estados; em condição de gateway segue recusado.
+- `deadlineTime`/`warningTime` do processo, em minutos como os das tarefas, viram
+  `deadlineTime`/`warningDeadlineTime` da `ProcessDefinition` em segundos (1 par:
+  2160 → 129600, 1440 → 86400).
+- 68/72 gabaritos batendo em todos os filhos. Os 4 restantes não têm regra
+  derivável: `messageData` (1); posições e tamanhos deslocados por igual num
+  diagrama inteiro (2); e um com configuração de atribuição vazia e `condition`
+  vazia onde o conversor segue a maioria — mecanismo sem blob deixa a
+  configuração ausente em 35 estados e vazia em 6; `expression` `false` com
+  regras sai `"false"` em 308 condições, ausente em 13 e `""` em 3.
+- 369/475 `.process` convertem sem recusa. O que mais bloqueia agora não tem par
+  para conferir: `controlsAttachmentsSecurity` (17 arquivos),
+  `processAttachmentSecurity` (8), `notifyManagerComplements` (6); e o subprocesso
+  (31 arquivos, 1 par antigo).
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
