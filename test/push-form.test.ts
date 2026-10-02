@@ -248,3 +248,107 @@ test('push form recusa, sem escrever, dataset que já é de outro formulário', 
     await a.fluig.close();
   }
 });
+
+/** Um servidor cujo catálogo é `itens` (cada item já em XML). */
+async function ambienteCom(itens: string) {
+  const lista = env(
+    `<ns:getCardIndexesWithoutApproverResponse xmlns:ns="${NS}"><result>${itens}</result></ns:getCardIndexesWithoutApproverResponse>`,
+  );
+  const fluig = await fakeFluig({
+    [CAMINHO]: (req) => {
+      if (req.method === 'GET') return { headers: { 'content-type': 'text/xml' }, body: WSDL };
+      return {
+        headers: { 'content-type': 'text/xml' },
+        body: req.body.includes('getCardIndexes')
+          ? lista
+          : okMsg('updateSimpleCardIndexWithDatasetAndGeneralInfo', 902),
+      };
+    },
+  });
+  const u = new URL(fluig.url);
+  const server: Server = {
+    host: u.hostname, port: Number(u.port), ssl: false, username: 'integracao',
+    companyId: 1, userCode: 'Integracao.Fluig', passwordEnv: 'FLUIG_T_PASSWORD',
+  };
+  return { fluig, server };
+}
+
+const REEMBOLSO_NO_HML =
+  `<item><documentId>676</documentId><documentDescription>formReembolso</documentDescription><datasetName>dsformReembolso</datasetName><cardDescription></cardDescription></item>` +
+  `<item><documentId>902</documentId><documentDescription>formSolicitacaoReembolso</documentDescription><datasetName>dsformSolicitacaoReembolso</datasetName><cardDescription>justificativa</cardDescription></item>`;
+
+test('update mantém o nome e o campo descritor do servidor (não renomeia para a pasta)', async () => {
+  const a = await ambienteCom(REEMBOLSO_NO_HML);
+  try {
+    const r = await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formReembolso'), documentId: 902, versionOption: '0', prompt: async () => '',
+    });
+
+    assert.equal(r.nomeEnviado, 'formSolicitacaoReembolso');
+    assert.equal(r.descritorEnviado, 'justificativa');
+    const corpo = escritas(a.fluig)[0]!.body;
+    assert.match(corpo, /<cardDescription>formSolicitacaoReembolso<\/cardDescription>/);
+    assert.match(corpo, /<descriptionField>justificativa<\/descriptionField>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('--description e --description-field ainda mandam sobre o servidor', async () => {
+  const a = await ambienteCom(REEMBOLSO_NO_HML);
+  try {
+    await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formReembolso'), documentId: 902, versionOption: '0',
+      description: 'novoNome', descriptionField: 'outroCampo', prompt: async () => '',
+    });
+
+    const corpo = escritas(a.fluig)[0]!.body;
+    assert.match(corpo, /<cardDescription>novoNome<\/cardDescription>/);
+    assert.match(corpo, /<descriptionField>outroCampo<\/descriptionField>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('sem --document-id, o .metadata do Studio leva formReembolso ao 902, não ao 676', async () => {
+  const a = await ambienteCom(REEMBOLSO_NO_HML);
+  try {
+    const r = await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formReembolso'), versionOption: '0', dryRun: true, prompt: async () => '',
+    });
+
+    assert.equal(r.documentId, 902);
+    assert.equal(r.nomeEnviado, 'formSolicitacaoReembolso');
+    assert.match(r.avisos.join('\n'), /pelo nome da pasta seria o 676/);
+    assert.equal(escritas(a.fluig).length, 0);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('servidor que não informa o campo descritor: avisa que ele vai vazio', async () => {
+  const a = await ambiente();
+  try {
+    const r = await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '0', dryRun: true, prompt: async () => '',
+    });
+    assert.match(r.avisos.join('\n'), /campo descritor/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('campo descritor vazio no servidor (tag vazia) vai vazio, sem aviso', async () => {
+  const a = await ambienteCom(
+    `<item><documentId>902</documentId><documentDescription>formSolicitacaoReembolso</documentDescription><datasetName>dsformSolicitacaoReembolso</datasetName><cardDescription/></item>`,
+  );
+  try {
+    const r = await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formReembolso'), documentId: 902, versionOption: '0', dryRun: true, prompt: async () => '',
+    });
+    assert.equal(r.descritorEnviado, '');
+    assert.doesNotMatch(r.avisos.join('\n'), /campo descritor/);
+  } finally {
+    await a.fluig.close();
+  }
+});

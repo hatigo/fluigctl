@@ -1,0 +1,105 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+
+import { camposDoHtml, changedArtifacts, comandoSugerido } from '../src/commands/changed.js';
+
+function repo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'fluigctl-changed-'));
+  execFileSync('git', ['init', '-q', dir]);
+  execFileSync('git', ['-C', dir, 'config', 'user.email', 't@t']);
+  execFileSync('git', ['-C', dir, 'config', 'user.name', 't']);
+  return dir;
+}
+
+function escreve(raiz: string, arquivo: string, conteudo: string): void {
+  mkdirSync(dirname(join(raiz, arquivo)), { recursive: true });
+  writeFileSync(join(raiz, arquivo), conteudo);
+}
+
+function commit(raiz: string): void {
+  execFileSync('git', ['-C', raiz, 'add', '-A']);
+  execFileSync('git', ['-C', raiz, 'commit', '-q', '-m', 'x']);
+}
+
+test('camposDoHtml lê os name= do formulário', () => {
+  assert.deepEqual([...camposDoHtml(`<input name="a"><select name='b'></select><form name="form">`)].sort(), ['a', 'b', 'form']);
+});
+
+test('traduz o working tree em artefatos e comandos, um por artefato', () => {
+  const r = repo();
+  try {
+    escreve(r, 'datasets/reembolso/dsFoo.js', 'function createDataset(){}');
+    escreve(r, 'forms/formBar/formBar.html', '<form name="form"><input name="a"></form>');
+    escreve(r, 'forms/formBar/.metadata', 'x');
+    escreve(r, 'workflow/scripts/reembolso.servicetask20.js', '// a');
+    commit(r);
+
+    escreve(r, 'datasets/reembolso/dsFoo.js', 'function createDataset(){ return 1 }');
+    escreve(r, 'forms/formBar/formBar.html', '<form name="form"><input name="a"><input name="novo"></form>');
+    escreve(r, 'forms/formBar/main.js', '// novo');
+    escreve(r, 'workflow/scripts/reembolso.servicetask20.js', '// b');
+    escreve(r, 'workflow/scripts/reembolso.beforeStateEntry.js', '// novo');
+    escreve(r, 'events/afterProcessCreate.js', '// global');
+
+    const { artefatos } = changedArtifacts(r);
+    const linhas = artefatos.map((a) => comandoSugerido(a, 'hml'));
+
+    assert.deepEqual(linhas, [
+      'fluigctl push dataset datasets/reembolso/dsFoo.js --server hml --dry-run',
+      'fluigctl push form forms/formBar/ --server hml --new-version --dry-run',
+      'fluigctl push process reembolso --server hml --dry-run',
+      '# events/afterProcessCreate.js: evento global, mecanismo e layout ainda não são publicados pelo fluigctl',
+    ]);
+
+    const form = artefatos.find((a) => a.tipo === 'form');
+    assert.ok(form?.tipo === 'form');
+    assert.deepEqual(form.camposNovos, ['novo']);
+
+    const proc = artefatos.find((a) => a.tipo === 'process');
+    assert.ok(proc?.tipo === 'process');
+    assert.deepEqual(proc.eventos, ['beforeStateEntry', 'servicetask20']);
+  } finally {
+    rmSync(r, { recursive: true, force: true });
+  }
+});
+
+test('formulário sem campo novo sugere --keep-version; só .metadata não conta', () => {
+  const r = repo();
+  try {
+    escreve(r, 'forms/formBar/formBar.html', '<form name="form"><input name="a"></form>');
+    escreve(r, 'forms/formBaz/formBaz.html', '<form name="form"></form>');
+    escreve(r, 'forms/formBaz/.metadata', 'x');
+    commit(r);
+
+    escreve(r, 'forms/formBar/formBar.html', '<form name="form"><input name="a" class="nova"></form>');
+    escreve(r, 'forms/formBaz/.metadata', 'y');
+
+    const linhas = changedArtifacts(r).artefatos.map((a) => comandoSugerido(a, 'hml'));
+    assert.deepEqual(linhas, ['fluigctl push form forms/formBar/ --server hml --keep-version --dry-run']);
+  } finally {
+    rmSync(r, { recursive: true, force: true });
+  }
+});
+
+test('--since compara com um commit anterior', () => {
+  const r = repo();
+  try {
+    escreve(r, 'datasets/dsA.js', '1');
+    commit(r);
+    const base = execFileSync('git', ['-C', r, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    escreve(r, 'datasets/dsA.js', '2');
+    commit(r);
+
+    assert.equal(changedArtifacts(r).artefatos.length, 0);
+    assert.deepEqual(
+      changedArtifacts(r, base).artefatos.map((a) => a.tipo === 'dataset' && a.nome),
+      ['dsA'],
+    );
+  } finally {
+    rmSync(r, { recursive: true, force: true });
+  }
+});

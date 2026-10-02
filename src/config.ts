@@ -3,6 +3,8 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { ErroFluigctl } from './errors.js';
+import { avisoGit, garantirIgnorado } from './gitignore.js';
+import { machineIds, senhaNosArquivos, serversJsonAcima } from './vscode-credentials.js';
 
 export interface Server {
   host: string;
@@ -75,23 +77,56 @@ function leDoArquivo(caminho: string, nome: string): string | undefined {
   return undefined;
 }
 
+/** Onde procurar o `.vscode/servers.json` da extensão; `false` desliga a busca. */
+export type OpcoesVscode = false | { inicio: string; home: string };
+
+function vscodePadrao(): OpcoesVscode {
+  if (process.env['FLUIGCTL_NO_VSCODE'] === '1') return false;
+  return { inicio: process.cwd(), home: homedir() };
+}
+
 /**
  * Descobre a senha do servidor.
  *
- * A variável de ambiente vem primeiro; o arquivo é a conveniência para quem
- * não quer exportá-la a cada sessão. Quem lê é sempre o CLI — a senha não
- * passa por quem invoca o comando.
+ * Nesta ordem: a variável de ambiente; o arquivo de senhas do fluigctl; e o
+ * `.vscode/servers.json` da extensão Fluiggers, da pasta atual para cima, com a
+ * senha decifrada pela chave desta máquina. Quem lê é sempre o CLI — a senha não
+ * passa por quem invoca o comando, e nada aqui a imprime.
+ *
+ * Ao usar o servers.json, garante que ele está no .gitignore do repositório e
+ * sugere copiar a senha para o arquivo próprio (`server import --with-passwords`).
  */
-export function resolvePassword(server: Server, envPath = envFilePath()): string {
+export function resolvePassword(
+  server: Server,
+  envPath = envFilePath(),
+  vscode: OpcoesVscode = vscodePadrao(),
+): string {
   const doAmbiente = process.env[server.passwordEnv];
   if (doAmbiente) return doAmbiente;
 
   const doArquivo = leDoArquivo(envPath, server.passwordEnv);
   if (doArquivo) return doArquivo;
 
+  if (vscode) {
+    const achada = senhaNosArquivos(server, serversJsonAcima(vscode.inicio), machineIds(vscode.home));
+    if (achada) {
+      console.error(
+        `fluigctl: senha de ${server.username}@${server.host} lida de ${achada.origem} (extensão Fluiggers). ` +
+          `Para não depender dele: fluigctl server import <dir> --write --with-passwords`,
+      );
+      const aviso = avisoGit(achada.origem, garantirIgnorado(achada.origem));
+      if (aviso) console.error(`fluigctl: ${aviso}`);
+      return achada.senha;
+    }
+  }
+
   throw new ErroFluigctl(
     `não encontrei a senha de ${server.username}: a variável ` +
-      `${server.passwordEnv} não está definida e ${envPath} não a contém.`,
+      `${server.passwordEnv} não está definida, ${envPath} não a contém` +
+      (vscode
+        ? ` e nenhum .vscode/servers.json de ${vscode.inicio} para cima tem este servidor ` +
+          `com uma senha que esta máquina decifre.`
+        : '.'),
     4,
   );
 }

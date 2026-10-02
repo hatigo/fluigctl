@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 
 import {
   configPath,
+  envFilePath,
   loadConfig,
   resolvePassword,
   resolveServer,
@@ -16,6 +17,10 @@ import { pushForm } from './commands/push-form.js';
 import { pushProcess } from './commands/push-process.js';
 import { pushWidget } from './commands/push-widget.js';
 import { importCandidates, scanServersJson } from './import.js';
+import { gravarNoEnv } from './env-file.js';
+import { avisoGit, garantirIgnorado } from './gitignore.js';
+import { machineIds, senhaNosArquivos } from './vscode-credentials.js';
+import { changedArtifacts, comandoSugerido } from './commands/changed.js';
 import { decideVersionOption } from './push/form-resolve.js';
 import { promptPassword } from './prompt.js';
 import { testServer } from './commands/server-test.js';
@@ -27,9 +32,14 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e scripts de proc
   fluigctl server ls
   fluigctl server add <nome> --host H [--port P] [--ssl] --user U [--prod]
   fluigctl server rm <nome>
-  fluigctl server import <dir> [--write]
+  fluigctl server import <dir> [--write] [--with-passwords]
+      traz os servidores dos .vscode/servers.json da extensão Fluiggers; com --with-passwords,
+      copia as senhas (decifradas com a chave desta máquina) para o arquivo de senhas do fluigctl
   fluigctl server set-prod <nome> [--off]
   fluigctl server test <nome>
+
+  fluigctl changed [--since <ref>] [--server <nome>]
+      lista o que mudou no git como artefatos do Fluig e sugere o comando de cada um; não envia nada
 
   fluigctl push dataset <arquivo.js> --server <nome> [--create] [--description D] [--dry-run]
   fluigctl push form <pasta/> --server <nome> [--document-id N] [--principal A] [--description D]
@@ -45,8 +55,10 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e scripts de proc
       converte o diagrama no XML que o servidor importa, sem rede e sem senha;
       por enquanto só --dry-run (fase 1 de docs/plano-push-diagrama.md)
 
-A senha de cada servidor vem de variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD).
-Nenhuma senha é gravada em disco.`;
+A senha de cada servidor vem, nesta ordem: da variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD),
+do arquivo de senhas do fluigctl (~/.config/fluigctl/env, permissão 600) ou do .vscode/servers.json
+da extensão, da pasta atual para cima. O .vscode/servers.json é mantido no .gitignore.
+Nenhuma senha é impressa, nem gravada no cadastro de servidores.`;
 
 
 async function comandoServer(argv: string[]): Promise<void> {
@@ -116,13 +128,17 @@ async function comandoServer(argv: string[]): Promise<void> {
     const { values, positionals } = parseArgs({
       args: resto,
       allowPositionals: true,
-      options: { write: { type: 'boolean', default: false } },
+      options: {
+        write: { type: 'boolean', default: false },
+        'with-passwords': { type: 'boolean', default: false },
+      },
     });
 
     const dir = positionals[0];
-    if (!dir) throw new ErroFluigctl('uso: fluigctl server import <dir> [--write]', 2);
+    if (!dir) throw new ErroFluigctl('uso: fluigctl server import <dir> [--write] [--with-passwords]', 2);
 
-    const { candidatos, ignorados } = importCandidates(await scanServersJson(dir));
+    const arquivos = await scanServersJson(dir);
+    const { candidatos, ignorados } = importCandidates(arquivos);
 
     if (candidatos.length === 0) {
       console.log(`nenhum servidor encontrado em ${dir}`);
@@ -162,19 +178,51 @@ async function comandoServer(argv: string[]): Promise<void> {
       );
     }
 
-    if (!values.write) {
+    // Os servers.json carregam senha cifrada com a chave desta máquina: fora do git, sempre.
+    console.log('');
+    for (const a of arquivos) {
+      const aviso = avisoGit(a.path, garantirIgnorado(a.path, values.write));
+      if (aviso) console.log(`  git  ${aviso}`);
+    }
+
+    if (values.write) {
+      saveConfig(config);
+      console.log(`\n${novos.length} servidor(es) gravados em ${configPath()}.`);
+    } else {
       console.log(`\n${novos.length} servidor(es) a importar. Repita com --write para gravar.`);
+    }
+
+    if (!values['with-passwords']) {
+      if (values.write && novos.length > 0) {
+        console.log('Nenhuma senha foi importada. Defina as variáveis, ou repita com --with-passwords:');
+        for (const nome of novos) console.log(`  export ${config.servers[nome]!.passwordEnv}='...'`);
+      }
       return;
     }
 
-    saveConfig(config);
-    console.log(`\n${novos.length} servidor(es) gravados em ${configPath()}.`);
-    if (novos.length > 0) {
-      console.log('Nenhuma senha foi importada. Defina:');
-      for (const nome of novos) {
-        console.log(`  export ${config.servers[nome]!.passwordEnv}='...'`);
+    // Copia as senhas da extensão para o arquivo próprio. O valor nunca é impresso.
+    const ids = machineIds();
+    const destino = envFilePath();
+    const semSenha: string[] = [];
+    console.log(`\nSenhas (${destino}, permissão 600):`);
+    for (const c of candidatos) {
+      const servidor = config.servers[c.nome];
+      if (!servidor) continue;
+      const achada = senhaNosArquivos(servidor, arquivos, ids);
+      if (!achada) {
+        semSenha.push(c.nome);
+        continue;
       }
+      const como = values.write ? gravarNoEnv(destino, servidor.passwordEnv, achada.senha) : 'a copiar';
+      console.log(
+        `  ${c.nome.padEnd(28)} ${servidor.passwordEnv}  ${como}` +
+          (servidor.prod ? '  (produção: o push continua exigindo a senha digitada no terminal)' : ''),
+      );
     }
+    for (const nome of semSenha) {
+      console.log(`  ${nome.padEnd(28)} sem senha que esta máquina decifre (cifrada noutra máquina?)`);
+    }
+    if (!values.write) console.log('Repita com --write para copiar.');
     return;
   }
 
@@ -281,11 +329,24 @@ async function comandoPush(argv: string[]): Promise<void> {
 
   const verbo = r.acao === 'create' ? 'criado' : 'atualizado';
   const alvo = `${values.server} (${serverUrl(servidor)})`;
-  console.log(
-    values['dry-run']
-      ? `[dry-run] ${r.nome} seria ${verbo} em ${alvo} — ${r.bytes} bytes. Nada foi enviado.`
-      : `${r.nome} ${verbo} em ${alvo} — ${r.bytes} bytes.`,
-  );
+  if (values['dry-run']) {
+    console.log(
+      `[dry-run] ${r.nome} seria ${verbo} em ${alvo} — ${r.bytes} bytes` +
+        (r.jaIgual ? ' (o servidor já tem este código)' : r.jaIgual === false ? ' (código diferente do servidor)' : '') +
+        '. Nada foi enviado.',
+    );
+    return;
+  }
+  console.log(`${r.nome} ${verbo} em ${alvo} — ${r.bytes} bytes.`);
+  if (r.backup) console.log(`  cópia do que estava no servidor: ${r.backup}`);
+  if (r.conferido === true) console.log('  conferido: o servidor devolve o código local.');
+  if (r.conferido === false) {
+    throw new ErroFluigctl(
+      `o servidor aceitou, mas o código que ele devolve NÃO é o local. ` +
+        (r.backup ? `O anterior está em ${r.backup}.` : ''),
+      7,
+    );
+  }
 }
 
 type ValoresPush = {
@@ -364,7 +425,11 @@ async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<
   for (const aviso of r.avisos) console.log(`aviso: ${aviso}`);
 
   const alvo = `${values.server} (${serverUrl(servidor)})`;
-  const detalhe = `${r.anexos} anexo(s), ${r.eventos} evento(s)`;
+  const detalhe =
+    `${r.anexos} anexo(s), ${r.eventos} evento(s)` +
+    (r.nomeEnviado === undefined
+      ? ''
+      : `, nome "${r.nomeEnviado}", campo descritor "${r.descritorEnviado ?? ''}"`);
 
   if (values['dry-run']) {
     console.log(
@@ -523,6 +588,34 @@ async function pushDiagramCli(argv: string[]): Promise<void> {
   console.log('[dry-run] Nada foi enviado.');
 }
 
+function comandoChanged(argv: string[]): void {
+  const { values } = parseArgs({
+    args: argv,
+    options: {
+      since: { type: 'string' },
+      server: { type: 'string', short: 's' },
+    },
+  });
+
+  const { raiz, artefatos } = changedArtifacts(process.cwd(), values.since);
+  const origem = values.since ? `desde ${values.since}, mais o working tree` : 'no working tree';
+  if (artefatos.length === 0) {
+    console.log(`nada a publicar ${origem} (${raiz}).`);
+    return;
+  }
+
+  console.log(`${artefatos.length} artefato(s) alterado(s) ${origem} — rode na raiz ${raiz}:`);
+  for (const a of artefatos) {
+    console.log(`  ${comandoSugerido(a, values.server ?? '<servidor>')}`);
+    if (a.tipo === 'form' && a.camposNovos.length > 0) {
+      console.log(`      campos novos (exigem --new-version): ${a.camposNovos.join(', ')}`);
+    }
+    if (a.tipo === 'form' && a.htmlNovo) console.log('      formulário novo no git: confira se já existe no servidor');
+    if (a.tipo === 'process') console.log(`      eventos alterados: ${a.eventos.join(', ')}`);
+  }
+  console.log('\nTire o --dry-run de cada um depois de conferir. Nada foi enviado.');
+}
+
 async function main(argv: string[]): Promise<void> {
   const comando = argv[0];
 
@@ -532,6 +625,7 @@ async function main(argv: string[]): Promise<void> {
   }
 
   if (comando === 'server') return comandoServer(argv.slice(1));
+  if (comando === 'changed') return comandoChanged(argv.slice(1));
   if (comando === 'push') return comandoPush(argv.slice(1));
 
   throw new ErroFluigctl(`comando desconhecido: ${comando}\n\n${USO}`, 2);

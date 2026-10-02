@@ -2,8 +2,12 @@ import { serverUrl, type Server } from '../config.js';
 import { ErroFluigctl } from '../errors.js';
 import { cardIndexClient } from '../fluig/cardindex-service.js';
 import { confirmProduction, type PromptSenha } from '../guard.js';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import { decideForm } from '../push/form-resolve.js';
 import { readForm } from '../push/form-source.js';
+import { lerMetadataStudio } from '../push/studio-metadata.js';
 
 /**
  * Tipo de persistência na criação do formulário.
@@ -27,8 +31,9 @@ export interface OpcoesPushForm {
   persistenceType?: 'form' | 'list';
   descriptionField?: string;
   /**
-   * Descrição do formulário no servidor. Sem ela vale o nome da pasta — e um form
-   * criado com outro nome (ex.: pelo Studio) seria renomeado para o da pasta.
+   * Descrição (nome) do formulário no servidor. Num update, sem ela vale a que o
+   * servidor já tem — mandar o nome da pasta renomeava o formulário (o 902 do HML
+   * da Cetenco virou "formReembolso"). Na criação, sem ela vale o nome da pasta.
    */
   description?: string;
   principal?: string;
@@ -44,6 +49,9 @@ export interface ResultadoPushForm {
   anexos: number;
   eventos: number;
   avisos: string[];
+  /** Num update: o nome e o campo descritor que vão (ou foram) para o servidor. */
+  nomeEnviado?: string;
+  descritorEnviado?: string;
 }
 
 export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushForm> {
@@ -63,9 +71,13 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
   );
 
   const catalogo = await cliente.listForms();
+  const studio = lerMetadataStudio(
+    await readFile(join(opcoes.pasta, '.metadata')).catch(() => undefined),
+  );
   const decisao = decideForm({
     nome: fonte.nome,
     catalogo,
+    ...(studio === undefined ? {} : { studio }),
     ...(opcoes.documentId === undefined ? {} : { documentId: opcoes.documentId }),
     ...(fonte.documentIdDaPasta === undefined
       ? {}
@@ -98,9 +110,39 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
     }
   }
 
+  // Nome e campo descritor num update: os do servidor, a menos que o usuário peça outro. O web
+  // service grava o que receber, e o default antigo (nome da pasta, descritor vazio) apagava os do
+  // cliente.
+  const noServidor =
+    decisao.acao === 'update' ? catalogo.find((f) => f.documentId === decisao.documentId) : undefined;
+  const nomeEnviado =
+    decisao.acao === 'update'
+      ? opcoes.description ?? (noServidor?.documentDescription || fonte.nome)
+      : undefined;
+  const descritorEnviado =
+    decisao.acao === 'update'
+      ? opcoes.descriptionField ?? noServidor?.descriptionField ?? ''
+      : undefined;
+  if (
+    decisao.acao === 'update' &&
+    opcoes.descriptionField === undefined &&
+    noServidor?.descriptionField === undefined
+  ) {
+    base.avisos.push(
+      'o servidor não informou o campo descritor do formulário; ele vai vazio. ' +
+        'Use --description-field para definir.',
+    );
+  }
+
   if (opcoes.dryRun) {
     return decisao.acao === 'update'
-      ? { ...base, acao: 'update', documentId: decisao.documentId }
+      ? {
+          ...base,
+          acao: 'update',
+          documentId: decisao.documentId,
+          nomeEnviado: nomeEnviado!,
+          descritorEnviado: descritorEnviado!,
+        }
       : { ...base, acao: 'create' };
   }
 
@@ -121,7 +163,6 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
 
     // Sem --dataset-name vale o dataset que o formulário já tem no servidor: um form criado com
     // outro nome (ex.: pelo Studio) é recusado com ds<pasta> se esse nome já for de outro form.
-    const noServidor = catalogo.find((f) => f.documentId === decisao.documentId);
 
     // O servidor recusa um nome de dataset que já é de outro formulário, mas só depois de desativar
     // o dataset atual deste (visto no HML: dsformSolicitacaoReembolso ficou inativo). Recusar aqui.
@@ -141,15 +182,21 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
 
     await cliente.updateForm({
       documentId: decisao.documentId,
-      cardDescription: opcoes.description ?? fonte.nome,
-      descriptionField: opcoes.descriptionField ?? '',
+      cardDescription: nomeEnviado!,
+      descriptionField: descritorEnviado!,
       datasetName: opcoes.datasetName ?? (noServidor?.datasetName || `ds${fonte.nome}`),
       anexos: fonte.anexos,
       eventos: fonte.eventos,
       versionOption,
     });
 
-    return { ...base, acao: 'update', documentId: decisao.documentId };
+    return {
+      ...base,
+      acao: 'update',
+      documentId: decisao.documentId,
+      nomeEnviado: nomeEnviado!,
+      descritorEnviado: descritorEnviado!,
+    };
   }
 
   const documentId = await cliente.createForm({

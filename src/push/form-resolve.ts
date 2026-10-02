@@ -1,11 +1,14 @@
 import { ErroFluigctl } from '../errors.js';
 import type { FormNoServidor } from '../fluig/cardindex-service.js';
+import type { MetadataStudio } from './studio-metadata.js';
 
 export interface EntradaDecisao {
   nome: string;
   catalogo: readonly FormNoServidor[];
   documentId?: number;
   documentIdDaPasta?: number;
+  /** O `.metadata` do Studio na pasta do formulário, quando existe e é legível. */
+  studio?: MetadataStudio;
   create?: boolean;
 }
 
@@ -71,7 +74,34 @@ export function decideForm(entrada: EntradaDecisao): DecisaoForm {
     );
   }
 
-  // 3. Casamento por nome.
+  // 3. O .metadata do Studio: o documentId em que a pasta já foi publicada.
+  const pelaPasta = decidePeloStudio(entrada);
+  if (pelaPasta) {
+    if (create) {
+      throw new ErroFluigctl(
+        `--create foi pedido, mas o .metadata do Studio diz que esta pasta já é o ` +
+          `formulário ${pelaPasta.documentId} neste servidor. Remova --create para atualizá-lo.`,
+        6,
+      );
+    }
+    const peloNome = exatos.length === 1 ? exatos[0]! : undefined;
+    if (peloNome && peloNome.documentId !== pelaPasta.documentId) {
+      pelaPasta.avisos.push(
+        `pelo nome da pasta seria o ${peloNome.documentId} ("${peloNome.documentDescription}", ` +
+          `${peloNome.datasetName}), mas o .metadata do Studio aponta o ${pelaPasta.documentId}.`,
+      );
+    }
+    return { acao: 'update', documentId: pelaPasta.documentId, avisos: [...avisos, ...pelaPasta.avisos] };
+  }
+  if (entrada.studio && entrada.studio.exportacoes.length > 0) {
+    avisos.push(
+      `nenhum documentId do .metadata do Studio (` +
+        entrada.studio.exportacoes.map((e) => e.documentId).join(', ') +
+        `) é este formulário neste servidor — devem ser de outro ambiente. Resolvendo pelo nome.`,
+    );
+  }
+
+  // 4. Casamento por nome.
   if (exatos.length === 1) {
     if (create) {
       throw new ErroFluigctl(
@@ -120,6 +150,62 @@ export function decideForm(entrada: EntradaDecisao): DecisaoForm {
     `o formulário "${nome}" não existe neste servidor. ` +
       `Para criá-lo: --create --parent-id <pasta> --dataset-name <ds> ` +
       `--persistence-type form|list`,
+    6,
+  );
+}
+
+/**
+ * Escolhe pelo `.metadata` do Studio.
+ *
+ * Cada exportação guarda o documentId de UM servidor, e os ids não valem de um
+ * ambiente para outro (o formAprovacaoMovimento é o 7 no HML e o 6 em
+ * produção — e o 6 do HML é outro formulário). Por isso só conta a exportação
+ * cujo documentId existe aqui E é o mesmo formulário: mesmo dataset ou mesma
+ * descrição. Sobrando mais de uma, desempata o servidor da última exportação;
+ * sem desempate, para.
+ */
+function decidePeloStudio(
+  entrada: EntradaDecisao,
+): { documentId: number; avisos: string[] } | undefined {
+  const studio = entrada.studio;
+  if (!studio || studio.exportacoes.length === 0) return undefined;
+
+  const confere = studio.exportacoes.filter((e) => {
+    const alvo = entrada.catalogo.find((f) => f.documentId === e.documentId);
+    if (!alvo) return false;
+    return (
+      (e.serviceName !== '' && alvo.datasetName === e.serviceName) ||
+      (e.documentDescription !== '' && alvo.documentDescription === e.documentDescription)
+    );
+  });
+
+  const ids = [...new Set(confere.map((e) => e.documentId))];
+  if (ids.length === 0) return undefined;
+  if (ids.length === 1) {
+    return { documentId: ids[0]!, avisos: [`formulário ${ids[0]} escolhido pelo .metadata do Studio.`] };
+  }
+
+  const daUltima = [
+    ...new Set(
+      confere.filter((e) => e.serverName === studio.lastServerName).map((e) => e.documentId),
+    ),
+  ];
+  const candidatos = entrada.catalogo.filter((f) => ids.includes(f.documentId));
+  if (daUltima.length === 1) {
+    const outros = ids.filter((id) => id !== daUltima[0]);
+    return {
+      documentId: daUltima[0]!,
+      avisos: [
+        `o .metadata do Studio tem ${ids.length} formulários desta pasta neste servidor; ` +
+          `vale o ${daUltima[0]}, da última exportação ("${studio.lastServerName}"). ` +
+          `Os outros (${outros.join(', ')}) ficam como estão.`,
+      ],
+    };
+  }
+
+  throw new ErroFluigctl(
+    `o .metadata do Studio tem ${ids.length} formulários desta pasta neste servidor e ` +
+      `nenhum desempate. Escolha com --document-id:\n${listaCandidatos(candidatos)}`,
     6,
   );
 }

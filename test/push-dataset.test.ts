@@ -13,6 +13,10 @@ const WSDL = readFileSync(new URL('./fixtures/wsdl/ECMDatasetService.wsdl', impo
 const CAMINHO = '/webdesk/ECMDatasetService';
 const IMPL = 'function createDataset(fields, constraints, sorts) { return null; }\n';
 
+// As cópias de segurança de cada update vão para cá, nunca para o ~/.local/state real.
+const ESTADO = mkdtempSync(join(tmpdir(), 'fluigctl-estado-'));
+process.env['XDG_STATE_HOME'] = ESTADO;
+
 function envelope(corpo: string): string {
   return `<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>${corpo}</soap:Body></soap:Envelope>`;
 }
@@ -217,6 +221,74 @@ test('create usa a descrição passada, sem consultar o servidor', async () => {
     });
 
     assert.match(escritas(a.fluig)[0]!.body, /<description>dataset novo<\/description>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+/** Servidor cujo loadDataset devolve `antes` até o update e, depois, o que foi enviado. */
+async function ambienteQueGrava(antes: string, gravaDiferente = false) {
+  const dir = mkdtempSync(join(tmpdir(), 'fluigctl-ds-'));
+  const arquivo = join(dir, 'dsSTGTEMP.js');
+  writeFileSync(arquivo, IMPL);
+  let noServidor = antes;
+
+  const fluig = await fakeFluig({
+    [LOGIN]: { headers: { 'set-cookie': 'JSESSIONID=abc; Path=/' } },
+    [LOAD]: () => ({
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ datasetPK: { datasetId: 'dsSTGTEMP' }, datasetDescription: 'desc', datasetImpl: noServidor }),
+    }),
+    [CAMINHO]: (req) => {
+      if (req.method === 'GET') return { headers: { 'content-type': 'text/xml' }, body: WSDL };
+      if (req.body.includes('updateDataset')) noServidor = gravaDiferente ? 'outra coisa' : IMPL;
+      return {
+        headers: { 'content-type': 'text/xml' },
+        body: req.body.includes('findAllFormulariesDatasets') ? LISTA : OK,
+      };
+    },
+  });
+
+  const u = new URL(fluig.url);
+  const server: Server = {
+    host: u.hostname, port: Number(u.port), ssl: false, username: 'integracao',
+    companyId: 1, userCode: 'Integracao.Fluig', passwordEnv: 'FLUIG_TESTE_PASSWORD',
+  };
+  return { fluig, arquivo, server };
+}
+
+test('update guarda cópia do que estava no servidor e confere o que ficou', async () => {
+  const a = await ambienteQueGrava('codigo antigo do servidor');
+  try {
+    const r = await pushDataset({ server: a.server, senha: 's', arquivo: a.arquivo, prompt: async () => '' });
+
+    assert.equal(r.jaIgual, false);
+    assert.equal(r.conferido, true);
+    assert.ok(r.backup?.startsWith(ESTADO), `cópia fora da pasta de estado: ${r.backup}`);
+    assert.equal(readFileSync(r.backup!, 'utf8'), 'codigo antigo do servidor');
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('servidor que grava outra coisa sai como não conferido', async () => {
+  const a = await ambienteQueGrava('antigo', true);
+  try {
+    const r = await pushDataset({ server: a.server, senha: 's', arquivo: a.arquivo, prompt: async () => '' });
+    assert.equal(r.conferido, false);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('dry-run diz quando o servidor já tem o mesmo código, sem escrever nem copiar', async () => {
+  const a = await ambienteQueGrava(IMPL.replace(/\n/g, '\r\n'));
+  try {
+    const r = await pushDataset({ server: a.server, senha: 's', arquivo: a.arquivo, dryRun: true, prompt: async () => '' });
+
+    assert.equal(r.jaIgual, true);
+    assert.equal(r.backup, undefined);
+    assert.equal(a.fluig.requests.filter((q) => /updateDataset/.test(q.body)).length, 0);
   } finally {
     await a.fluig.close();
   }

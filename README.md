@@ -10,7 +10,8 @@ script.
 | | |
 |---|---|
 | `server add` / `ls` / `rm` / `test` / `set-prod` | pronto |
-| `server import` (lê `.vscode/servers.json` da Fluiggers) | pronto |
+| `server import` (lê `.vscode/servers.json` da Fluiggers, e as senhas com `--with-passwords`) | pronto |
+| `changed` (o que mudou no git, como comandos) | pronto |
 | `push dataset` | pronto |
 | `push form` | pronto |
 | `push widget` | pronto (widgets sem Java) |
@@ -52,13 +53,21 @@ fluigctl push widget wcm/widget/wdgAniversariantes --server cetenco-hml
 ### Importar o que já existe
 
 ```sh
-fluigctl server import ~/fluig/workspaces          # mostra o que faria
-fluigctl server import ~/fluig/workspaces --write  # grava
+fluigctl server import ~/fluig/workspaces                                  # mostra o que faria
+fluigctl server import ~/fluig/workspaces --write                          # grava os servidores
+fluigctl server import ~/fluig/workspaces --write --with-passwords         # e copia as senhas
 ```
 
-Traz os servidores dos `.vscode/servers.json` da extensão Fluiggers, sem a
-senha. Deduplica pelo que identifica um servidor — host, porta, ssl e usuário —
+Traz os servidores dos `.vscode/servers.json` da extensão Fluiggers.
+Deduplica pelo que identifica um servidor — host, porta, ssl e usuário —
 porque o mesmo Fluig costuma aparecer em vários projetos com nomes diferentes.
+
+Com `--with-passwords`, decifra a senha de cada servidor (ver "Segredos") e a
+copia para `~/.config/fluigctl/env`, sem imprimi-la. Sem `--write`, só lista o
+que copiaria. Em qualquer caso, confere o git de cada repositório onde achou um
+`servers.json`: com `--write`, acrescenta `.vscode/servers.json` ao `.gitignore`
+que não o tiver; se o arquivo já estiver **versionado**, avisa — ignorar não o
+tira do histórico.
 
 A marca de produção vem do nome do servidor, o que é palpite: o import lista
 tudo que **não** marcou e pede revisão. Corrija com `server set-prod <nome>`.
@@ -74,7 +83,17 @@ A senha vem, nesta ordem:
 
 1. a variável de ambiente;
 2. `~/.config/fluigctl/env`, no formato de shell, se a variável não estiver
-   definida.
+   definida;
+3. o `.vscode/servers.json` da extensão Fluiggers, procurado da pasta atual
+   para cima, no servidor de mesmo host, porta, ssl e usuário.
+
+A extensão grava a senha em AES-256-CBC com chave derivada (scrypt) do
+`telemetry.machineId` do VS Code — o do `storage.json` do perfil (VS Code,
+Insiders, Cursor ou VSCodium). O `fluigctl` decifra com a chave desta máquina;
+senha cifrada noutra máquina não abre, e o servidor é pulado. Ao usar essa
+fonte, ele diz de qual arquivo leu, acrescenta `.vscode/servers.json` ao
+`.gitignore` do repositório e sugere copiar a senha para o arquivo próprio com
+`server import --with-passwords`. `FLUIGCTL_NO_VSCODE=1` desliga a fonte 3.
 
 ```sh
 # ~/.config/fluigctl/env   (chmod 600)
@@ -108,7 +127,22 @@ catálogo do servidor antes de valer:
 2. o prefixo numérico da pasta (`721291 - Aprovadores`) — aceito só se a
    descrição no servidor também bater; se apontar para outro formulário, o
    push para, porque isso costuma ser pasta copiada de outro projeto
-3. o nome da pasta contra `documentDescription`
+3. o `.metadata` do Fluig Studio na pasta — a lista das exportações já feitas,
+   cada uma com o documentId. Vale a exportação cujo documentId existe neste
+   servidor **e** é o mesmo formulário (mesmo dataset ou mesma descrição): os
+   ids não valem de um ambiente para outro. Sobrando mais de uma, desempata o
+   servidor da última exportação; sem desempate, para e lista
+4. o nome da pasta contra `documentDescription`
+
+O passo 3 existe porque o nome da pasta engana: no HML da Cetenco,
+`forms/formReembolso` é o 902 ("formSolicitacaoReembolso"), e o 676, que se
+chama "formReembolso", é outro formulário — o push por nome publicou nele.
+
+Num update, o **nome** e o **campo descritor** do formulário ficam os que estão
+no servidor. O web service grava o que receber, e mandar o nome da pasta e o
+descritor vazio renomeava o formulário e apagava o descritor (o 392 do HML usa
+`nomeFantasia`). Mude-os só de propósito, com `--description` e
+`--description-field`. O dry-run mostra o nome e o descritor que vão.
 
 Com duas correspondências, o push para e lista os candidatos. Sem nenhuma,
 pede `--create` com `--parent-id`, `--dataset-name` e `--persistence-type` —
@@ -144,6 +178,33 @@ tiver o nome da pasta, ou o que você indicar em `--principal`.
 Rodado contra as 657 pastas de formulário reais dos 12 workspaces: 646 lidas
 sem erro, 11 recusadas com motivo — 8 sem `.html` nenhum e 3 com dois `.html`
 sem desempate. Nenhuma publicaria o `.metadata` junto.
+
+## Publicando um dataset
+
+Num update, antes de escrever, o `fluigctl` lê do servidor o código e a
+descrição atuais (`loadDataset`):
+
+- a descrição é preservada, a menos que venha `--description`;
+- o dry-run diz se o servidor já tem exatamente este código;
+- o código que estava lá é copiado para
+  `~/.local/state/fluigctl/backups/<host>/datasets/<nome>.<data>.js`
+  (`$XDG_STATE_HOME` se definido) — é o rollback;
+- depois do envio, lê de novo e confere que o servidor devolve o código local.
+  Se não devolver, sai com código 7 e aponta a cópia.
+
+## O que mudou no git
+
+```sh
+fluigctl changed --server cetenco-hml                # working tree
+fluigctl changed --since main --server cetenco-hml   # desde um commit ou branch
+```
+
+Traduz os arquivos alterados em artefatos (dataset, formulário, scripts de
+processo, widget) e imprime o comando de **cada um**, com `--dry-run`. Não envia
+nada: publicar em lote é como se sobrescreve, sem querer, o que outra pessoa
+mudou no servidor. Para formulário, compara os `name="..."` do HTML com a
+versão anterior e sugere `--new-version` quando há campo novo. Diagrama, evento
+global, mecanismo e layout aparecem com o motivo de não serem publicados aqui.
 
 ## Publicando um widget
 
