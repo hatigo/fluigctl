@@ -271,8 +271,11 @@ async function main(argv: string[]): Promise<void> {
     let gerado: No[];
     let naoSuportados: string[];
     try {
+      // bpmnVersion é do processo no destino, não do .process: vem do ecm30, como no push virá do servidor.
+      const bpmnVersion = Number(campo(sPDV, 'bpmnVersion')) || undefined;
       const r = gerarEcm30(diagrama, {
         companyId, parcial: true, scripts: locais, ...(formId === undefined ? {} : { formId }),
+        ...(bpmnVersion === undefined ? {} : { bpmnVersion }),
       });
       gerado = lerXml(r.xml).filhos[0]!.filhos;
       naoSuportados = r.naoSuportados;

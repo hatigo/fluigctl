@@ -94,7 +94,13 @@ export function lerXml(xml: string): No {
     }
 
     const attrs: Record<string, string> = {};
-    for (const a of attrsBrutos.matchAll(ATRIBUTO)) attrs[a[1]!] = decodificarEntidades(a[2]!);
+    for (const a of attrsBrutos.matchAll(ATRIBUTO)) {
+      // XML proíbe atributo repetido; aceitar ficaria com o último valor em silêncio.
+      if (Object.prototype.hasOwnProperty.call(attrs, a[1]!)) {
+        throw new ErroFluigctl(`XML malformado: atributo ${a[1]} repetido em <${nome}>`, 6);
+      }
+      attrs[a[1]!] = decodificarEntidades(a[2]!);
+    }
     const no: No = { nome, attrs, filhos: [], texto: '' };
     topo.filhos.push(no);
     if (!vazia) pilha.push(no);

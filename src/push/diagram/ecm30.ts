@@ -40,6 +40,12 @@ export interface OpcoesConversao {
    * código da tarefa de serviço (`servicetaskN`). Sem eles, o filho 6 sai vazio.
    */
   scripts?: Map<string, string>;
+  /**
+   * `bpmnVersion` da PDV. Não está no `.process`: é do processo no servidor (1 em
+   * 9 pares do fluigproduza, 2 nos outros 100). O push o lê da definição atual do
+   * destino; sem ele, vale 2.
+   */
+  bpmnVersion?: number;
 }
 
 export interface ResultadoConversao {
@@ -116,8 +122,8 @@ const EM_ATRASO = ['Responsavel', 'Requisitante', 'Gestor'].flatMap((quem) =>
 const EXPIRACAO = ['noticeExpirationAuthorityTime', 'noticeExpirationRequisitionerTime', 'noticeExpirationManagerTime'];
 /**
  * Texto de movimentação do fluxo. Quando o `.process` tem os três, o Studio
- * grava os três no `ProcessLink`, com o mesmo valor — mas em nenhum par o valor
- * é não vazio, então só o vazio é aceito (ver VALOR_NEUTRO).
+ * grava os três no `ProcessLink`, com o mesmo valor, preenchido ou vazio (9
+ * pares do fluigproduza com "Solicitação @[request:id] movimentada.").
  */
 const MOVIMENTO = ['movementTitle', 'movementDescription', 'movementAccessLinkDescription'];
 /** Da tarefa de serviço (82): viram `executionType` e `ProcessStateService`. */
@@ -142,6 +148,8 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
   ],
   BpmnStartEvent: [
     'id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'attachmentRules', 'signalId', 'expediente', 'selecionaColaboradores',
+    // Como na tarefa: joint = atividadeConjunta, agreementPercentage = consenso (10/10 inícios nos pares).
+    'atividadeConjunta', 'consenso',
     'esforcoCalculo', 'initializerConfiguration', 'instrucoes', 'prazoConclusao', 'notificaResponsavel',
     'notificaRequisitante', 'notificaGestor', 'inibeOpcaoTransferir', ...EM_ATRASO, ...EXPIRACAO,
   ],
@@ -174,7 +182,6 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
 /** Atributos conhecidos que não viram campo; só o valor neutro é aceito. */
 const VALOR_NEUTRO: Record<string, string> = {
   esforcoCalculo: '0', loopType: '0', executionAttempts: '0', frequency: '0',
-  movementTitle: '', movementDescription: '', movementAccessLinkDescription: '',
 };
 /** Na tarefa de serviço, tentativas e frequência viram campo do `ProcessStateService`. */
 const CAMPOS_DO_SERVICO = new Set(['executionAttempts', 'frequency']);
@@ -226,6 +233,48 @@ function folhas(no: No): Map<string, string> | undefined {
 }
 
 type Lido<T> = { valor: T } | { erro: string };
+
+interface PropriedadeEstendida {
+  nome: string;
+  tipo: string;
+  descricao: string;
+  valor: string;
+  padrao: string;
+}
+
+const PROPRIEDADE_CAMPOS = ['propertyName', 'propertyType', 'propertyDescription', 'propertyValue', 'isDefaultProperty'];
+
+/**
+ * `extendedFields` do processo: `<list>` com um `ExtendedPropertyImpl`. Vira um
+ * `AdvancedProcessProperties` (filho 7) e um `ExtendedPropertyField` (filho 13,
+ * `stateSequence` 0). Nos .process medidos são 8 processos, todos com um item,
+ * `propertyType` 0 e `isDefaultProperty` false; fora disso, recusa.
+ */
+function lerPropriedadesEstendidas(blob: string): Lido<PropriedadeEstendida[]> {
+  const raiz = arvoreDoBlob(blob);
+  if (!raiz || raiz.nome !== 'list' || Object.keys(raiz.attrs).length > 0) return { erro: 'extendedFields ilegível' };
+  if (raiz.filhos.length !== 1) return { erro: `extendedFields com ${raiz.filhos.length} propriedades (só 1 conferida)` };
+  const no = raiz.filhos[0]!;
+  if (no.nome !== 'org.eclipse.bpmn2.impl.ExtendedPropertyImpl') return { erro: `extendedFields com ${no.nome}` };
+  const f = Object.keys(no.attrs).length === 0 ? folhas(no) : undefined;
+  const extra = f ? [...f.keys()].find((k) => !PROPRIEDADE_CAMPOS.includes(k)) : undefined;
+  if (!f || extra !== undefined || f.size !== PROPRIEDADE_CAMPOS.length) {
+    return { erro: `extendedFields com campo ${extra ?? 'faltando ou fora da forma'}` };
+  }
+  const nome = f.get('propertyName')!;
+  if (nome === '') return { erro: 'extendedFields sem propertyName' };
+  if (f.get('propertyType') !== '0') return { erro: `extendedFields com propertyType ${f.get('propertyType')}` };
+  if (f.get('isDefaultProperty') !== 'false') return { erro: `extendedFields com isDefaultProperty ${f.get('isDefaultProperty')}` };
+  return {
+    valor: [{
+      nome,
+      tipo: f.get('propertyType')!,
+      descricao: f.get('propertyDescription')!,
+      valor: f.get('propertyValue')!,
+      padrao: f.get('isDefaultProperty')!,
+    }],
+  };
+}
 
 /**
  * `descriptorFields` do processo: `<list>` de `BpmnProcessFormField`, cada um
@@ -508,8 +557,11 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
         recusar(`${attr}="${valor}" em ${o.attrs['id'] ?? o.tipo}`);
       }
     }
+    // No processo vira os filhos 7 e 13 (abaixo); em outro objeto nunca foi conferido.
     const ext = o.attrs['extendedFields'];
-    if (ext && !/^<list\s*\/>$/.test(ext.trim())) recusar('propriedades estendidas (extendedFields)');
+    if (o.tipo !== 'BpmnProcess' && ext && !/^<list\s*\/>$/.test(ext.trim())) {
+      recusar(`propriedades estendidas (extendedFields) em ${o.attrs['id'] ?? o.tipo}`);
+    }
     if (o.attrs['appsConfiguration'] && (o.tipo !== 'BpmnTask' || o.attrs['type'] !== TAREFA_COM_APP)) {
       recusar(`appsConfiguration em ${o.attrs['id'] ?? o.tipo} (type ${o.attrs['type'] ?? '?'}), só conferido na tarefa 80`);
     }
@@ -588,7 +640,8 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['transferAttachments', false],
       ['subProcessId', ''],
       ['formFolder', 0],
-      ['notifyAuthorityFollowUp', tarefa ? booleano(a['authNotify'], true) : booleano(a['notificaResponsavel'], false)],
+      // Tarefa sem authNotify sai false no Studio (12/12 nos pares); com authNotify="true", true (1232/1232).
+      ['notifyAuthorityFollowUp', tarefa ? booleano(a['authNotify'], false) : booleano(a['notificaResponsavel'], false)],
       ['notifyRequisitionerFollowUp', booleano(a['notificaRequisitante'], false)],
       ['automatic', false],
       ['positionX', pos.absX],
@@ -1224,6 +1277,29 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       });
     }
   }
+  const propriedadesAvancadas: Campo[][] = [];
+  const propriedadesEstendidas: Campo[][] = [];
+  if (p['extendedFields'] && !/^<list\s*\/>$/.test(p['extendedFields'].trim())) {
+    const lido = lerPropriedadesEstendidas(p['extendedFields']);
+    if ('erro' in lido) recusar(lido.erro);
+    else {
+      for (const e of lido.valor) {
+        propriedadesAvancadas.push([
+          ['advancedProcessPropertiesPK', [['companyId', companyId], ['processId', processId], ['propertyId', e.nome], ['version', versao]]],
+          ['propertieValue', e.valor],
+        ]);
+        propriedadesEstendidas.push([
+          ['extendedPropertyFieldPK', [
+            ['companyId', companyId], ['processId', processId], ['version', versao], ['stateSequence', 0], ['propertyName', e.nome],
+          ]],
+          ['propertyType', e.tipo],
+          ['propertyDescription', e.descricao],
+          ['propertyValue', e.valor],
+          ['isDefaultProperty', e.padrao],
+        ]);
+      }
+    }
+  }
   const configuracoesDeApp: Campo[][] = [];
   for (const o of tarefas) {
     const blob = o.attrs['appsConfiguration'];
@@ -1355,7 +1431,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ['blockedVersion', false],
     ['counterSign', false],
     ['openInstances', 0],
-    ['bpmnVersion', 2],
+    ['bpmnVersion', opcoes.bpmnVersion ?? 2],
     ['processStates', null],
     ['favorito', false],
     ['inheritFormSecurity', booleano(p['inheritFormSecurity'], false)],
@@ -1371,13 +1447,13 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     lista('ProcessLink', links),
     vazio,
     lista('WorkflowProcessEvent', eventos),
-    vazio,
+    lista('AdvancedProcessProperties', propriedadesAvancadas),
     lista('SwimLane', raias),
     lista('ProcessComponGraf', anotacoesXml),
     lista('ProcessLinkAssoc', associacoes),
     lista('ProcessLinkBend', bends),
     lista('ProcessStateTrigger', gatilhos),
-    vazio,
+    lista('ExtendedPropertyField', propriedadesEstendidas),
     lista('ProcessFormField', camposDeFormulario),
     lista('ProcessStateService', servicos),
     lista('SubProcessFieldRelationship', relacoes),

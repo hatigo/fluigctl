@@ -339,6 +339,26 @@ valores numéricos nos `.process` medidos nomeiam.
   `extendedFields` 9 (4), `processAttachmentSecurity` 8, `consenso` 8,
   subprocesso 101 7, `deadlineTime` 7, `notifyManagerComplements` 6 (5).
 
+**Estado (02/10/2026, sexto corte).** Entram `movement*` preenchidos (vão ao
+`ProcessLink` como estão), `consenso`/`atividadeConjunta` no início (mesma regra
+da tarefa, 10/10), `extendedFields` do processo (filhos 7 e 13, um item com
+`propertyType` 0 e `isDefaultProperty` false — 8 processos; no gateway, 1 caso
+sem par, segue recusado) e `bpmnVersion` como dado do destino: não está no
+`.process` (1 em 9 pares do fluigproduza, 2 nos outros 100), então o push o lê
+da definição atual do servidor e o harness o lê do ecm30. Corrigido o padrão de
+`notifyAuthorityFollowUp` na tarefa: sem `authNotify`, `false` (12/12); com
+`authNotify="true"`, `true` (1232/1232). O leitor de XML passa a recusar
+atributo repetido (nenhum dos 475 `.process` tem).
+
+- 66/72 gabaritos batendo em todos os filhos (eram 56). Por filho: 0=71 1=71
+  2=68 3=71 4=72 7=72 8=70 9=72 10=72 11=70 12=71 13=72 14=72 15=72 16=72 17=72
+  18=72 19=72; filhos 7 e 13 em 3/3 dos pares com o atributo. Sobram: atribuição
+  "Associado" (1), `messageData` (1), `deadlineTime`/`warningTime` do processo
+  (1), posições e tamanhos deslocados por igual num diagrama inteiro (2,
+  provável edição depois do export) e um par com versão e condição vazia a
+  investigar (1).
+- 349/475 `.process` convertem sem recusa (eram 329).
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

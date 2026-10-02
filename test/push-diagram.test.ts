@@ -59,6 +59,10 @@ test('o tokenizer não encerra a tag num ">" dentro de atributo e decodifica as 
 
 test('XML malformado é recusado com código 6, sem árvore parcial', () => {
   assert.equal(erroDe(() => lerXml('<a><b></a>')).codigo, 6);
+  // Atributo repetido é XML inválido; aceitar ficaria com o último valor em silêncio.
+  const repetido = erroDe(() => lerXml('<a v="1" v="2"/>'));
+  assert.equal(repetido.codigo, 6);
+  assert.match(repetido.message, /atributo v repetido/);
   assert.equal(erroDe(() => converterDiagrama('<<<<<<< HEAD\n<xmi:XMI/>', { companyId: 1 })).codigo, 6);
 });
 
@@ -421,16 +425,65 @@ test('anotação vira ProcessComponGraf e o fluxo dela, ProcessLinkAssoc — nã
   assert.ok(!porCampo(filhos[4]!, 'processLinkPK', 'linkSequence').has('32'));
 });
 
-test('movementTitle/Description/AccessLinkDescription vazios saem no ProcessLink; preenchidos são recusados', () => {
+test('movementTitle/Description/AccessLinkDescription saem no ProcessLink, vazios ou preenchidos', () => {
   const links = porCampo(filhosDaRaiz(converterDiagrama(FASE1, { companyId: 1 }).xml)[4]!, 'processLinkPK', 'linkSequence');
   assert.deepEqual(nomes(links.get('21')!).slice(-4), ['type', 'movementTitle', 'movementDescription', 'movementAccessLinkDescription']);
   assert.equal(texto(links.get('21')!, 'movementTitle'), '');
   assert.equal(nomes(links.get('22')!).at(-1), 'type', 'sem os atributos, o link não leva os campos');
 
-  const preenchido = FASE1.replace('movementTitle=""', 'movementTitle="Solicita&#xe7;&#xe3;o enviada"');
-  const erro = erroDe(() => converterDiagrama(preenchido, { companyId: 1 }));
-  assert.equal(erro.codigo, 6);
-  assert.match(erro.message, /movementTitle="Solicitação enviada" em flow21/);
+  // Preenchido vai como está (9 pares do fluigproduza: "Solicitação @[request:id] movimentada.").
+  const preenchido = FASE1.replace('movementTitle=""', 'movementTitle="Solicita&#xe7;&#xe3;o @[request:id] enviada"');
+  const comTexto = porCampo(filhosDaRaiz(converterDiagrama(preenchido, { companyId: 1 }).xml)[4]!, 'processLinkPK', 'linkSequence');
+  assert.equal(texto(comTexto.get('21')!, 'movementTitle'), 'Solicitação @[request:id] enviada');
+});
+
+test('consenso e atividadeConjunta no início viram agreementPercentage e joint, como na tarefa', () => {
+  const comConsenso = PROCESSO.replace('<bpmn2:BpmnStartEvent id="startevent4"', '<bpmn2:BpmnStartEvent consenso="100" id="startevent4"');
+  assert.notEqual(comConsenso, PROCESSO);
+  const inicio = filhosDaRaiz(converterDiagrama(comConsenso, { companyId: 1 }).xml)[2]!.filhos
+    .find((e) => texto(e, 'processStatePK', 'sequence') === '4')!;
+  assert.equal(texto(inicio, 'agreementPercentage'), '100');
+  assert.equal(texto(inicio, 'joint'), 'false');
+});
+
+test('bpmnVersion vem de quem chama (o processo no destino); sem ele, 2', () => {
+  assert.equal(texto(filhosDaRaiz(converterDiagrama(PROCESSO, { companyId: 1 }).xml)[1]!, 'bpmnVersion'), '2');
+  assert.equal(texto(filhosDaRaiz(converterDiagrama(PROCESSO, { companyId: 1, bpmnVersion: 1 }).xml)[1]!, 'bpmnVersion'), '1');
+});
+
+test('extendedFields do processo vira AdvancedProcessProperties (7) e ExtendedPropertyField (13)', () => {
+  const blob = '<list>\n  <org.eclipse.bpmn2.impl.ExtendedPropertyImpl>\n    <propertyName>AutomaticTasks</propertyName>\n' +
+    '    <propertyType>0</propertyType>\n    <propertyDescription>AutomaticTasks</propertyDescription>\n' +
+    '    <propertyValue>4</propertyValue>\n    <isDefaultProperty>false</isDefaultProperty>\n  </org.eclipse.bpmn2.impl.ExtendedPropertyImpl>\n</list>';
+  // O fixture já tem extendedFields="<list/>" no processo: troca o valor.
+  const comExt = PROCESSO.replace(/(<bpmn2:BpmnProcess [^\n]*?)extendedFields="[^"]*"/, `$1extendedFields="${comoAtributo(blob)}"`);
+  assert.notEqual(comExt, PROCESSO);
+  const filhos = filhosDaRaiz(converterDiagrama(comExt, { companyId: 3 }).xml);
+
+  const avancada = filhos[7]!.filhos[0]!;
+  assert.equal(avancada.nome, 'AdvancedProcessProperties');
+  assert.deepEqual(avancada.filhos[0]!.filhos.map((f) => [f.nome, f.texto]), [
+    ['companyId', '3'], ['processId', 'processoTeste'], ['propertyId', 'AutomaticTasks'], ['version', '3'],
+  ]);
+  assert.equal(texto(avancada, 'propertieValue'), '4');
+
+  const estendida = filhos[13]!.filhos[0]!;
+  assert.deepEqual(estendida.filhos.map((f) => f.nome), [
+    'extendedPropertyFieldPK', 'propertyType', 'propertyDescription', 'propertyValue', 'isDefaultProperty',
+  ]);
+  assert.deepEqual(estendida.filhos[0]!.filhos.map((f) => f.texto), ['3', 'processoTeste', '3', '0', 'AutomaticTasks']);
+
+  // Duas propriedades, outro tipo, ou em outro objeto: nunca conferido, recusa.
+  const duas = blob.replace('</list>', blob.slice(blob.indexOf('  <org'), blob.lastIndexOf('</list>')) + '</list>');
+  for (const [x, motivo] of [
+    [comExt.replace(comoAtributo(blob), comoAtributo(duas)), /2 propriedades/],
+    [comExt.replace(comoAtributo(blob), comoAtributo(blob.replace('<propertyType>0', '<propertyType>1'))), /propertyType 1/],
+    [PROCESSO.replace(/(<bpmn2:BpmnTask id="task5"[^\n]*?)extendedFields="[^"]*"/, `$1extendedFields="${comoAtributo(blob)}"`), /extendedFields\) em task5/],
+  ] as [string, RegExp][]) {
+    const erro = erroDe(() => converterDiagrama(x, { companyId: 1 }));
+    assert.equal(erro.codigo, 6);
+    assert.match(erro.message, motivo);
+  }
 });
 
 test('valor sem mapeamento conferido continua recusado com código 6', () => {
@@ -639,7 +692,7 @@ test('evento de link recusado: sem linkId, linkId que não resolve, linkId fora 
       LINK_SIMPLES.replace('</xmi:XMI>', '  <bpmn2:SequenceFlow id="flow13" name="" sourceRef="task2" targetRef="intermediatelinkreceive4" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>\n</xmi:XMI>'),
       /evento de link intermediatelinkreceive4 \(42\) com fluxo de entrada/,
     ],
-    [LINK_SIMPLES.replace('linkId="intermediatelinkreceive4"', 'sequenceAttached="0"'), /sem um único recebimento/],
+    [LINK_SIMPLES.replace('linkId="intermediatelinkreceive4"', 'linkId=""'), /sem um único recebimento/],
     [
       diagramaDeLink(
         [INICIO, CAPTURA('intermediatelinkreceive4'), ['BpmnEndEvent', 'endevent5', 'type="60" signalId="0"']],
