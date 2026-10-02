@@ -1,20 +1,70 @@
 # fluigctl
 
-Sobe datasets e formulários para o TOTVS Fluig pela linha de comando — o que a
-extensão Fluiggers do VS Code faz, sem precisar de IDE nem de clique em
-QuickPick. O mesmo binário serve para você no terminal e para um agente via
-script.
+Publica artefatos de um repositório TOTVS Fluig — datasets, formulários,
+widgets e os scripts de um processo — num servidor Fluig, pela linha de
+comando. Faz o que o **Exportar** do Fluig Studio e da extensão Fluiggers do VS
+Code fazem, sem IDE e sem clique, e serve igual para você no terminal e para um
+agente (Claude Code, CI) via script.
+
+## Por que usar
+
+Publicar no Fluig é sobrescrever: o servidor grava o que receber, sem perguntar.
+Os caminhos de sempre deixam fácil errar o alvo, apagar o que é do cliente ou
+subir em produção sem querer. O `fluigctl` existe para que publicar seja
+repetível e difícil de errar:
+
+- **Não publica no lugar errado.** O formulário é resolvido pelo `--document-id`,
+  pelo `.metadata` do Studio e só então pelo nome da pasta — e para quando há
+  dúvida, listando os candidatos. O nome da pasta engana: no HML da Cetenco,
+  `forms/formReembolso` é o formulário 902, e o que se chama "formReembolso" (676)
+  é outro.
+- **Não apaga o que é do servidor.** Num update mantém a descrição do dataset e o
+  nome e o campo descritor do formulário, que o web service sobrescreveria.
+- **Simula antes e prova depois.** Todo push tem `--dry-run`, que mostra o alvo e
+  o que vai. No dataset, guarda uma cópia do código anterior e confere que o
+  servidor devolve o código local.
+- **Produção é humana.** Servidor marcado como produção exige a senha digitada
+  num terminal de verdade. Um agente ou um script não consegue — por construção,
+  não por convenção.
+- **A senha não passa por quem chama.** Vem da variável de ambiente, de um
+  arquivo próprio com permissão 600 ou do `.vscode/servers.json` da extensão,
+  decifrado pela chave desta máquina. Nunca é impressa, e o `servers.json` é
+  mantido no `.gitignore`.
+- **Barato para um agente.** Comandos curtos e saídas de uma linha.
+
+### Comparado com os outros caminhos
+
+Medido em 02/10/2026 contra o HML da Cetenco, publicando o mesmo dataset e o
+mesmo formulário por cada caminho (tokens: o que o agente precisa ler + o que
+cada comando custa):
+
+| | fluigctl | skill publicar-fluig | skill fluig-artefatos (curl) | Studio / Fluiggers |
+|---|---|---|---|---|
+| Uso por agente | sim | sim | sim, montando SOAP na mão | não (interface gráfica) |
+| Tokens para 1 dataset + 1 formulário | ~1.900 | ~4.000 | ~12.000 (estimado) | — |
+| Publicar dataset | 1,4 s | 1,0 s | — | — |
+| Publicar formulário | 2,3 s | 2,4 s | — | — |
+| Formulário sem `--document-id`, pasta `formReembolso` | 902 (certo, pelo `.metadata`) | 676 (errado, sem aviso) | o agente escolhe | pergunta |
+| Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
+| Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
+| Cópia antes / conferência depois | dataset | não | checklist manual | não |
+| Testes automatizados | 283 | não | não | — |
+
+Fica para o Studio: criar processo novo, o diagrama (aqui só `--dry-run`, ou o
+import com `push process --base`), widget com código Java, evento global,
+mecanismo de atribuição e layout.
 
 ## Estado
 
 | | |
 |---|---|
 | `server add` / `ls` / `rm` / `test` / `set-prod` | pronto |
-| `server import` (lê `.vscode/servers.json` da Fluiggers, e as senhas com `--with-passwords`) | pronto |
+| `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
 | `push dataset` | pronto |
 | `push form` | pronto |
 | `push widget` | pronto (widgets sem Java) |
+| `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
 | `push diagram` | só `--dry-run`, fase 1 |
 
 Fora de escopo por enquanto: `pull`, layout WCM, widget com código Java,
@@ -27,30 +77,72 @@ npm install && npm run build
 npm link            # deixa `fluigctl` no PATH
 ```
 
-## Uso
+Node 22.2 ou mais novo.
+
+## Como usar
+
+### 1. Cadastrar os servidores, uma vez
+
+Se você já usa a extensão Fluiggers, traga os servidores e as senhas dela:
 
 ```sh
-export FLUIG_CETENCO_HML_PASSWORD='...'
-fluigctl server add cetenco-hml --host homolog.cetenco.com.br --port 8021 --user integracao.fluig
+fluigctl server import ~/fluig/workspaces --with-passwords           # mostra o que faria
+fluigctl server import ~/fluig/workspaces --write --with-passwords   # grava
+fluigctl server ls
 fluigctl server test cetenco-hml
+```
 
-fluigctl push dataset datasets/dsSTGObterProjetos.js --server cetenco-hml --dry-run
-fluigctl push dataset datasets/dsSTGObterProjetos.js --server cetenco-hml
-fluigctl push dataset datasets/dsNovo.js --server cetenco-hml --create --description "Novo"
+Confira a marca de produção que o import listar (`fluigctl server set-prod <nome>`
+corrige). Sem a extensão, cadastre à mão e ponha a senha no arquivo próprio:
 
-fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --keep-version --dry-run
-fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --keep-version
-fluigctl push form forms/formSolicitacaoCompras --server cetenco-hml --new-version
-fluigctl push form forms/formNovo --server cetenco-hml \
-  --create --parent-id 5 --dataset-name dsformNovo --persistence-type form
-
-fluigctl push widget wcm/widget/wdgAniversariantes --server cetenco-hml --dry-run
-fluigctl push widget wcm/widget/wdgAniversariantes --server cetenco-hml
+```sh
+fluigctl server add cetenco-hml --host homolog.cetenco.com.br --port 8021 --user integracao.fluig
+echo "export FLUIG_CETENCO_HML_PASSWORD='...'" >> ~/.config/fluigctl/env && chmod 600 ~/.config/fluigctl/env
 ```
 
 `server add` descobre `companyId` e `userCode` sozinho, consultando o servidor.
 
-### Importar o que já existe
+### 2. No dia a dia: ver o que mudou, simular, publicar
+
+Rode na raiz do repositório Fluig:
+
+```sh
+fluigctl changed --server cetenco-hml
+```
+
+Para cada artefato alterado, ele imprime o comando com `--dry-run`. Rode a
+simulação, leia os `aviso:` e o alvo, e repita sem `--dry-run`:
+
+```sh
+fluigctl push dataset datasets/reembolso/dsFoo.js --server cetenco-hml --dry-run
+fluigctl push dataset datasets/reembolso/dsFoo.js --server cetenco-hml
+
+fluigctl push form forms/formReembolso/ --server cetenco-hml --keep-version --dry-run
+fluigctl push form forms/formReembolso/ --server cetenco-hml --keep-version
+
+fluigctl push process reembolso --server cetenco-hml --dry-run
+fluigctl push widget wcm/widget/wdgAniversariantes --server cetenco-hml --dry-run
+```
+
+Formulário exige escolher a versão: `--keep-version` sobrescreve a ativa (só
+mudou JS, CSS, texto), `--new-version` cria a próxima (ganhou campo — o servidor
+recusa campo novo com `--keep-version`). Na dúvida sobre o alvo, passe
+`--document-id`.
+
+Criar artefato novo é sempre explícito:
+
+```sh
+fluigctl push dataset datasets/dsNovo.js --server cetenco-hml --create --description "Novo"
+fluigctl push form forms/formNovo --server cetenco-hml \
+  --create --parent-id 5 --dataset-name dsformNovo --persistence-type form
+```
+
+### 3. Produção
+
+O mesmo comando, num terminal seu: o `fluigctl` pede a senha antes de enviar.
+Um agente não sobe em produção — ele te entrega o comando.
+
+## Importando servidores da extensão
 
 ```sh
 fluigctl server import ~/fluig/workspaces                                  # mostra o que faria
@@ -321,7 +413,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 248 testes, sem rede e sem servidor Fluig
+npm test        # 283 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
