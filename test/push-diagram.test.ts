@@ -141,13 +141,25 @@ test('tarefa sem managerMechanism não leva os campos de atribuição', () => {
 });
 
 test('elemento não suportado é recusado com código 6, listando o tipo', () => {
-  const comSubprocesso = PROCESSO.replace(
+  // O subprocesso ad hoc (101) não aparece em nenhum ecm30: segue recusado pelo tipo.
+  const adHoc = PROCESSO.replace(
+    '<bpmn2:BpmnEndEvent',
+    '<bpmn2:BpmnSubProcess id="subprocess12" name="Filho" type="101"/>\n  <bpmn2:BpmnEndEvent',
+  );
+  const erro = erroDe(() => converterDiagrama(adHoc, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /BpmnSubProcess \(type 101\)/);
+});
+
+test('subprocesso (100) sem os atributos que o ecm30 exige é recusado listando cada um', () => {
+  const incompleto = PROCESSO.replace(
     '<bpmn2:BpmnEndEvent',
     '<bpmn2:BpmnSubProcess id="subprocess12" name="Filho" type="100"/>\n  <bpmn2:BpmnEndEvent',
   );
-  const erro = erroDe(() => converterDiagrama(comSubprocesso, { companyId: 1 }));
+  const erro = erroDe(() => converterDiagrama(incompleto, { companyId: 1 }));
   assert.equal(erro.codigo, 6);
-  assert.match(erro.message, /BpmnSubProcess \(type 100\)/);
+  assert.match(erro.message, /subprocess12 sem process/);
+  assert.match(erro.message, /sem transferAttachments/);
 });
 
 test('atribuição que não foi conferida contra o Studio é recusada com código 6', () => {
@@ -688,13 +700,14 @@ test('descriptorFields e appsConfiguration vazios ou ausentes deixam os filhos 1
 });
 
 test('appsConfiguration: uma linha por campo e por tarefa, com a versão do .process e o sequence da tarefa', () => {
-  const blob = APPS(CAMPO_APP('title', ''), CAMPO_APP('description', '@[form:descr] &amp; mais'), CAMPO_APP('approve', '125'), CAMPO_APP('reject', ''));
-  const outro = APPS(CAMPO_APP('highlight', '@[form:valor]'), CAMPO_APP('approve', '8'));
+  // approve/reject nomeiam estados do diagrama (185/185 nos .process medidos): aqui 7 e 6.
+  const blob = APPS(CAMPO_APP('title', ''), CAMPO_APP('description', '@[form:descr] &amp; mais'), CAMPO_APP('approve', '7'), CAMPO_APP('reject', ''));
+  const outro = APPS(CAMPO_APP('highlight', '@[form:valor]'), CAMPO_APP('approve', '6'));
   const xml = comApps('task7', outro).replace('<bpmn2:BpmnTask id="task5"', `<bpmn2:BpmnTask appsConfiguration="${comoAtributo(blob)}" id="task5"`);
   const linhas = filhosDaRaiz(converterDiagrama(xml, { companyId: 1 }).xml)[17]!.filhos;
   assert.deepEqual(
     linhas.map((l) => [texto(l, 'stateSequence'), texto(l, 'appField'), texto(l, 'description')].join('|')),
-    ['5|title|', '5|description|@[form:descr] & mais', '5|approve|125', '5|reject|', '7|highlight|@[form:valor]', '7|approve|8'],
+    ['5|title|', '5|description|@[form:descr] & mais', '5|approve|7', '5|reject|', '7|highlight|@[form:valor]', '7|approve|6'],
   );
   assert.deepEqual(linhas[0]!.filhos.map((f) => f.nome), [
     'id', 'tenantId', 'processId', 'processVersion', 'stateSequence', 'appKey', 'appField', 'description',
@@ -733,7 +746,7 @@ test('descriptorFields fora da forma conferida é recusado com código 6, sem XM
 });
 
 test('appsConfiguration fora da forma conferida é recusado com código 6, sem XML parcial', () => {
-  const ok = CAMPO_APP('approve', '1');
+  const ok = CAMPO_APP('approve', '7');
   const classe = 'org.eclipse.bpmn2.documentacional.BpmnProcessAppConfiguration';
   const casos: [string, RegExp][] = [
     [APPS(CAMPO_APP('outro', 'x')), /appField "outro"/],
@@ -741,7 +754,8 @@ test('appsConfiguration fora da forma conferida é recusado com código 6, sem X
     [APPS(ok).replace(classe + '>\n        <appField', 'com.exemplo.Outra>\n        <appField').replace(`</${classe}>`, '</com.exemplo.Outra>'), /appsConfiguration com com\.exemplo\.Outra/],
     [APPS(ok).replace('<string>approval</string>', '<string>outro</string>'), /appKey "outro"/],
     [APPS(CAMPO_APP('approve', 'abc')), /approve não numérico/],
-    [APPS(ok, CAMPO_APP('approve', '2')), /appField approve repetido/],
+    [APPS(ok, CAMPO_APP('approve', '6')), /appField approve repetido/],
+    [APPS(CAMPO_APP('reject', '125')), /reject 125, que não é um estado do diagrama/],
     [APPS(ok.replace(/\s*<description>.*<\/description>/, '')), /sem description em approve/],
     [APPS(), /sem nenhum campo/],
     [APPS(ok).replace('</entry>', '</entry>\n  <entry>\n    <string>approval</string>\n    <list/>\n  </entry>'), /fora da forma/],

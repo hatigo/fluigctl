@@ -92,10 +92,17 @@ const INSTRUCAO_INTERMEDIARIO: Record<string, string> = {
 const RUN_TYPE: Record<string, number> = { MINUTE: 0, HOUR: 1, DAY: 2 };
 const CONFIGURACAO_DO_CAMINHO = 'mecanismoAtribuicaoConfiguracao';
 
-/** Atributos que alimentam filhos ainda não gerados: presentes, o XML ficaria incompleto. */
-const ATRIBUTOS_NAO_SUPORTADOS: Record<string, string> = {
-  attachmentRules: 'regras de anexo (attachmentRules)',
-};
+/**
+ * Subprocesso (100): atributos que o ecm30 não guarda só aceitam o valor neutro.
+ * O ad hoc (101) não aparece em nenhum ecm30, então segue recusado.
+ */
+const SUBPROCESSO = '100';
+const MAPEAMENTO_CAMPOS = ['processField', 'subProcessField', 'mapFlow'];
+/** Tipos que carregam `attachmentRules` nos pares: início (10) e tarefa de usuário (80). */
+const REGRA_DE_ANEXO_EM = new Set(['BpmnStartEvent:10', 'BpmnTask:80']);
+const REGRA_CAMPOS = ['id', 'message', 'operator', 'amount', 'name'];
+/** Operadores vistos nos pares (2 e 3); o 1 só aparece em `.process` sem ecm30. */
+const REGRA_OPERADORES = ['2', '3'];
 /** Única tarefa com `appsConfiguration` conferida contra o Studio: a de usuário (80). */
 const TAREFA_COM_APP = '80';
 /** `appKey` e `appField` que aparecem nos pares; `approve` e `reject` guardam um número (vazio ou sequence). */
@@ -134,7 +141,7 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     'serverId', 'author', 'formSource', 'formType', 'keyWord',
   ],
   BpmnStartEvent: [
-    'id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'signalId', 'expediente', 'selecionaColaboradores',
+    'id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'attachmentRules', 'signalId', 'expediente', 'selecionaColaboradores',
     'esforcoCalculo', 'initializerConfiguration', 'instrucoes', 'prazoConclusao', 'notificaResponsavel',
     'notificaRequisitante', 'notificaGestor', 'inibeOpcaoTransferir', ...EM_ATRASO, ...EXPIRACAO,
   ],
@@ -143,7 +150,11 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     'managerAssignmentControllerString', 'loopType', 'authNotify', 'expediente', 'atividadeConjunta',
     'consenso', 'selecionaColaboradores', 'esforcoCalculo', 'executionAttempts', 'frequency', 'instrucoes',
     'prazoConclusao', 'deadlineFieldName', 'notificaRequisitante', 'notificaGestor', 'inibeOpcaoTransferir',
-    'confirmarSenha', 'appsConfiguration', ...EM_ATRASO, ...EXPIRACAO,
+    'confirmarSenha', 'appsConfiguration', 'attachmentRules', ...EM_ATRASO, ...EXPIRACAO,
+  ],
+  BpmnSubProcess: [
+    'id', 'name', 'incoming', 'outgoing', 'type', 'process', 'loopType', 'selectColleague', 'transferAttachments',
+    'cancelSubProcess', 'sendToNextTaskInSubProcess', 'formMaps',
   ],
   BpmnEndEvent: ['id', 'name', 'incoming', 'type', 'extendedFields', 'signalId', 'notificaRequisitante'],
   BpmnGateway: ['id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'condition'],
@@ -200,11 +211,15 @@ function arvoreDoBlob(blob: string): No | undefined {
   }
 }
 
-/** Folhas de um elemento XStream; `undefined` se um filho não é folha ou se repete. */
+/**
+ * Folhas de um elemento XStream; `undefined` se um filho não é folha, se repete
+ * ou traz atributo (`reference`, `class`...): o valor estaria em outro lugar, e
+ * ler só o texto descartaria o atributo em silêncio.
+ */
 function folhas(no: No): Map<string, string> | undefined {
   const campos = new Map<string, string>();
   for (const f of no.filhos) {
-    if (f.filhos.length > 0 || campos.has(f.nome)) return undefined;
+    if (f.filhos.length > 0 || campos.has(f.nome) || Object.keys(f.attrs).length > 0) return undefined;
     campos.set(f.nome, f.texto);
   }
   return campos;
@@ -243,7 +258,7 @@ function lerDescritores(blob: string): Lido<{ id: string; label: string }[]> {
  * `appsConfiguration` da tarefa: `<map>` com uma `<entry>` (`<string>` appKey +
  * `<list>` de `BpmnProcessAppConfiguration` com `appField` e `description`).
  */
-function lerAppsConfiguracao(blob: string): Lido<{ chave: string; campo: string; descricao: string }[]> {
+function lerAppsConfiguracao(blob: string, estados: Set<number>): Lido<{ chave: string; campo: string; descricao: string }[]> {
   const raiz = arvoreDoBlob(blob);
   const entrada = raiz?.filhos[0];
   if (!raiz || raiz.nome !== 'map' || Object.keys(raiz.attrs).length > 0 || raiz.filhos.length !== 1 ||
@@ -251,7 +266,7 @@ function lerAppsConfiguracao(blob: string): Lido<{ chave: string; campo: string;
     return { erro: 'appsConfiguration fora da forma (um <entry> em <map>)' };
   }
   const [chaveNo, listaNo, ...sobra] = entrada.filhos;
-  if (sobra.length > 0 || chaveNo?.nome !== 'string' || chaveNo.filhos.length > 0 || listaNo?.nome !== 'list' ||
+  if (sobra.length > 0 || chaveNo?.nome !== 'string' || chaveNo.filhos.length > 0 || Object.keys(chaveNo.attrs).length > 0 || listaNo?.nome !== 'list' ||
     Object.keys(listaNo.attrs).length > 0) {
     return { erro: 'appsConfiguration com <entry> fora da forma (<string> e <list>)' };
   }
@@ -272,10 +287,62 @@ function lerAppsConfiguracao(blob: string): Lido<{ chave: string; campo: string;
     if (APP_CAMPOS_NUMERICOS.has(campo) && descricao !== '' && !/^\d+$/.test(descricao)) {
       return { erro: `appsConfiguration com ${campo} não numérico` };
     }
+    // approve/reject nomeiam um sequence de estado do diagrama (não só o destino direto do fluxo).
+    if (APP_CAMPOS_NUMERICOS.has(campo) && descricao !== '' && !estados.has(Number(descricao))) {
+      return { erro: `appsConfiguration com ${campo} ${descricao}, que não é um estado do diagrama` };
+    }
     if (itens.some((i) => i.campo === campo)) return { erro: `appsConfiguration com appField ${campo} repetido` };
     itens.push({ chave: chaveNo.texto, campo, descricao });
   }
   return { valor: itens };
+}
+
+/**
+ * `formMaps` do subprocesso: `<list>` de `BpmnProcessFormMap` com `processField`,
+ * `subProcessField` e `mapFlow` (0, 1 ou 2). Vira um `SubProcessFieldRelationship`
+ * por item, na ordem do blob.
+ */
+function lerMapeamentos(blob: string): Lido<{ campo: string; campoSub: string; fluxo: string }[]> {
+  const raiz = arvoreDoBlob(blob);
+  if (!raiz || raiz.nome !== 'list' || Object.keys(raiz.attrs).length > 0) return { erro: 'formMaps ilegível' };
+  if (raiz.filhos.length === 0) return { erro: 'formMaps sem nenhum campo' };
+  const itens: { campo: string; campoSub: string; fluxo: string }[] = [];
+  for (const no of raiz.filhos) {
+    if (no.nome !== 'org.eclipse.bpmn2.impl.BpmnProcessFormMap') return { erro: `formMaps com ${no.nome}` };
+    const f = Object.keys(no.attrs).length === 0 ? folhas(no) : undefined;
+    const extra = f ? [...f.keys()].find((k) => !MAPEAMENTO_CAMPOS.includes(k)) : undefined;
+    if (!f || extra !== undefined) return { erro: `formMaps com campo ${extra ?? 'fora da forma'}` };
+    const campo = f.get('processField');
+    const campoSub = f.get('subProcessField');
+    const fluxo = f.get('mapFlow');
+    if (!campo || !campoSub || fluxo === undefined) return { erro: 'formMaps com item sem processField, subProcessField ou mapFlow' };
+    if (!/^[012]$/.test(fluxo)) return { erro: `formMaps com mapFlow "${fluxo}"` };
+    itens.push({ campo, campoSub, fluxo });
+  }
+  return { valor: itens };
+}
+
+/**
+ * `attachmentRules` do início ou da tarefa de usuário: `<list>` com uma
+ * `BpmnProcessAttachmentRules` (`id`, `message`, `operator`, `amount`, `name`).
+ * Só a forma conferida nos pares: uma regra por elemento, `id` 0, operador 2 ou 3.
+ */
+function lerRegrasDeAnexo(blob: string): Lido<{ operador: string; quantidade: string; nome: string; mensagem: string }> {
+  const raiz = arvoreDoBlob(blob);
+  if (!raiz || raiz.nome !== 'list' || Object.keys(raiz.attrs).length > 0) return { erro: 'attachmentRules ilegível' };
+  if (raiz.filhos.length !== 1) return { erro: `attachmentRules com ${raiz.filhos.length} regras (só uma foi conferida)` };
+  const no = raiz.filhos[0]!;
+  if (no.nome !== 'org.eclipse.bpmn2.documentacional.BpmnProcessAttachmentRules') return { erro: `attachmentRules com ${no.nome}` };
+  const f = Object.keys(no.attrs).length === 0 ? folhas(no) : undefined;
+  const extra = f ? [...f.keys()].find((k) => !REGRA_CAMPOS.includes(k)) : undefined;
+  if (!f || extra !== undefined) return { erro: `attachmentRules com campo ${extra ?? 'fora da forma'}` };
+  const faltando = REGRA_CAMPOS.find((k) => !f.has(k));
+  if (faltando) return { erro: `attachmentRules sem ${faltando}` };
+  const operador = f.get('operator')!;
+  if (f.get('id') !== '0') return { erro: `attachmentRules com id "${f.get('id')}"` };
+  if (!REGRA_OPERADORES.includes(operador)) return { erro: `attachmentRules com operator "${operador}"` };
+  if (!/^\d+$/.test(f.get('amount')!)) return { erro: 'attachmentRules com amount não numérico' };
+  return { valor: { operador, quantidade: f.get('amount')!, nome: f.get('name')!, mensagem: f.get('message')! } };
 }
 
 interface Atribuicao {
@@ -394,6 +461,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   const inicios: ObjetoBpmn[] = [];
   const tarefas: ObjetoBpmn[] = [];
   const intermediarios: ObjetoBpmn[] = [];
+  const subprocessos: ObjetoBpmn[] = [];
   const gateways: ObjetoBpmn[] = [];
   const fins: ObjetoBpmn[] = [];
   const anotacoes: ObjetoBpmn[] = [];
@@ -409,6 +477,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     else if (o.tipo === 'BpmnStartEvent' && tipo === '10') inicios.push(o);
     else if (o.tipo === 'BpmnTask' && TAREFAS.has(tipo)) tarefas.push(o);
     else if (o.tipo === 'BpmnIntermediateEvent' && INTERMEDIARIOS.has(tipo)) intermediarios.push(o);
+    else if (o.tipo === 'BpmnSubProcess' && tipo === SUBPROCESSO) subprocessos.push(o);
     else if (o.tipo === 'BpmnGateway' && GATEWAYS[tipo] !== undefined) gateways.push(o);
     else if (o.tipo === 'BpmnEndEvent' && FINS.has(tipo)) fins.push(o);
     else if (o.tipo === 'BpmnAnnotation' && tipo === '0') anotacoes.push(o);
@@ -419,8 +488,9 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     if (o.tipo !== 'SequenceFlow' && o.attrs['id']) nos.set(o.attrs['id'], o);
   }
 
-  /** Na ordem em que o Studio lista os estados: início, tarefas, intermediários, gateways, fim. */
-  const estadosBpmn = [...inicios, ...tarefas, ...intermediarios, ...gateways, ...fins];
+  /** Na ordem em que o Studio lista os estados: início, tarefas, intermediários, subprocessos, gateways, fim. */
+  const estadosBpmn = [...inicios, ...tarefas, ...intermediarios, ...subprocessos, ...gateways, ...fins];
+  const sequenciasDeEstado = new Set(estadosBpmn.map((o) => sufixo(o.attrs['id'])));
   const servico = (o: ObjetoBpmn | undefined) => o?.tipo === 'BpmnTask' && o.attrs['type'] === SERVICO;
   const idsDeEstado = new Set(estadosBpmn.map((o) => o.attrs['id'] ?? ''));
   const ehEstado = (id: string | undefined) => id !== undefined && id !== '' && idsDeEstado.has(id);
@@ -428,11 +498,10 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   for (const o of [processo, ...estadosBpmn, ...anotacoes, ...raiasBpmn, ...fluxos]) {
     const conhecidos = [...(ATRIBUTOS_CONHECIDOS[o.tipo] ?? []), ...(servico(o) ? SERVICO_ATRIBUTOS : [])];
     for (const [attr, valor] of Object.entries(o.attrs)) {
-      const rotulo = ATRIBUTOS_NAO_SUPORTADOS[attr];
-      if (rotulo) {
-        if (valor) recusar(rotulo);
-      } else if (!conhecidos.includes(attr)) {
+      if (!conhecidos.includes(attr)) {
         recusar(`atributo ${attr} em ${o.attrs['id'] ?? o.tipo}`);
+      } else if (o.tipo === 'BpmnSubProcess' && attr === 'selectColleague') {
+        if (valor !== '1') recusar(`${attr}="${valor}" em ${o.attrs['id']}`);
       } else if (servico(o) && CAMPOS_DO_SERVICO.has(attr)) {
         if (!/^\d+$/.test(valor)) recusar(`${attr}="${valor}" em ${o.attrs['id']}`);
       } else if (VALOR_NEUTRO[attr] !== undefined && valor !== VALOR_NEUTRO[attr]) {
@@ -444,6 +513,10 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     if (o.attrs['appsConfiguration'] && (o.tipo !== 'BpmnTask' || o.attrs['type'] !== TAREFA_COM_APP)) {
       recusar(`appsConfiguration em ${o.attrs['id'] ?? o.tipo} (type ${o.attrs['type'] ?? '?'}), só conferido na tarefa 80`);
     }
+    if (o.attrs['attachmentRules'] && !REGRA_DE_ANEXO_EM.has(`${o.tipo}:${o.attrs['type']}`)) {
+      recusar(`attachmentRules em ${o.attrs['id'] ?? o.tipo} (type ${o.attrs['type'] ?? '?'}), só conferido no início e na tarefa 80`);
+    }
+    if (o.attrs['formMaps'] && o.tipo !== 'BpmnSubProcess') recusar(`formMaps em ${o.attrs['id'] ?? o.tipo}`);
     if (o.attrs['descriptorFields'] && o.tipo !== 'BpmnProcess') recusar(`descriptorFields em ${o.attrs['id'] ?? o.tipo}`);
   }
 
@@ -626,9 +699,115 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ];
   };
 
+  /*
+   * Subprocesso (100): campos de atribuição, prazo e notificação constantes nos
+   * 9 estados dos ecm30; variam nome, posição, `subProcessId` e os três
+   * booleanos do subprocesso. Transferir anexos e enviar à próxima tarefa
+   * precisam vir no `.process` (nenhum par mostra o que o Studio grava sem
+   * eles); `cancelSubProcess` ausente sai false (3 estados em pares).
+   */
+  const estadoSubprocesso = (o: ObjetoBpmn): Campo[] => {
+    const a = o.attrs;
+    const pos = caixa(a['id'] ?? '');
+    return [
+      ['processStatePK', pk([['sequence', sufixo(a['id'])]])],
+      ['stateName', a['name'] ?? ''],
+      ['stateDescription', a['name'] ?? ''],
+      ['instruction', ''],
+      ['deadlineTime', 0],
+      ['joint', false],
+      ['agreementPercentage', 0],
+      ['engineAllocationId', ''],
+      ['engineAllocationConfiguration', ''],
+      ['initialState', false],
+      ['notifyAuthorityDelay', false],
+      ['notifyRequisitionerDelay', false],
+      ['allowanceAuthorityTime', 0],
+      ['frequenceAuthorityTime', 0],
+      ['allowanceRequisitionerTime', 0],
+      ['frequenceRequisitionerTime', 0],
+      ['transferAttachments', a['transferAttachments'] === 'true'],
+      ['subProcessId', a['process'] ?? ''],
+      ['formFolder', 0],
+      ['notifyAuthorityFollowUp', false],
+      ['notifyRequisitionerFollowUp', false],
+      ['automatic', false],
+      ['positionX', pos.absX],
+      ['positionY', pos.absY],
+      ['forecastedEffortType', 0],
+      ['forecastedEffort', 0],
+      ['notifyManagerFollowUp', false],
+      ['notifyManagerDelay', true],
+      ['allowanceManagerTime', 0],
+      ['frequenceManagerTime', 0],
+      ['inhibitTransfer', false],
+      ['stateType', 2],
+      ['bpmnType', a['type'] ?? ''],
+      ['signalId', 0],
+      ['counterSign', false],
+      ['openInstances', 0],
+      ['noticeExpirationAuthorityTime', 0],
+      ['noticeExpirationRequisitionerTime', 0],
+      ['noticeExpirationManagerTime', 0],
+      ['cancelSubProcess', a['cancelSubProcess'] === 'true'],
+      ['destinationStates', null],
+      ['digitalSignature', false],
+      ['sendToNextTaskInSubProcess', a['sendToNextTaskInSubProcess'] === 'true'],
+    ];
+  };
+
   const estados = estadosBpmn.map((o) =>
-    o.tipo === 'BpmnGateway' ? estadoGateway(o) : o.tipo === 'BpmnIntermediateEvent' ? estadoIntermediario(o) : estado(o),
+    o.tipo === 'BpmnGateway'
+      ? estadoGateway(o)
+      : o.tipo === 'BpmnIntermediateEvent'
+        ? estadoIntermediario(o)
+        : o.tipo === 'BpmnSubProcess'
+          ? estadoSubprocesso(o)
+          : estado(o),
   );
+
+  /*
+   * Subprocesso → `SubProcessFieldRelationship` (filho 16): uma linha por item
+   * do `formMaps`, `version` 1 como nas PKs de estado. O processo-alvo
+   * (`process`) precisa existir no servidor de destino; aqui só é listado.
+   */
+  const relacoes: Campo[][] = [];
+  for (const o of subprocessos) {
+    const a = o.attrs;
+    const id = a['id'] ?? '';
+    if (!a['process']) recusar(`subprocesso ${id} sem process`);
+    for (const atributo of ['transferAttachments', 'sendToNextTaskInSubProcess']) {
+      if (a[atributo] !== 'true' && a[atributo] !== 'false') recusar(`subprocesso ${id} sem ${atributo} (true/false)`);
+    }
+    if (a['cancelSubProcess'] !== undefined && a['cancelSubProcess'] !== 'true' && a['cancelSubProcess'] !== 'false') {
+      recusar(`cancelSubProcess="${a['cancelSubProcess']}" em ${id}`);
+    }
+    if (!a['formMaps']) continue;
+    const lido = lerMapeamentos(a['formMaps']);
+    if ('erro' in lido) {
+      recusar(`${lido.erro} em ${id}`);
+      continue;
+    }
+    for (const m of lido.valor) {
+      relacoes.push([
+        ['tenantId', companyId],
+        ['processCode', processId],
+        ['stateSequence', sufixo(id)],
+        ['version', 1],
+        ['subProcessCode', a['process'] ?? ''],
+        ['processField', m.campo],
+        ['subProcessField', m.campoSub],
+        ['mapFlow', Number(m.fluxo)],
+      ]);
+    }
+  }
+  const alvos = [...new Set(subprocessos.map((o) => o.attrs['process'] ?? '').filter(Boolean))];
+  if (alvos.length > 0) {
+    avisos.push(
+      `o diagrama chama os processos ${alvos.map((x) => `"${x}"`).join(', ')} como subprocesso; ` +
+        'cada um precisa existir no servidor de destino (a publicação confere antes de enviar)',
+    );
+  }
 
   /*
    * Erro anexado: o `.process` guarda o vínculo dos dois lados (`attachedEvents`
@@ -1049,7 +1228,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   for (const o of tarefas) {
     const blob = o.attrs['appsConfiguration'];
     if (!blob || o.attrs['type'] !== TAREFA_COM_APP) continue;
-    const lido = lerAppsConfiguracao(blob);
+    const lido = lerAppsConfiguracao(blob, sequenciasDeEstado);
     if ('erro' in lido) {
       recusar(`${lido.erro} em ${o.attrs['id']}`);
       continue;
@@ -1066,6 +1245,32 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
         ['description', c.descricao],
       ]);
     }
+  }
+
+  /*
+   * Regras de anexo → `ProcessAttachmentRules` (filho 18): uma linha por início
+   * ou tarefa 80 com `attachmentRules`, nessa ordem; `processVersion` = versão do .process.
+   */
+  const regrasDeAnexo: Campo[][] = [];
+  for (const o of [...inicios, ...tarefas]) {
+    const blob = o.attrs['attachmentRules'];
+    if (!blob || !REGRA_DE_ANEXO_EM.has(`${o.tipo}:${o.attrs['type']}`)) continue;
+    const lido = lerRegrasDeAnexo(blob);
+    if ('erro' in lido) {
+      recusar(`${lido.erro} em ${o.attrs['id']}`);
+      continue;
+    }
+    regrasDeAnexo.push([
+      ['id', 0],
+      ['tenantId', 0],
+      ['processId', processId],
+      ['processVersion', versao],
+      ['stateSequence', sufixo(o.attrs['id'])],
+      ['operator', Number(lido.valor.operador)],
+      ['amount', Number(lido.valor.quantidade)],
+      ['name', lido.valor.nome],
+      ['message', lido.valor.mensagem],
+    ]);
   }
 
   const gestor = atribuicaoDe(processo, p['managerMechanism'], p['managerAssignmentController']);
@@ -1175,9 +1380,9 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     vazio,
     lista('ProcessFormField', camposDeFormulario),
     lista('ProcessStateService', servicos),
-    vazio,
+    lista('SubProcessFieldRelationship', relacoes),
     lista('ProcessAppConfiguration', configuracoesDeApp),
-    vazio,
+    lista('ProcessAttachmentRules', regrasDeAnexo),
     lista('ConditionProcessAutomaticRules', regras),
   ];
 

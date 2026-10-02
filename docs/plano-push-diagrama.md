@@ -311,6 +311,34 @@ ordem das linhas, e reporta cada um à parte.
   tipo 100 e 5 do 101), `attachmentRules` (17), atribuição "Associado" (9),
   condição para destino não suportado (13).
 
+**Estado (02/10/2026, quinto corte — início da fase 2).** Entram as regras de
+anexo (`attachmentRules` no início e na tarefa de usuário → filho 18) e o
+subprocesso 100 (`process`, `transferAttachments`, `sendToNextTaskInSubProcess`,
+`formMaps` → filho 16); o ad hoc (101) segue recusado. `approve`/`reject` do
+`appsConfiguration` passam a ter de nomear um estado do diagrama: 185/185 dos
+valores numéricos nos `.process` medidos nomeiam.
+
+- **Corpus.** `~/fluig/workspaces` tem hoje só 3 clientes (21 pares). Os demais
+  vêm de um clone raso e esparso (só `workflow/`) dos 28 repositórios `fluig*`
+  da StrategiConsultoria, fora dos workspaces. O harness aceita várias raízes:
+  `npm run diff-diagramas -- ~/fluig/workspaces <clone>`. Antes, um bug
+  descartava a raiz passada sem `--detalhe` e o harness sempre caía no padrão.
+- 109 pares, 72 gabaritos, 56 batendo em todos os filhos comparados. Por filho:
+  0=71 1=62 2=67 3=71 4=72 7=70 8=70 9=72 10=72 11=70 12=71 13=70 14=72 15=72
+  16=72 17=72 18=72 19=72. Os 16 que não batem: 9 `fluigproduza` (`movement*`
+  preenchido, `bpmnVersion` 2, `consenso` no início), 2 `fluiggel` com
+  `extendedFields` (filhos 7 e 13), 1 com `deadlineTime`/`warningTime` do
+  processo, 1 com atribuição "Associado", 1 com `messageData`, e posições
+  editadas depois do export.
+- Filho 18: 2/2 gabaritos e 4/4 antigos com o atributo. Filho 16: nenhum
+  gabarito tem subprocesso; o único par (antigo) bate em 1 de 2 estados.
+- Dos 475 `.process`, 329 convertem sem recusa. Por arquivos afetados (entre
+  parênteses, os que só esse motivo bloqueia): atribuição "Associado" 23 (13),
+  `movement*` preenchido 20 (2), `controlsAttachmentsSecurity` 17 (4),
+  subprocesso sem `sendToNextTaskInSubProcess`/`transferAttachments` 10 (9),
+  `extendedFields` 9 (4), `processAttachmentSecurity` 8, `consenso` 8,
+  subprocesso 101 7, `deadlineTime` 7, `notifyManagerComplements` 6 (5).
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

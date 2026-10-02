@@ -3,7 +3,7 @@
  * `.ecm30.xml` exportado pelo Studio ao lado e compara, filho a filho, o XML
  * gerado com o do Studio.
  *
- *   npm run diff-diagramas -- [raiz] [--detalhe <trecho do caminho>]
+ *   npm run diff-diagramas -- [raiz...] [--detalhe <trecho do caminho>]
  *
  * A raiz (padrão ~/fluig/workspaces) é varrida atrás de pares
  * `workflow/diagrams/X.process` ↔ `workflow/.resources/X.ecm30.xml`. Só lê:
@@ -33,7 +33,7 @@
  */
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 
 import { textoAscii } from '../src/commands/push-diagram.js';
 import { gerarEcm30 } from '../src/push/diagram/ecm30.js';
@@ -56,11 +56,11 @@ const IGNORADOS: { entidade: string; campo: string; motivo: string }[] = [
   },
 ];
 
-const FILHOS_COMPARADOS = [0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 14, 15, 17, 19] as const;
+const FILHOS_COMPARADOS = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] as const;
 /** Filhos cuja ordem no ecm30 também é comparada (a do Studio precisa ser reproduzida). */
-const COM_ORDEM = new Set<number>([14, 17]);
+const COM_ORDEM = new Set<number>([14, 16, 17, 18]);
 const TIPOS_COBERTOS = new Set([
-  '10', '80', '81', '82', '84', '87', '32', '35', '36', '37', '41', '42', '43', '120', '126', '127', '60', '64', '65', '68',
+  '10', '80', '81', '82', '84', '87', '32', '35', '36', '37', '41', '42', '43', '100', '120', '126', '127', '60', '64', '65', '68',
 ]);
 const TIPOS_DE_NO = new Set([
   'BpmnStartEvent', 'BpmnTask', 'BpmnEndEvent', 'BpmnGateway', 'BpmnIntermediateEvent', 'BpmnSubProcess',
@@ -68,6 +68,8 @@ const TIPOS_DE_NO = new Set([
 
 /** Chave de cada filho e, quando ele pende de um estado, o caminho do sequence do estado. */
 const CHAVES: Record<number, { chave: (n: No) => string; coberto?: string }> = {
+  7: { chave: (n) => campo(n, 'advancedProcessPropertiesPK.propertyId') },
+  13: { chave: (n) => `${campo(n, 'extendedPropertyFieldPK.stateSequence')}/${campo(n, 'extendedPropertyFieldPK.propertyName')}` },
   3: {
     chave: (n) => `${campo(n, 'conditionProcessStatePK.sequence')}/${campo(n, 'conditionProcessStatePK.expressionOrder')}`,
     coberto: 'conditionProcessStatePK.sequence',
@@ -80,16 +82,32 @@ const CHAVES: Record<number, { chave: (n: No) => string; coberto?: string }> = {
   },
   14: { chave: (n) => campo(n, 'processFormFieldPK.fieldId') },
   15: { chave: (n) => campo(n, 'sequence'), coberto: 'sequence' },
+  16: {
+    chave: (n) => `${campo(n, 'stateSequence')}/${campo(n, 'processField')}/${campo(n, 'subProcessField')}/${campo(n, 'mapFlow')}`,
+    coberto: 'stateSequence',
+  },
   17: { chave: (n) => `${campo(n, 'stateSequence')}/${campo(n, 'appField')}`, coberto: 'stateSequence' },
+  18: { chave: (n) => campo(n, 'stateSequence'), coberto: 'stateSequence' },
   19: {
     chave: (n) => `${campo(n, 'sequence')}/${campo(n, 'expressionOrder')}/${campo(n, 'ruleOrder')}`,
     coberto: 'sequence',
   },
 };
 const NOMES: Record<number, string> = {
-  3: 'ConditionProcessState', 9: 'ProcessComponGraf', 10: 'ProcessLinkAssoc', 12: 'ProcessStateTrigger',
-  14: 'ProcessFormField', 15: 'ProcessStateService', 17: 'ProcessAppConfiguration', 19: 'ConditionProcessAutomaticRules',
+  3: 'ConditionProcessState', 7: 'AdvancedProcessProperties', 9: 'ProcessComponGraf', 10: 'ProcessLinkAssoc',
+  12: 'ProcessStateTrigger', 13: 'ExtendedPropertyField', 14: 'ProcessFormField', 15: 'ProcessStateService',
+  16: 'SubProcessFieldRelationship', 17: 'ProcessAppConfiguration', 18: 'ProcessAttachmentRules',
+  19: 'ConditionProcessAutomaticRules',
 };
+/** Filhos reportados à parte, e o atributo do `.process` que os alimenta (nos pares em que um dos dois os tem). */
+const POR_FILHO: Record<number, string> = {
+  7: 'extendedFields', 13: 'extendedFields', 14: 'descriptorFields', 16: 'formMaps', 17: 'appsConfiguration', 18: 'attachmentRules',
+};
+/** Campos de versão da PK, que diferem de propósito num par "antigo" (ecm30 de outra versão do diagrama). */
+const VERSAO_DA_PK: Record<number, RegExp> = {
+  7: /PK\.version$/, 13: /PK\.version$/, 18: /\.processVersion$/,
+};
+const vazioXStream = (v: string) => v.trim() === '' || /^<list\s*\/>$/.test(v.trim());
 
 interface Par {
   processo: string;
@@ -208,10 +226,14 @@ async function scriptsDoPar(par: Par, processId: string): Promise<Map<string, st
 async function main(argv: string[]): Promise<void> {
   const detalheIdx = argv.indexOf('--detalhe');
   const detalhe = detalheIdx === -1 ? undefined : argv[detalheIdx + 1];
-  const posicionais = argv.filter((_, i) => i !== detalheIdx && i !== detalheIdx + 1);
-  const raiz = posicionais[0] ?? join(homedir(), 'fluig', 'workspaces');
-
-  const pares = acharPares(raiz).sort((a, b) => a.processo.localeCompare(b.processo));
+  // Sem --detalhe, detalheIdx é -1 e "detalheIdx + 1" descartaria o primeiro posicional (a raiz).
+  const posicionais = detalheIdx === -1 ? argv : argv.filter((_, i) => i !== detalheIdx && i !== detalheIdx + 1);
+  // Uma ou mais raízes; o nome de cada par é relativo à raiz em que foi achado.
+  const raizes = posicionais.length > 0 ? posicionais : [join(homedir(), 'fluig', 'workspaces')];
+  const raizDe = new Map<string, string>();
+  const pares = raizes
+    .flatMap((r) => acharPares(r).map((p) => (raizDe.set(p.processo, r), p)))
+    .sort((a, b) => a.processo.localeCompare(b.processo));
   const contagemCampos = new Map<string, { n: number; exemplo: Diferenca }>();
   const resumo = { pares: pares.length, ilegiveis: 0, gabarito: 0, suportados: 0, suportadosOk: 0, gabaritoOk: 0 };
   const okPorFilho = new Map<number, number>(FILHOS_COMPARADOS.map((f) => [f, 0]));
@@ -219,14 +241,14 @@ async function main(argv: string[]): Promise<void> {
     pares: 0, ok: 0, comLink: 0, comLinkSlot4: 0, comLinkTodos: 0,
     porFilho: new Map<number, number>(), divergencias: [] as string[],
   };
-  /** Filhos 14 e 17 nos pares (gabarito e mesma versão) em que o .process ou o Studio os preenchem. */
-  const preenchidos = new Map<string, { gab: number; gabOk: number; mv: number; mvOk: number; falhas: string[] }>(
-    [14, 17].map((f) => [`${f}`, { gab: 0, gabOk: 0, mv: 0, mvOk: 0, falhas: [] }]),
+  /** Filhos de POR_FILHO nos pares (gabarito e mesma versão) em que o .process ou o Studio os preenchem. */
+  const preenchidos = new Map<string, { gab: number; gabOk: number; mv: number; mvOk: number; ant: number; antOk: number; falhas: string[] }>(
+    Object.keys(POR_FILHO).map((f) => [f, { gab: 0, gabOk: 0, mv: 0, mvOk: 0, ant: 0, antOk: 0, falhas: [] }]),
   );
   const scripts = { iguais: 0, diferentes: [] as string[], semArquivo: 0, soLocal: 0, gabIguais: 0, gabDiferentes: 0 };
 
   for (const par of pares) {
-    const nome = relative(raiz, par.processo);
+    const nome = relative(dirname(raizDe.get(par.processo)!), par.processo);
     let diagrama: Diagrama;
     let studio: No[];
     try {
@@ -366,11 +388,25 @@ async function main(argv: string[]): Promise<void> {
       }
     }
 
-    for (const f of [14, 17]) {
-      const atributo = diagrama.objetos.some((o) => Boolean(o.attrs[f === 14 ? 'descriptorFields' : 'appsConfiguration']));
-      if (!(atributo || studio[f]!.filhos.length > 0) || !(gabarito || mesmaVersao)) continue;
-      const c = preenchidos.get(`${f}`)!;
+    for (const [chaveFilho, nomeAtributo] of Object.entries(POR_FILHO)) {
+      const f = Number(chaveFilho);
+      const atributo = diagrama.objetos.some((o) => {
+        const v = o.attrs[nomeAtributo];
+        return v !== undefined && (f === 7 || f === 13 ? !vazioXStream(v) : Boolean(v));
+      });
+      if (!(atributo || studio[f]!.filhos.length > 0)) continue;
+      const c = preenchidos.get(chaveFilho)!;
       const difs = difsPorFilho.get(f)!;
+      if (!(gabarito || mesmaVersao)) {
+        // Informativo: no par antigo, vale o filho ignorando os campos de versão da PK.
+        const ignorar = VERSAO_DA_PK[f];
+        if (ignorar === undefined && f !== 16) continue;
+        const reais = difs.filter((d) => !(ignorar?.test(d.chave.replace(/ \(.*\)$/, '')) ?? false));
+        c.ant++;
+        if (reais.length === 0) c.antOk++;
+        for (const d of reais) c.falhas.push(`(antigo) ${nome}: ${d.chave}  studio=${JSON.stringify(d.esperado)}  gerado=${JSON.stringify(d.obtido)}`);
+        continue;
+      }
       if (gabarito) {
         c.gab++;
         if (difs.length === 0) c.gabOk++;
@@ -402,7 +438,8 @@ async function main(argv: string[]): Promise<void> {
   console.log(`  gabarito por filho: ${[...okPorFilho].map(([f, n]) => `${f}=${n}/${resumo.gabarito}`).join('  ')}`);
   for (const [f, c] of preenchidos) {
     console.log(
-      `  filho ${f} nos pares com o atributo ou com linhas no Studio: gabarito ${c.gabOk}/${c.gab}, mesma versão ${c.mvOk}/${c.mv}`,
+      `  filho ${f} nos pares com o atributo ou com linhas no Studio: gabarito ${c.gabOk}/${c.gab}, mesma versão ${c.mvOk}/${c.mv}` +
+        (c.ant > 0 ? `; antigo, sem os campos de versão (informativo): ${c.antOk}/${c.ant}` : ''),
     );
     for (const d of c.falhas) console.log(`      filho ${f} diverge: ${d}`);
   }
