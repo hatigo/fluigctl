@@ -55,6 +55,45 @@ export async function datasetClient(
   };
 }
 
+export interface DatasetNoServidor {
+  description?: string;
+  impl?: string;
+}
+
+/**
+ * Lê descrição e código de um dataset pelo REST (`loadDataset`).
+ *
+ * O SOAP não devolve nenhum dos dois. Serve para preservar a descrição, guardar
+ * uma cópia antes de sobrescrever e conferir depois o que o servidor gravou.
+ */
+export async function loadDataset(
+  baseUrl: string,
+  cookie: string,
+  nome: string,
+): Promise<DatasetNoServidor> {
+  const url =
+    `${baseUrl}/ecm/api/rest/ecm/dataset/loadDataset` +
+    `?datasetId=${encodeURIComponent(nome)}`;
+
+  const resposta = await fetch(url, { headers: { cookie }, redirect: 'manual' });
+  const texto = await resposta.text();
+
+  try {
+    const lido = JSON.parse(texto) as {
+      datasetDescription?: string;
+      datasetImpl?: string;
+      content?: { datasetDescription?: string; datasetImpl?: string } | null;
+    };
+    const d = lido.datasetImpl !== undefined || lido.datasetDescription !== undefined ? lido : lido.content ?? {};
+    return {
+      ...(d.datasetDescription === undefined ? {} : { description: d.datasetDescription }),
+      ...(d.datasetImpl === undefined ? {} : { impl: d.datasetImpl }),
+    };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Lê a descrição atual de um dataset.
  *

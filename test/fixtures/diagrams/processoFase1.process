@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="ASCII"?>
+<xmi:XMI xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:al="http://eclipse.org/graphiti/mm/algorithms" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL-XMI" xmlns:pi="http://eclipse.org/graphiti/mm/pictograms">
+  <pi:Diagram visible="true" gridUnit="10" diagramTypeId="BPMNdiagram" name="processoFase1" snapToGrid="true" version="0.16.0">
+    <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1000" height="1000"/>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="900" height="400" x="10" y="10"/>
+      <link businessObjects="bpmnpool1"/>
+      <children xsi:type="pi:ContainerShape" visible="true" active="true">
+        <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="870" height="400" x="30"/>
+        <link businessObjects="bpmnswimlane2"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="36" height="36" x="40" y="60"/>
+      <link businessObjects="startevent4"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="106" height="67" x="120" y="50"/>
+      <link businessObjects="servicetask5"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="24" height="24" x="200" y="100"/>
+      <link businessObjects="intermediateerror6"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="40" height="40" x="300" y="60"/>
+      <link businessObjects="exclusivegateway7"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="106" height="67" x="400" y="50"/>
+      <link businessObjects="task8"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="40" height="40" x="300" y="200"/>
+      <link businessObjects="parallelgateway10"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="106" height="67" x="400" y="180"/>
+      <link businessObjects="task11"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="106" height="67" x="400" y="280"/>
+      <link businessObjects="task12"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="40" height="40" x="560" y="200"/>
+      <link businessObjects="joingateway13"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="36" height="36" x="660" y="200"/>
+      <link businessObjects="intermediatetimer14"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="36" height="36" x="800" y="60"/>
+      <link businessObjects="endevent15"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="120" height="30" x="420" y="0"/>
+      <link businessObjects="annotationtask16"/>
+    </children>
+  </pi:Diagram>
+  <bpmn2:BpmnPool id="bpmnpool1" name="Fase 1" cores="FFFFFF"/>
+  <bpmn2:BpmnSwimLane id="bpmnswimlane2" name="Todos"/>
+  <bpmn2:BpmnStartEvent id="startevent4" name="In&#xed;cio" outgoing="flow20" type="10" extendedFields="&lt;list/>" signalId="0" expediente="" selecionaColaboradores="1" esforcoCalculo="0"/>
+  <bpmn2:BpmnTask id="servicetask5" name="Integrar" incoming="flow20" outgoing="flow21" type="82" extendedFields="&lt;list/>" loopType="0" authNotify="true" serviceName="" scriptFileName="processoFase1.servicetask5.js" expediente="" selecionaColaboradores="1" esforcoCalculo="0" attachedEvents="intermediateerror6" executionType="1" executionAttempts="3" executionSucessfulMessage="Integra&#xe7;&#xe3;o executada com sucesso" frequency="0"/>
+  <bpmn2:BpmnIntermediateEvent id="intermediateerror6" name="Intermedi&#xe1;rio" outgoing="flow31" type="43" extendedFields="&lt;list/>" sequenceAttached="5" signalId="0" linkId="servicetask5" parentTask="servicetask5"/>
+  <bpmn2:BpmnGateway id="exclusivegateway7" name="Aprovado?" incoming="flow21" outgoing="flow22 flow23" type="120" extendedFields="&lt;list/>" condition="&lt;list>&#xA;  &lt;org.eclipse.bpmn2.impl.ConditionImpl>&#xA;    &lt;order>1&lt;/order>&#xA;    &lt;expression>false&lt;/expression>&#xA;    &lt;targetTask>task8&lt;/targetTask>&#xA;    &lt;conditionType>1&lt;/conditionType>&#xA;    &lt;rules>&#xA;      &lt;com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;        &lt;tenantId>0&lt;/tenantId>&#xA;        &lt;version>0&lt;/version>&#xA;        &lt;sequence>7&lt;/sequence>&#xA;        &lt;expressionOrder>1&lt;/expressionOrder>&#xA;        &lt;ruleOrder>1&lt;/ruleOrder>&#xA;        &lt;field>aprovado&lt;/field>&#xA;        &lt;value>sim&lt;/value>&#xA;        &lt;operator>1&lt;/operator>&#xA;        &lt;valueType>1&lt;/valueType>&#xA;      &lt;/com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;    &lt;/rules>&#xA;  &lt;/org.eclipse.bpmn2.impl.ConditionImpl>&#xA;  &lt;org.eclipse.bpmn2.impl.ConditionImpl>&#xA;    &lt;order>2&lt;/order>&#xA;    &lt;expression>hAPI.getCardValue(&amp;quot;aprovado&amp;quot;) != &amp;quot;sim&amp;quot;&lt;/expression>&#xA;    &lt;targetTask>parallelgateway10&lt;/targetTask>&#xA;    &lt;conditionType>0&lt;/conditionType>&#xA;  &lt;/org.eclipse.bpmn2.impl.ConditionImpl>&#xA;&lt;/list>"/>
+  <bpmn2:BpmnTask id="task8" name="Tarefa 8" incoming="flow22 flow32" outgoing="flow30" type="80" extendedFields="&lt;list/>" loopType="0" authNotify="true" expediente="" selecionaColaboradores="1" esforcoCalculo="0" executionAttempts="0" frequency="0"/>
+  <bpmn2:BpmnGateway id="parallelgateway10" name="Paralelo" incoming="flow23" outgoing="flow24 flow25" type="126" extendedFields="&lt;list/>" condition="&lt;list/>"/>
+  <bpmn2:BpmnTask id="task11" name="Tarefa 11" incoming="flow24" outgoing="flow26" type="80" extendedFields="&lt;list/>" loopType="0" authNotify="true" expediente="" selecionaColaboradores="1" esforcoCalculo="0" executionAttempts="0" frequency="0"/>
+  <bpmn2:BpmnTask id="task12" name="Tarefa 12" incoming="flow25" outgoing="flow27" type="80" extendedFields="&lt;list/>" loopType="0" authNotify="true" expediente="" selecionaColaboradores="1" esforcoCalculo="0" executionAttempts="0" frequency="0"/>
+  <bpmn2:BpmnGateway id="joingateway13" name="Join" incoming="flow26 flow27" outgoing="flow28" type="127" extendedFields="&lt;list/>" condition="&lt;list/>"/>
+  <bpmn2:BpmnIntermediateEvent id="intermediatetimer14" name="Aguarda" incoming="flow28" outgoing="flow29" type="32" extendedFields="&lt;list/>" sequenceAttached="0" signalId="0" trigger="&lt;org.eclipse.bpmn2.documentacional.BpmnTriggerData>&#xA;  &lt;runType>HOUR&lt;/runType>&#xA;  &lt;timeTrigger>8:30:0&lt;/timeTrigger>&#xA;  &lt;frequencia>02&lt;/frequencia>&#xA;  &lt;isCondition>false&lt;/isCondition>&#xA;&lt;/org.eclipse.bpmn2.documentacional.BpmnTriggerData>"/>
+  <bpmn2:BpmnEndEvent id="endevent15" name="Fim" incoming="flow29 flow30 flow31" type="60" extendedFields="&lt;list/>" signalId="0"/>
+  <bpmn2:BpmnAnnotation id="annotationtask16" name="Confira antes" outgoing="flow32" type="0"/>
+  <bpmn2:BpmnProcess id="processoFase1" name="Processo Fase 1" serverId="Teste" version="2" author="" extendedFields="&lt;list/>" cardIndex="99" formSource="server" category="Testes" volume="Default" expedient="Default" instruction="" complementsLevel="1"/>
+  <bpmn2:SequenceFlow id="flow20" name="" sourceRef="startevent4" targetRef="servicetask5" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow21" name="" sourceRef="servicetask5" targetRef="exclusivegateway7" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>" movementTitle="" movementDescription="" movementAccessLinkDescription=""/>
+  <bpmn2:SequenceFlow id="flow22" name="" sourceRef="exclusivegateway7" targetRef="task8" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow23" name="" sourceRef="exclusivegateway7" targetRef="parallelgateway10" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow24" name="" sourceRef="parallelgateway10" targetRef="task11" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow25" name="" sourceRef="parallelgateway10" targetRef="task12" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow26" name="" sourceRef="task11" targetRef="joingateway13" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow27" name="" sourceRef="task12" targetRef="joingateway13" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow28" name="" sourceRef="joingateway13" targetRef="intermediatetimer14" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow29" name="" sourceRef="intermediatetimer14" targetRef="endevent15" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow30" name="" sourceRef="task8" targetRef="endevent15" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow31" name="" sourceRef="intermediateerror6" targetRef="endevent15" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow32" name="" sourceRef="annotationtask16" targetRef="task8" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>" movementTitle="" movementDescription="" movementAccessLinkDescription=""/>
+</xmi:XMI>

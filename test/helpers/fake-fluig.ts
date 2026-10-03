@@ -6,6 +6,8 @@ export interface Requisicao {
   url: string;
   headers: Record<string, string | string[] | undefined>;
   body: string;
+  /** O corpo como chegou, para o que não é texto (multipart com binário). */
+  corpo: Buffer;
 }
 
 export interface RotaResposta {
@@ -36,6 +38,7 @@ export async function fakeFluig(
         url: req.url ?? '',
         headers: req.headers,
         body: Buffer.concat(pedacos).toString('utf8'),
+        corpo: Buffer.concat(pedacos),
       };
       requests.push(registro);
 

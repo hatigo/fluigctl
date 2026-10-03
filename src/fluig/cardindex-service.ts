@@ -6,6 +6,12 @@ export interface FormNoServidor {
   documentId: number;
   documentDescription: string;
   datasetName: string;
+  /**
+   * Campo descritor do formulário. Na listagem ele vem como `cardDescription`;
+   * no update, o mesmo valor vai em `descriptionField` (e `cardDescription` do
+   * update é o NOME do formulário). Ausente quando o servidor não o informou.
+   */
+  descriptionField?: string;
 }
 
 export interface ParametrosUpdate {
@@ -82,10 +88,14 @@ export async function cardIndexClient(
         { ...credencial, colleagueId },
       );
 
-      return itens<FormNoServidor>(r?.result).map((f) => ({
+      return itens<FormNoServidor & { cardDescription?: unknown }>(r?.result).map((f) => ({
         documentId: Number(f.documentId),
         documentDescription: String(f.documentDescription ?? ''),
         datasetName: String(f.datasetName ?? ''),
+        // Tag vazia chega como null (o formulário não tem descritor); só a tag ausente é "não sei".
+        ...(Object.prototype.hasOwnProperty.call(f, 'cardDescription')
+          ? { descriptionField: f.cardDescription === null ? '' : String(f.cardDescription) }
+          : {}),
       }));
     },
 
