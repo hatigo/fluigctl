@@ -107,8 +107,8 @@ const MAPEAMENTO_CAMPOS = ['processField', 'subProcessField', 'mapFlow'];
 /** Tipos que carregam `attachmentRules` nos pares: início (10) e tarefa de usuário (80). */
 const REGRA_DE_ANEXO_EM = new Set(['BpmnStartEvent:10', 'BpmnTask:80']);
 const REGRA_CAMPOS = ['id', 'message', 'operator', 'amount', 'name'];
-/** Operadores vistos nos pares (2 e 3); o 1 só aparece em `.process` sem ecm30. */
-const REGRA_OPERADORES = ['2', '3'];
+/** Índices do combo de operadores do Studio (`PropertyBpmnAttachmentRulesSection`). */
+const REGRA_OPERADORES = ['0', '1', '2', '3', '4', '5', '6'];
 /** Única tarefa com `appsConfiguration` conferida contra o Studio: a de usuário (80). */
 const TAREFA_COM_APP = '80';
 /** `appKey` e `appField` que aparecem nos pares; `approve` e `reject` guardam um número (vazio ou sequence). */
@@ -375,27 +375,40 @@ function lerMapeamentos(blob: string): Lido<{ campo: string; campoSub: string; f
   return { valor: itens };
 }
 
+interface RegraDeAnexo {
+  operador: string;
+  quantidade: string;
+  nome: string;
+  mensagem: string;
+}
+
 /**
- * `attachmentRules` do início ou da tarefa de usuário: `<list>` com uma
+ * `attachmentRules` do início ou da tarefa de usuário: `<list>` de
  * `BpmnProcessAttachmentRules` (`id`, `message`, `operator`, `amount`, `name`).
- * Só a forma conferida nos pares: uma regra por elemento, `id` 0, operador 2 ou 3.
+ * O Studio copia `operator`, `amount` (texto), `name` e `message` e ignora o
+ * `id` (`getProcessAttachmentRules` decompilado); os operadores são o índice do
+ * combo: 0 nenhum, 1 =, 2 >, 3 >=, 4 <, 5 <=, 6 qualquer. Pares: 2 e 3; o resto
+ * conferido no HML (ver o plano).
  */
-function lerRegrasDeAnexo(blob: string): Lido<{ operador: string; quantidade: string; nome: string; mensagem: string }> {
+function lerRegrasDeAnexo(blob: string): Lido<RegraDeAnexo[]> {
   const raiz = arvoreDoBlob(blob);
   if (!raiz || raiz.nome !== 'list' || Object.keys(raiz.attrs).length > 0) return { erro: 'attachmentRules ilegível' };
-  if (raiz.filhos.length !== 1) return { erro: `attachmentRules com ${raiz.filhos.length} regras (só uma foi conferida)` };
-  const no = raiz.filhos[0]!;
-  if (no.nome !== 'org.eclipse.bpmn2.documentacional.BpmnProcessAttachmentRules') return { erro: `attachmentRules com ${no.nome}` };
-  const f = Object.keys(no.attrs).length === 0 ? folhas(no) : undefined;
-  const extra = f ? [...f.keys()].find((k) => !REGRA_CAMPOS.includes(k)) : undefined;
-  if (!f || extra !== undefined) return { erro: `attachmentRules com campo ${extra ?? 'fora da forma'}` };
-  const faltando = REGRA_CAMPOS.find((k) => !f.has(k));
-  if (faltando) return { erro: `attachmentRules sem ${faltando}` };
-  const operador = f.get('operator')!;
-  if (f.get('id') !== '0') return { erro: `attachmentRules com id "${f.get('id')}"` };
-  if (!REGRA_OPERADORES.includes(operador)) return { erro: `attachmentRules com operator "${operador}"` };
-  if (!/^\d+$/.test(f.get('amount')!)) return { erro: 'attachmentRules com amount não numérico' };
-  return { valor: { operador, quantidade: f.get('amount')!, nome: f.get('name')!, mensagem: f.get('message')! } };
+  if (raiz.filhos.length === 0) return { erro: 'attachmentRules vazio (nunca visto)' };
+  const regras: RegraDeAnexo[] = [];
+  for (const no of raiz.filhos) {
+    if (no.nome !== 'org.eclipse.bpmn2.documentacional.BpmnProcessAttachmentRules') return { erro: `attachmentRules com ${no.nome}` };
+    const f = Object.keys(no.attrs).length === 0 ? folhas(no) : undefined;
+    const extra = f ? [...f.keys()].find((k) => !REGRA_CAMPOS.includes(k)) : undefined;
+    if (!f || extra !== undefined) return { erro: `attachmentRules com campo ${extra ?? 'fora da forma'}` };
+    const faltando = REGRA_CAMPOS.find((k) => !f.has(k));
+    if (faltando) return { erro: `attachmentRules sem ${faltando}` };
+    const operador = f.get('operator')!;
+    if (!/^\d+$/.test(f.get('id')!)) return { erro: `attachmentRules com id "${f.get('id')}"` };
+    if (!REGRA_OPERADORES.includes(operador)) return { erro: `attachmentRules com operator "${operador}"` };
+    if (!/^\d*$/.test(f.get('amount')!)) return { erro: 'attachmentRules com amount não numérico' };
+    regras.push({ operador, quantidade: f.get('amount')!, nome: f.get('name')!, mensagem: f.get('message')! });
+  }
+  return { valor: regras };
 }
 
 const SEGURANCA_CLASSE = 'org.eclipse.bpmn2.ECMProcessAttachmentSecurityImpl';
@@ -1458,7 +1471,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   }
 
   /*
-   * Regras de anexo → `ProcessAttachmentRules` (filho 18): uma linha por início
+   * Regras de anexo → `ProcessAttachmentRules` (filho 18): uma linha por regra de cada início
    * ou tarefa 80 com `attachmentRules`, nessa ordem; `processVersion` = versão do .process.
    */
   const regrasDeAnexo: Campo[][] = [];
@@ -1470,17 +1483,19 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       recusar(`${lido.erro} em ${o.attrs['id']}`);
       continue;
     }
-    regrasDeAnexo.push([
-      ['id', 0],
-      ['tenantId', 0],
-      ['processId', processId],
-      ['processVersion', versao],
-      ['stateSequence', sufixo(o.attrs['id'])],
-      ['operator', Number(lido.valor.operador)],
-      ['amount', Number(lido.valor.quantidade)],
-      ['name', lido.valor.nome],
-      ['message', lido.valor.mensagem],
-    ]);
+    for (const regra of lido.valor) {
+      regrasDeAnexo.push([
+        ['id', 0],
+        ['tenantId', 0],
+        ['processId', processId],
+        ['processVersion', versao],
+        ['stateSequence', sufixo(o.attrs['id'])],
+        ['operator', Number(regra.operador)],
+        ['amount', regra.quantidade],
+        ['name', regra.nome],
+        ['message', regra.mensagem],
+      ]);
+    }
   }
 
   const segurancaDeAnexos: Campo[][] = [];

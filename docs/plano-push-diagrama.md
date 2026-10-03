@@ -443,6 +443,21 @@ e pelo caminho até o fim, finalizada.
 
 - 412/475 `.process` convertem sem recusa (eram 396); gabaritos seguem 68/72.
 
+**Estado (03/10/2026, 11º corte).** Regras de anexo além da forma dos pares:
+qualquer operador do combo do Studio (0 nenhum, 1 =, 2 >, 3 >=, 4 <, 5 <=, 6
+qualquer — `PropertyBpmnAttachmentRulesSection` decompilado), `amount` vazio (é
+`String` no modelo; sai como texto), mais de uma regra por elemento (uma linha
+cada, na ordem do blob) e `id` do blob qualquer (o Studio não o copia; sai 0).
+
+- HML: versão 9 do `teste_fluigctl` com uma regra 0/vazio no início e duas na
+  tarefa (1/"1" e 6/vazio). Liberada; o export devolve as três como enviadas, com
+  `id` e `tenantId` atribuídos pelo servidor. Solicitação 684 abriu (a regra 0
+  não bloqueia) e o movimento da tarefa sem anexo foi recusado — HTTP 500 com uma
+  `IllegalArgumentException` genérica, sem citar a regra; na versão 8 o mesmo
+  movimento passava. A 684 ficou aberta. Versão 10 republicada sem regras.
+- O harness segue com o filho 18 em 2/2 gabaritos e 4/4 antigos; gabaritos 68/72.
+- 418/475 `.process` convertem sem recusa (eram 412).
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

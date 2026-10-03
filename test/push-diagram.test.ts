@@ -1165,3 +1165,28 @@ test('caminho de gateway com mechanism vazio e sem configuração leva só engin
   assert.equal(texto(comVazio[0]!, 'engineAllocationId'), '');
   assert.equal(texto(comVazio[0]!, 'engineAllocationConfiguration'), '<ausente>');
 });
+
+/** `attachmentRules` com as regras dadas, como o Studio grava no `.process`. */
+const REGRA = (id: number, operador: number, quantidade: string) =>
+  `  <org.eclipse.bpmn2.documentacional.BpmnProcessAttachmentRules>\n    <id>${id}</id>\n    <message>Anexe</message>\n` +
+  `    <operator>${operador}</operator>\n    <amount>${quantidade}</amount>\n    <name>Regra ${operador}</name>\n` +
+  '  </org.eclipse.bpmn2.documentacional.BpmnProcessAttachmentRules>\n';
+const comRegras = (...regras: string[]) =>
+  PROCESSO.replace('<bpmn2:BpmnTask id="task5"', `<bpmn2:BpmnTask id="task5" attachmentRules="${comoAtributo(`<list>\n${regras.join('')}</list>`)}"`);
+
+test('regras de anexo: uma linha por regra, qualquer operador do combo, amount como texto e id do blob ignorado', () => {
+  const linhas = filhosDaRaiz(converterDiagrama(comRegras(REGRA(7, 1, '1'), REGRA(0, 6, '')), { companyId: 1 }).xml)[18]!.filhos;
+  assert.deepEqual(linhas.map((l) => [texto(l, 'id'), texto(l, 'stateSequence'), texto(l, 'operator'), texto(l, 'amount')]), [
+    ['0', '5', '1', '1'],
+    ['0', '5', '6', ''],
+  ]);
+  for (const [regras, motivo] of [
+    [[REGRA(0, 7, '1')], /operator "7"/],
+    [[REGRA(0, 1, 'um')], /amount não numérico/],
+    [[], /attachmentRules vazio/],
+  ] as [string[], RegExp][]) {
+    const erro = erroDe(() => converterDiagrama(comRegras(...regras), { companyId: 1 }));
+    assert.equal(erro.codigo, 6, String(motivo));
+    assert.match(erro.message, motivo);
+  }
+});
