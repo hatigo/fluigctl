@@ -384,6 +384,34 @@ prazo do processo.
   `processAttachmentSecurity` (8), `notifyManagerComplements` (6); e o subprocesso
   (31 arquivos, 1 par antigo).
 
+**Estado (03/10/2026, oitavo corte).** Entram `controlsAttachmentsSecurity`,
+`notifyManagerComplements` e `processAttachmentSecurity` do processo. Nenhum
+par os tem; a regra veio do `BPMN2ECM30ExportMarshaller` decompilado
+(fluig-agentic-development) e foi conferida no HML da Cetenco — é o primeiro
+corte aprendido pelo servidor e não por par.
+
+- O filho 5, "sempre vazio", é o `ProcessAttachmentSecurity`. Cada
+  `ECMProcessAttachmentSecurityImpl` do blob vira um, com PK `companyId`,
+  `processId`, `version` 1 e `sequence` do blob (o Studio descarta `companyId`,
+  `processId` e `version` do blob: 0/0, 1/36 nos `.process`), `engineAllocationId`,
+  `engineAllocationConfiguration` só quando o blob tem (no formato da atribuição
+  do estado), `accessLevel` e `editionMode`.
+- `notifyManagerComplements` → `ProcessDefinition`; `controlsAttachmentsSecurity`
+  → `ProcessDefinitionVersion`. Booleanos, `false` sem o atributo.
+- HML: a versão 5 do `teste_fluigctl`, com o XML do servidor editado à mão
+  (`push process --base`), e a versão 6, publicada pelo `push diagram` a partir
+  de um `.process` com os três atributos, foram importadas e liberadas sem
+  `attachmentSecurityError`. O export devolve os três campos como enviados — a PK
+  com a versão do servidor, e `editionMode` sempre `false` (o servidor zera o
+  `true` enviado na versão 5).
+- Só entra a forma vista nos `.process`: "Todos os Usuários" sem configuração;
+  Grupo, Usuário e Campo Formulário com; `accessLevel` com as letras P, R, M, O,
+  E, D. Outro mecanismo, sequence repetido, lista vazia e campo desconhecido
+  recusam com código 6.
+- O harness compara o filho 5: 72/72 gabaritos (todos vazios). Gabaritos
+  inteiros seguem 68/72.
+- 384/475 `.process` convertem sem recusa (eram 369).
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

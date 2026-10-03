@@ -56,7 +56,7 @@ const IGNORADOS: { entidade: string; campo: string; motivo: string }[] = [
   },
 ];
 
-const FILHOS_COMPARADOS = [0, 1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] as const;
+const FILHOS_COMPARADOS = [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] as const;
 /** Filhos cuja ordem no ecm30 também é comparada (a do Studio precisa ser reproduzida). */
 const COM_ORDEM = new Set<number>([14, 16, 17, 18]);
 const TIPOS_COBERTOS = new Set([
@@ -68,6 +68,7 @@ const TIPOS_DE_NO = new Set([
 
 /** Chave de cada filho e, quando ele pende de um estado, o caminho do sequence do estado. */
 const CHAVES: Record<number, { chave: (n: No) => string; coberto?: string }> = {
+  5: { chave: (n) => campo(n, 'processAttachmentSecurityPK.sequence') },
   7: { chave: (n) => campo(n, 'advancedProcessPropertiesPK.propertyId') },
   13: { chave: (n) => `${campo(n, 'extendedPropertyFieldPK.stateSequence')}/${campo(n, 'extendedPropertyFieldPK.propertyName')}` },
   3: {
@@ -94,7 +95,7 @@ const CHAVES: Record<number, { chave: (n: No) => string; coberto?: string }> = {
   },
 };
 const NOMES: Record<number, string> = {
-  3: 'ConditionProcessState', 7: 'AdvancedProcessProperties', 9: 'ProcessComponGraf', 10: 'ProcessLinkAssoc',
+  3: 'ConditionProcessState', 5: 'ProcessAttachmentSecurity', 7: 'AdvancedProcessProperties', 9: 'ProcessComponGraf', 10: 'ProcessLinkAssoc',
   12: 'ProcessStateTrigger', 13: 'ExtendedPropertyField', 14: 'ProcessFormField', 15: 'ProcessStateService',
   16: 'SubProcessFieldRelationship', 17: 'ProcessAppConfiguration', 18: 'ProcessAttachmentRules',
   19: 'ConditionProcessAutomaticRules',
@@ -105,7 +106,7 @@ const POR_FILHO: Record<number, string> = {
 };
 /** Campos de versão da PK, que diferem de propósito num par "antigo" (ecm30 de outra versão do diagrama). */
 const VERSAO_DA_PK: Record<number, RegExp> = {
-  7: /PK\.version$/, 13: /PK\.version$/, 18: /\.processVersion$/,
+  5: /PK\.version$/, 7: /PK\.version$/, 13: /PK\.version$/, 18: /\.processVersion$/,
 };
 const vazioXStream = (v: string) => v.trim() === '' || /^<list\s*\/>$/.test(v.trim());
 

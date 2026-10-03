@@ -1070,3 +1070,66 @@ test('diagrama sem formulário vinculado não é publicado, republicado nem simu
     }
   }
 });
+
+/** Um item de `processAttachmentSecurity`, como o Studio grava no `.process`. */
+const SEGURANCA = (sequencia: number, mecanismo: string, nivel: string, config = '') =>
+  `  <org.eclipse.bpmn2.ECMProcessAttachmentSecurityImpl>\n    <companyId>0</companyId>\n    <version>0</version>\n` +
+  `    <sequence>${sequencia}</sequence>\n    <engineAllocationId>${mecanismo}</engineAllocationId>\n${config}` +
+  `    <accessLevel>${nivel}</accessLevel>\n    <editionMode>false</editionMode>\n  </org.eclipse.bpmn2.ECMProcessAttachmentSecurityImpl>\n`;
+const comSeguranca = (atributos: string) =>
+  PROCESSO.replace('<bpmn2:BpmnProcess id="processoTeste"', `<bpmn2:BpmnProcess id="processoTeste" ${atributos}`);
+const ascii = (s: string) => s.replace(/[^\x00-\x7f]/g, (c) => `&#x${c.charCodeAt(0).toString(16)};`);
+
+test('segurança de anexos e notificação do gestor: filho 5, PDV e ProcessDefinition, como no HML', () => {
+  const blob = '<list>\n' +
+    SEGURANCA(1, 'Todos os Usuários', 'PR') +
+    SEGURANCA(2, 'Grupo', 'PRMOED',
+      '    <engineAllocationConfiguration class="org.eclipse.bpmn2.impl.AssignmentControllerGroup">\n' +
+      '      <groupId>UTIC</groupId>\n      <mechanismName>Grupo</mechanismName>\n    </engineAllocationConfiguration>\n') +
+    '</list>';
+  const r = converterDiagrama(comSeguranca(
+    `controlsAttachmentsSecurity="true" notifyManagerComplements="true" processAttachmentSecurity="${ascii(comoAtributo(blob))}"`,
+  ), { companyId: 4 });
+  const filhos = filhosDaRaiz(r.xml);
+
+  assert.equal(texto(filhos[0]!, 'notifyManagerComplements'), 'true');
+  assert.equal(texto(filhos[1]!, 'controlsAttachmentsSecurity'), 'true');
+  const itens = filhos[5]!.filhos;
+  assert.deepEqual(itens.map((i) => i.nome), ['ProcessAttachmentSecurity', 'ProcessAttachmentSecurity']);
+  // A PK descarta companyId e version do blob, como o Studio: companyId de quem chama, version 1.
+  assert.deepEqual(itens[0]!.filhos[0]!.filhos.map((f) => [f.nome, f.texto]), [
+    ['companyId', '4'], ['processId', 'processoTeste'], ['version', '1'], ['sequence', '1'],
+  ]);
+  assert.deepEqual(itens[0]!.filhos.slice(1).map((f) => [f.nome, f.texto]), [
+    ['engineAllocationId', 'Todos os Usuários'], ['accessLevel', 'PR'], ['editionMode', 'false'],
+  ]);
+  assert.deepEqual(itens[1]!.filhos.slice(1).map((f) => [f.nome, f.texto]), [
+    ['engineAllocationId', 'Grupo'],
+    ['engineAllocationConfiguration', '<AssignmentController><Group>UTIC</Group></AssignmentController>'],
+    ['accessLevel', 'PRMOED'],
+    ['editionMode', 'false'],
+  ]);
+
+  // Sem os atributos, como antes: false e filho 5 vazio.
+  const sem = filhosDaRaiz(converterDiagrama(PROCESSO, { companyId: 4 }).xml);
+  assert.equal(texto(sem[0]!, 'notifyManagerComplements'), 'false');
+  assert.equal(texto(sem[1]!, 'controlsAttachmentsSecurity'), 'false');
+  assert.equal(sem[5]!.filhos.length, 0);
+});
+
+test('segurança de anexos fora da forma vista nos .process é recusada com código 6', () => {
+  const papel = '    <engineAllocationConfiguration class="org.eclipse.bpmn2.impl.AssignmentControllerRole">\n' +
+    '      <roleId>admin</roleId>\n      <mechanismName>Papel</mechanismName>\n    </engineAllocationConfiguration>\n';
+  const casos: [string, RegExp][] = [
+    ['<list>\n' + SEGURANCA(1, 'Papel', 'PR', papel) + '</list>', /atribuição AssignmentControllerRole/],
+    ['<list>\n' + SEGURANCA(1, 'Grupo', 'PR') + '</list>', /mecanismo "Grupo" sem configuração/],
+    ['<list>\n' + SEGURANCA(1, 'Todos os Usuários', 'PX') + '</list>', /accessLevel "PX"/],
+    ['<list>\n' + SEGURANCA(1, 'Todos os Usuários', 'PR') + SEGURANCA(1, 'Todos os Usuários', 'R') + '</list>', /sequence 1 repetido/],
+    ['<list/>', /vazio/],
+  ];
+  for (const [blob, motivo] of casos) {
+    const erro = erroDe(() => converterDiagrama(comSeguranca(`processAttachmentSecurity="${ascii(comoAtributo(blob))}"`), { companyId: 1 }));
+    assert.equal(erro.codigo, 6, String(motivo));
+    assert.match(erro.message, motivo);
+  }
+});

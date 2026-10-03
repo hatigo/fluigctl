@@ -145,6 +145,8 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     'descriptionVersion', 'updateAttachment', 'uniquecardversion', 'extendedFields', 'descriptorFields',
     // Prazo do processo em minutos, como o das tarefas: vira segundos (1 par: 2160 → 129600, 1440 → 86400).
     'deadlineTime', 'warningTime',
+    // Conferidos no HML (03/10/2026), sem par: ver lerSegurancaDeAnexos.
+    'notifyManagerComplements', 'controlsAttachmentsSecurity', 'processAttachmentSecurity',
     // Só do Studio: o ecm30 não tem onde guardar, e keyWord sai sempre vazio (118/118).
     'serverId', 'author', 'formSource', 'formType', 'keyWord',
   ],
@@ -394,6 +396,81 @@ function lerRegrasDeAnexo(blob: string): Lido<{ operador: string; quantidade: st
   if (!REGRA_OPERADORES.includes(operador)) return { erro: `attachmentRules com operator "${operador}"` };
   if (!/^\d+$/.test(f.get('amount')!)) return { erro: 'attachmentRules com amount não numérico' };
   return { valor: { operador, quantidade: f.get('amount')!, nome: f.get('name')!, mensagem: f.get('message')! } };
+}
+
+const SEGURANCA_CLASSE = 'org.eclipse.bpmn2.ECMProcessAttachmentSecurityImpl';
+/** `companyId`, `processId` e `version` do blob o Studio descarta: a PK sai com 1, o id do processo e 1. */
+const SEGURANCA_CAMPOS = ['companyId', 'processId', 'version', 'sequence', 'engineAllocationId', 'accessLevel', 'editionMode'];
+/** Mecanismos com configuração vistos nos `.process`: Grupo, Usuário e Campo Formulário. */
+const SEGURANCA_ATRIBUICOES = ['AssignmentControllerGroup', 'AssignmentControllerColleague', 'AssignmentControllerFormField'];
+/** Sem configuração, só "Todos os Usuários" aparece. */
+const SEGURANCA_SEM_CONFIGURACAO = 'Todos os Usuários';
+
+interface SegurancaDeAnexo {
+  sequencia: number;
+  mecanismo: string;
+  configuracao?: string;
+  nivel: string;
+  edicao: string;
+}
+
+/**
+ * `processAttachmentSecurity` do processo: `<list>` de
+ * `ECMProcessAttachmentSecurityImpl`. Vira o filho 5 (`ProcessAttachmentSecurity`),
+ * como no `getProcessAttachmentSecurity` do Studio decompilado, e conferido no
+ * HML (03/10/2026): importado, liberado sem erro de "Segurança de Anexos" e
+ * devolvido igual pelo export. Nenhum par do Studio tem o atributo.
+ */
+function lerSegurancaDeAnexos(blob: string): Lido<SegurancaDeAnexo[]> {
+  const raiz = arvoreDoBlob(blob);
+  if (!raiz || raiz.nome !== 'list' || Object.keys(raiz.attrs).length > 0) return { erro: 'processAttachmentSecurity ilegível' };
+  if (raiz.filhos.length === 0) return { erro: 'processAttachmentSecurity vazio (nunca visto)' };
+  const itens: SegurancaDeAnexo[] = [];
+  for (const no of raiz.filhos) {
+    if (no.nome !== SEGURANCA_CLASSE || Object.keys(no.attrs).length > 0) {
+      return { erro: `processAttachmentSecurity com ${no.nome}` };
+    }
+    const config = no.filhos.filter((f) => f.nome === 'engineAllocationConfiguration');
+    const f = folhas({ ...no, filhos: no.filhos.filter((c) => c.nome !== 'engineAllocationConfiguration') });
+    const extra = f ? [...f.keys()].find((k) => !SEGURANCA_CAMPOS.includes(k)) : undefined;
+    if (!f || extra !== undefined || config.length > 1) {
+      return { erro: `processAttachmentSecurity com campo ${extra ?? 'fora da forma'}` };
+    }
+    const faltando = ['sequence', 'engineAllocationId', 'accessLevel', 'editionMode'].find((k) => !f.has(k));
+    if (faltando) return { erro: `processAttachmentSecurity sem ${faltando}` };
+    const sequencia = f.get('sequence')!;
+    const mecanismo = f.get('engineAllocationId')!;
+    const nivel = f.get('accessLevel')!;
+    const edicao = f.get('editionMode')!;
+    if (!/^\d+$/.test(sequencia)) return { erro: `processAttachmentSecurity com sequence "${sequencia}"` };
+    if (itens.some((i) => i.sequencia === Number(sequencia))) {
+      return { erro: `processAttachmentSecurity com sequence ${sequencia} repetido` };
+    }
+    // Permissões vistas: P(ublicar) R(ead) M(odificar) O E D — PR, PE, R, PRME, PRMOED.
+    if (!/^[PRMOED]+$/.test(nivel)) return { erro: `processAttachmentSecurity com accessLevel "${nivel}"` };
+    if (!['true', 'false'].includes(edicao)) return { erro: `processAttachmentSecurity com editionMode "${edicao}"` };
+
+    let configuracao: string | undefined;
+    if (config.length === 0) {
+      if (mecanismo !== SEGURANCA_SEM_CONFIGURACAO) {
+        return { erro: `processAttachmentSecurity com mecanismo "${mecanismo}" sem configuração (nunca visto)` };
+      }
+    } else {
+      const c = config[0]!;
+      const classe = (c.attrs['class'] ?? '').replace(PREFIXO_ATRIBUICAO, '');
+      const campos = Object.keys(c.attrs).length === 1 ? folhas(c) : undefined;
+      const lida =
+        campos && SEGURANCA_ATRIBUICOES.includes(classe)
+          ? atribuicaoLida(mecanismo, { classe, campos: Object.fromEntries(campos) }, () => 0)
+          : undefined;
+      if (!lida?.configuracao || (campos!.has('mechanismName') && campos!.get('mechanismName') !== mecanismo)) {
+        return { erro: `processAttachmentSecurity com atribuição ${classe || 'ilegível'}` };
+      }
+      configuracao = lida.configuracao;
+    }
+    itens.push({ sequencia: Number(sequencia), mecanismo, ...(configuracao ? { configuracao } : {}), nivel, edicao });
+  }
+  return { valor: itens };
 }
 
 interface Atribuicao {
@@ -1395,6 +1472,23 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ]);
   }
 
+  const segurancaDeAnexos: Campo[][] = [];
+  if (p['processAttachmentSecurity'] !== undefined) {
+    const lido = lerSegurancaDeAnexos(p['processAttachmentSecurity']);
+    if ('erro' in lido) recusar(lido.erro);
+    else {
+      for (const s of lido.valor) {
+        segurancaDeAnexos.push([
+          ['processAttachmentSecurityPK', [['companyId', companyId], ['processId', processId], ['version', 1], ['sequence', s.sequencia]]],
+          ['engineAllocationId', s.mecanismo],
+          ...(s.configuracao === undefined ? [] : [['engineAllocationConfiguration', s.configuracao] as Campo]),
+          ['accessLevel', s.nivel],
+          ['editionMode', s.edicao === 'true'],
+        ]);
+      }
+    }
+  }
+
   const gestor = atribuicaoDe(processo, p['managerMechanism'], p['managerAssignmentController']);
 
   /*
@@ -1460,7 +1554,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ['keyWord', ''],
     ['complementsLevel', p['complementsLevel'] || 1],
     ['notifyRequisitionerComplements', booleano(p['notifyRequisitionerComplements'], false)],
-    ['notifyManagerComplements', false],
+    ['notifyManagerComplements', booleano(p['notifyManagerComplements'], false)],
     ['deadlineTime', segundos(p['deadlineTime'], 0)],
     ['warningDeadlineTime', segundos(p['warningTime'], 0)],
     ['notifyAuthorityComplements', booleano(p['notifyResponsibleComplements'], false)],
@@ -1472,7 +1566,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ['formId', formId],
     ['editionMode', true],
     ['updateAttachmentsVersion', booleano(p['updateAttachment'], false)],
-    ['controlsAttachmentsSecurity', false],
+    ['controlsAttachmentsSecurity', booleano(p['controlsAttachmentsSecurity'], false)],
     ['active', true],
     ['blockedVersion', false],
     ['counterSign', false],
@@ -1484,14 +1578,13 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ['mobileReady', booleano(p['mobileReady'], false)],
   ];
 
-  const vazio: Campo = ['list', null];
   const filhosDaRaiz: Campo[] = [
     ['ProcessDefinition', definicao],
     ['ProcessDefinitionVersion', versaoDefinicao],
     lista('ProcessState', estados),
     lista('ConditionProcessState', condicoes),
     lista('ProcessLink', links),
-    vazio,
+    lista('ProcessAttachmentSecurity', segurancaDeAnexos),
     lista('WorkflowProcessEvent', eventos),
     lista('AdvancedProcessProperties', propriedadesAvancadas),
     lista('SwimLane', raias),
