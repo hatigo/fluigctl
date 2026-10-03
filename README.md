@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 301 | não | não | — |
+| Testes automatizados | 302 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -352,10 +352,15 @@ Converte o `.process` no XML que o servidor importa (o formato do
 `companyId` do cadastro; `cardIndex` numérico vira o `formId`, um nome fica 0,
 com aviso.
 
+**Um diagrama nunca é publicado nem republicado sem formulário.** `cardIndex`
+vazio (ou 0) no processo é recusado com código 6, já no `--dry-run` e antes de
+qualquer chamada ao servidor: processo sem formulário abre no portal com
+"Formulário inexistente". Vincule no Studio ou ponha no `cardIndex` o documentId
+de um formulário do servidor.
+
 Publicar converte primeiro (o que não converte nem abre sessão) e confere o
 destino: o processo tem de existir, ou vir `--create`; o formulário do
-`cardIndex` tem de existir (número) ou casar com um único formulário (nome);
-vazio é processo sem formulário. O `bpmnVersion`, que não está no `.process`,
+`cardIndex` tem de existir (número) ou casar com um único formulário (nome). O `bpmnVersion`, que não está no `.process`,
 vem da definição atual no servidor. Num processo existente: nova versão, import
 e liberação, como o `push process`; `--no-release` deixa a versão em edição.
 Produção passa pela mesma trava de senha no terminal.
@@ -368,7 +373,8 @@ senão, uma imagem gerada da geometria do `.process`, no mesmo formato (o
 visualizador destaca a atividade atual pelo `<g sequence>` de cada estado). O
 dry-run diz qual vai.
 
-Conferido no HML da Cetenco com um processo descartável (`teste_fluigctl`):
+Conferido no HML da Cetenco com um processo descartável (`teste_fluigctl`,
+hoje na versão 4, ligado ao formulário `formTesteFluigctl`, documentId 1192):
 criado, liberado, uma solicitação passando pela tarefa e pelo gateway até o fim,
 e republicado como versão 2 com outra solicitação de ponta a ponta.
 
@@ -435,7 +441,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 301 testes, sem rede e sem servidor Fluig
+npm test        # 302 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

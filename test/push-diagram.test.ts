@@ -969,7 +969,7 @@ test('resolverFormId: número tem de existir, nome tem de ser único, vazio é s
     { documentId: 6, documentDescription: 'formB', datasetName: 'dsB' },
     { documentId: 7, documentDescription: 'formB', datasetName: 'dsB2' },
   ];
-  assert.equal(resolverFormId('', cat), 0);
+  assert.throws(() => resolverFormId('', cat), /não está vinculado a um formulário/);
   assert.equal(resolverFormId('5', cat), 5);
   assert.equal(resolverFormId('formA', cat), 5);
   assert.throws(() => resolverFormId('8', cat), /8 \(cardIndex\), que não existe/);
@@ -1050,4 +1050,23 @@ test('o .processimage.svg do Studio vai no import quando desenha os mesmos estad
   assert.equal(r2.imagem.origem, 'gerada');
   assert.match(r2.avisos.join('\n'), /não desenha os mesmos estados/);
   assert.deepEqual([...sequenciasDoSvg(capturadas[1]!.svg.toString('utf8'))].sort((a, b) => a - b), [4, 5, 6, 7]);
+});
+
+
+test('diagrama sem formulário vinculado não é publicado, republicado nem simulado', async () => {
+  for (const vazio of ['cardIndex=""', 'cardIndex="0"']) {
+    const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-semform-'));
+    const arquivo = join(raiz, 'processoTeste.process');
+    writeFileSync(arquivo, PROCESSO.replace('cardIndex="1234"', vazio), 'latin1');
+
+    for (const extra of [{ dryRun: true }, {}, { criar: true }]) {
+      const s = servidorDeTeste(extra.criar ? { processos: [] } : {});
+      const erro = await pushDiagram({
+        server: SERVER, arquivo, senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios, ...extra,
+      }).then(() => undefined, (e: unknown) => e as ErroFluigctl);
+      assert.equal(erro?.codigo, 6, `${vazio} ${JSON.stringify(extra)}`);
+      assert.match(erro!.message, /não está vinculado a um formulário/);
+      assert.deepEqual(s.chamadas, [], 'recusa antes de qualquer chamada ao servidor');
+    }
+  }
 });

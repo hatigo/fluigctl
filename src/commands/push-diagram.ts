@@ -90,13 +90,29 @@ async function lerConvertivel(opcoes: OpcoesPushDiagram): Promise<{
 }
 
 /**
+ * Regra: um diagrama nunca é publicado nem republicado sem estar vinculado a um
+ * formulário. Processo sem formulário abre com "Formulário inexistente" no
+ * portal. Vale já no dry-run, que dá para saber offline.
+ */
+function exigirFormulario(cardIndex: string, processId: string): void {
+  if (cardIndex.trim() === '' || cardIndex.trim() === '0') {
+    throw new ErroFluigctl(
+      `o diagrama "${processId}" não está vinculado a um formulário (cardIndex vazio no processo). ` +
+        'Um processo não é publicado sem formulário: vincule-o no Studio (propriedades do processo) ' +
+        'ou ponha no cardIndex o documentId de um formulário do servidor.',
+      6,
+    );
+  }
+}
+
+/**
  * O formulário do processo no destino. `cardIndex` numérico tem de existir; um
- * nome tem de casar com exatamente um formulário; vazio é processo sem
- * formulário (formId 0). Qualquer dúvida recusa antes de escrever — um formId
+ * nome tem de casar com exatamente um formulário; vazio recusa (ver
+ * exigirFormulario). Qualquer dúvida recusa antes de escrever — um formId
  * errado liga o processo ao formulário de outra pessoa.
  */
 export function resolverFormId(cardIndex: string, catalogo: readonly FormNoServidor[]): number {
-  if (cardIndex === '') return 0;
+  exigirFormulario(cardIndex, '');
   if (/^\d+$/.test(cardIndex)) {
     const id = Number(cardIndex);
     if (!catalogo.some((f) => f.documentId === id)) {
@@ -179,6 +195,7 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
 
   // Sempre converte offline primeiro: um diagrama que não converte nem abre sessão.
   const previa = gerarEcm30(diagrama, comum);
+  exigirFormulario(previa.cardIndex, processId);
   const avisoScripts = semScripts ? `${semScripts}; o XML sai sem os scripts do processo (WorkflowProcessEvent)` : undefined;
 
   if (opcoes.dryRun) {
