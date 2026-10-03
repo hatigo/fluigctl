@@ -219,7 +219,8 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
     (async () =>
       (await cardIndexClient(url, opcoes.server.companyId, opcoes.server.username, opcoes.senha!, opcoes.server.userCode)).listForms());
 
-  const existe = (await cliente.listProcessIds()).includes(processId);
+  const processos = await cliente.listProcessIds();
+  const existe = processos.includes(processId);
   if (!existe && !opcoes.criar) {
     throw new ErroFluigctl(
       `o processo "${processId}" não existe em ${url}. Para criá-lo a partir do .process, use --create.`,
@@ -228,6 +229,16 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
   }
   if (existe && opcoes.criar) {
     throw new ErroFluigctl(`--create foi pedido, mas o processo "${processId}" já existe em ${url}. Remova --create.`, 6);
+  }
+
+  // O alvo de um subprocesso é resolvido pelo id na execução: se não existe, a solicitação para ali.
+  const semAlvo = previa.subprocessos.filter((alvo) => alvo !== processId && !processos.includes(alvo));
+  if (semAlvo.length > 0) {
+    throw new ErroFluigctl(
+      `o diagrama chama como subprocesso ${semAlvo.map((x) => `"${x}"`).join(', ')}, que não existe em ${url}. ` +
+        'Publique o processo-alvo antes.',
+      6,
+    );
   }
 
   const formId = resolverFormId(previa.cardIndex, await listarFormularios());

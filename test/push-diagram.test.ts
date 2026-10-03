@@ -1227,3 +1227,27 @@ test('regras de anexo: uma linha por regra, qualquer operador do combo, amount c
     assert.match(erro.message, motivo);
   }
 });
+
+test('subprocesso cujo processo-alvo não existe no destino é recusado com código 6, antes de escrever', async () => {
+  const comAlvo = (processos: string[]) => {
+    const s = servidorDeTeste({ processos });
+    const formularios = async (): Promise<FormNoServidor[]> => [
+      { documentId: 1192, documentDescription: 'formTesteFluigctl', datasetName: 'dsformTesteFluigctl' },
+    ];
+    return { s, publicar: () => pushDiagram({
+      server: SERVER, arquivo: join(FIXTURES, 'subprocessoTeste.process'), senha: 's', prompt: async () => '',
+      cliente: s.cliente, formularios,
+    }) };
+  };
+  const sem = comAlvo(['teste_fluigctl']);
+  const erro = await sem.publicar().catch((e: unknown) => e);
+  assert.ok(erro instanceof ErroFluigctl);
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /"teste_fluigctl_sub", que não existe/);
+  assert.deepEqual(sem.s.chamadas, ['list']);
+
+  const com = comAlvo(['teste_fluigctl', 'teste_fluigctl_sub']);
+  const r = await com.publicar();
+  assert.equal(r.publicado, true);
+  assert.deepEqual(r.subprocessos, ['teste_fluigctl_sub']);
+});

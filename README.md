@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 310 | não | não | — |
+| Testes automatizados | 311 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -360,7 +360,8 @@ de um formulário do servidor.
 
 Publicar converte primeiro (o que não converte nem abre sessão) e confere o
 destino: o processo tem de existir, ou vir `--create`; o formulário do
-`cardIndex` tem de existir (número) ou casar com um único formulário (nome). O `bpmnVersion`, que não está no `.process`,
+`cardIndex` tem de existir (número) ou casar com um único formulário (nome); e
+cada processo chamado como subprocesso tem de existir. O `bpmnVersion`, que não está no `.process`,
 vem da definição atual no servidor. Num processo existente: nova versão, import
 e liberação, como o `push process`; `--no-release` deixa a versão em edição.
 Produção passa pela mesma trava de senha no terminal.
@@ -373,19 +374,25 @@ senão, uma imagem gerada da geometria do `.process`, no mesmo formato (o
 visualizador destaca a atividade atual pelo `<g sequence>` de cada estado). O
 dry-run diz qual vai.
 
-Conferido no HML da Cetenco com um processo descartável (`teste_fluigctl`,
-hoje na versão 4, ligado ao formulário `formTesteFluigctl`, documentId 1192):
-criado, liberado, uma solicitação passando pela tarefa e pelo gateway até o fim,
-e republicado como versão 2 com outra solicitação de ponta a ponta.
+Conferido no HML da Cetenco com dois processos descartáveis: `teste_fluigctl`
+(hoje na versão 16, ligado ao formulário `formTesteFluigctl`, documentId 1192) e
+`teste_fluigctl_sub`, o alvo do subprocesso dele. Cada mapeamento sem par do
+Studio foi publicado numa versão própria, conferido no export e, quando muda a
+execução, com uma solicitação aberta e movida pela API (detalhes por corte no
+plano).
 
-Por enquanto cobre pool, lane, início, tarefas de usuário e de serviço,
-gateways exclusivo/paralelo/join com condições, eventos intermediários
-(temporizador, condicional, sinal, erro anexado), fim, anotação, fluxo de
-sequência e bendpoints. Evento de link, subprocesso, campos descritores,
-configuração de app, regras de anexo e atribuição não conferida são recusados
-com código 6, listando o que falta — nunca sai XML parcial. Os scripts entram
-no XML quando há `workflow/scripts/<processId>.*.js` ao lado de
-`workflow/diagrams/`; sem a pasta, o comando avisa.
+Cobre pool, lane, início, tarefas de usuário e de serviço, subprocesso (100) com
+mapeamento de campos, gateways exclusivo/paralelo/join com condições e
+atribuição por caminho, eventos intermediários (temporizador, condicional,
+sinal, erro anexado, link), fim, anotação, fluxo de sequência, bendpoints,
+campos descritores, configuração de app, regras e segurança de anexos,
+propriedades estendidas do processo, esforço previsto e as atribuições Grupo,
+Papel, Usuário, Campo, Executor, Grupos Colaborador, Custom e Associado. O que
+não foi conferido — subprocesso ad hoc (101), tarefa de e-mail, banco de dados,
+`BpmnGroup`, entre outros — é recusado com código 6, listando o que falta; nunca
+sai XML parcial. Os scripts entram no XML quando há
+`workflow/scripts/<processId>.*.js` ao lado de `workflow/diagrams/`; sem a
+pasta, o comando avisa.
 
 O plano, as fases e o que foi medido estão em `docs/plano-push-diagrama.md`.
 `npm run diff-diagramas [raiz]` compara a conversão com os `.ecm30.xml` do Studio
@@ -441,7 +448,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 310 testes, sem rede e sem servidor Fluig
+npm test        # 311 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

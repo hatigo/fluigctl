@@ -64,6 +64,8 @@ export interface ResultadoConversao {
     anotacoes: number;
   };
   avisos: string[];
+  /** Processos chamados como subprocesso; a publicação confere que existem no destino. */
+  subprocessos: string[];
   /** Vazio, a não ser em modo parcial. */
   naoSuportados: string[];
 }
@@ -1024,7 +1026,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   if (alvos.length > 0) {
     avisos.push(
       `o diagrama chama os processos ${alvos.map((x) => `"${x}"`).join(', ')} como subprocesso; ` +
-        'cada um precisa existir no servidor de destino (a publicação confere antes de enviar)',
+        'cada um precisa existir no servidor de destino (a publicação confere e recusa antes de enviar)',
     );
   }
 
@@ -1669,6 +1671,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       anotacoes: anotacoes.length,
     },
     avisos,
+    subprocessos: alvos,
     naoSuportados: [...naoSuportados],
   };
 }

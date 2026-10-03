@@ -500,6 +500,19 @@ continua tendo de nomear um estado; outro texto segue recusado.
   subprocesso (filha 688). Versão 16 republicada com a variante de referência.
 - 435/475 `.process` convertem sem recusa (eram 429); gabaritos seguem 68/72.
 
+**Correção (03/10/2026).** O aviso do subprocesso dizia que a publicação
+conferia o processo-alvo no destino, mas o `push diagram` não conferia. Agora
+confere: alvo que não está na lista de processos do servidor recusa com código 6,
+antes de criar versão ou importar (como pedia a fase 3).
+
+Ficam para o Studio, nos 40 `.process` que ainda não convertem, motivos de 1 a 9
+arquivos cada e nenhum com par: ad hoc (101), banco de dados, `BpmnGroup`,
+gateway 121, tarefa de e-mail (`messageData`), `scriptFileName` de outro processo,
+`appsConfiguration` na tarefa 81, atribuição por Usuário/"Associado" em caminho
+de gateway, `expression` no fluxo, `activeProcess`, propriedades estendidas no
+gateway, o fluxo sem origem das 5 cópias do `cotacao` e 2 arquivos que não são
+XML válido.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
