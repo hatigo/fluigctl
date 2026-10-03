@@ -458,6 +458,24 @@ cada, na ordem do blob) e `id` do blob qualquer (o Studio não o copia; sai 0).
 - O harness segue com o filho 18 em 2/2 gabaritos e 4/4 antigos; gabaritos 68/72.
 - 418/475 `.process` convertem sem recusa (eram 412).
 
+**Estado (03/10/2026, 12º corte).** Entram Executor Atividade com `returns` 2 e o
+esforço previsto.
+
+- `returns` 2 → `<Returns>All</Returns>` (switch do `getEngineAllocationConfiguration`
+  decompilado: 0 First, 1 Last, 2 All; 20 ocorrências nos `.process`, nenhuma em
+  par). Outro valor segue recusado.
+- `esforcoCalculo`/`esforcoPrevisto` no início (10) e na tarefa de usuário (80) →
+  `forecastedEffortType` = `esforcoCalculo`, `forecastedEffort` = `esforcoPrevisto`
+  × 60 (minutos → segundos, como os prazos). Nos outros tipos o Studio grava 0, e
+  valor diferente de 0 segue recusado.
+- HML: versão 11 do `teste_fluigctl` com a tarefa 5 em Executor Atividade `All`
+  do início e esforço 3 / 1920.0. Liberada; o export devolve
+  `<Returns>All</Returns>`, `forecastedEffortType` 3 e `forecastedEffort` 115200.
+  A solicitação 685 caiu na tarefa 5 para Integracao.Fluig, executor do início.
+  Versão 12 republicada com a variante de referência (subprocesso, caminho com
+  mecanismo vazio), que agora é o fixture `subprocessoTeste.process`.
+- 423/475 `.process` convertem sem recusa (eram 418); gabaritos seguem 68/72.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

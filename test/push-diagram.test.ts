@@ -170,14 +170,32 @@ test('subprocesso (100) sem process é recusado; booleano fora de true/false tam
   assert.match(erro.message, /transferAttachments="sim" em subprocess12/);
 });
 
+const comRetorno = (n: string) => PROCESSO.replace(
+  'AssignmentControllerExecutorMechanism>&#xA;  &lt;idNode>startevent4&lt;/idNode>&#xA;  &lt;returns>1',
+  `AssignmentControllerExecutorMechanism>&#xA;  &lt;idNode>startevent4&lt;/idNode>&#xA;  &lt;returns>${n}`,
+);
+
+test('Executor Atividade com returns 2 vira All', () => {
+  assert.notEqual(comRetorno('2'), PROCESSO);
+  const xml = converterDiagrama(comRetorno('2'), { companyId: 1 }).xml;
+  assert.match(xml, /&lt;BaseActivity&gt;4&lt;\/BaseActivity&gt;&lt;Returns&gt;All&lt;\/Returns&gt;/);
+});
+
 test('atribuição que não foi conferida contra o Studio é recusada com código 6', () => {
-  const retornoDois = PROCESSO.replace(
-    'AssignmentControllerExecutorMechanism>&#xA;  &lt;idNode>startevent4&lt;/idNode>&#xA;  &lt;returns>1',
-    'AssignmentControllerExecutorMechanism>&#xA;  &lt;idNode>startevent4&lt;/idNode>&#xA;  &lt;returns>2',
-  );
-  const erro = erroDe(() => converterDiagrama(retornoDois, { companyId: 1 }));
+  const erro = erroDe(() => converterDiagrama(comRetorno('3'), { companyId: 1 }));
   assert.equal(erro.codigo, 6);
   assert.match(erro.message, /AssignmentControllerExecutorMechanism em task7/);
+});
+
+test('esforço previsto no início e na tarefa 80: tipo = esforcoCalculo, esforço em segundos', () => {
+  const comEsforco = PROCESSO.replace(/(<bpmn2:BpmnTask id="task5"[^\n]*?)esforcoCalculo="0"/, '$1esforcoCalculo="3" esforcoPrevisto="1920.0"');
+  assert.notEqual(comEsforco, PROCESSO);
+  const estados = filhosDaRaiz(converterDiagrama(comEsforco, { companyId: 1 }).xml)[2]!.filhos;
+  const t5 = estados.find((e) => texto(e, 'processStatePK', 'sequence') === '5')!;
+  assert.equal(texto(t5, 'forecastedEffortType'), '3');
+  assert.equal(texto(t5, 'forecastedEffort'), '115200');
+  const erro = erroDe(() => converterDiagrama(comEsforco.replace('esforcoPrevisto="1920.0"', 'esforcoPrevisto="muito"'), { companyId: 1 }));
+  assert.match(erro.message, /esforcoPrevisto="muito" em task5/);
 });
 
 test('cardIndex por nome: formId 0 e aviso de que será resolvido no destino', () => {

@@ -154,13 +154,13 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     'id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'attachmentRules', 'signalId', 'expediente', 'selecionaColaboradores',
     // Como na tarefa: joint = atividadeConjunta, agreementPercentage = consenso (10/10 inícios nos pares).
     'atividadeConjunta', 'consenso',
-    'esforcoCalculo', 'initializerConfiguration', 'instrucoes', 'prazoConclusao', 'notificaResponsavel',
+    'esforcoCalculo', 'esforcoPrevisto', 'initializerConfiguration', 'instrucoes', 'prazoConclusao', 'notificaResponsavel',
     'notificaRequisitante', 'notificaGestor', 'inibeOpcaoTransferir', ...EM_ATRASO, ...EXPIRACAO,
   ],
   BpmnTask: [
     'id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'managerMechanism',
     'managerAssignmentControllerString', 'loopType', 'authNotify', 'expediente', 'atividadeConjunta',
-    'consenso', 'selecionaColaboradores', 'esforcoCalculo', 'executionAttempts', 'frequency', 'instrucoes',
+    'consenso', 'selecionaColaboradores', 'esforcoCalculo', 'esforcoPrevisto', 'executionAttempts', 'frequency', 'instrucoes',
     'prazoConclusao', 'deadlineFieldName', 'notificaRequisitante', 'notificaGestor', 'inibeOpcaoTransferir',
     'confirmarSenha', 'appsConfiguration', 'attachmentRules', ...EM_ATRASO, ...EXPIRACAO,
   ],
@@ -187,6 +187,13 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
 const VALOR_NEUTRO: Record<string, string> = {
   esforcoCalculo: '0', loopType: '0', executionAttempts: '0', frequency: '0',
 };
+/**
+ * Esforço previsto: no início (10) e na tarefa de usuário (80) o Studio grava
+ * `forecastedEffortType` = `esforcoCalculo` e `forecastedEffort` = `esforcoPrevisto`
+ * × 60, como os prazos (decompilado; conferido no HML).
+ */
+const COM_ESFORCO = new Set(['BpmnStartEvent:10', 'BpmnTask:80']);
+const comEsforco = (o: ObjetoBpmn) => COM_ESFORCO.has(`${o.tipo}:${o.attrs['type']}`);
 /** Na tarefa de serviço, tentativas e frequência viram campo do `ProcessStateService`. */
 const CAMPOS_DO_SERVICO = new Set(['executionAttempts', 'frequency']);
 
@@ -576,8 +583,8 @@ function atribuicaoLida(
     case 'AssignmentControllerFormField':
       return comConfiguracao(mecanismo, controlador('FormField', c['formField']));
     case 'AssignmentControllerExecutorMechanism': {
-      // 1 → Last em dezenas de pares; 0 → First em um; 2 não aparece em nenhum par conferível.
-      const retorno = { '0': 'First', '1': 'Last' }[c['returns'] ?? ''];
+      // 1 → Last em dezenas de pares; 0 → First em um; 2 → All pelo Studio decompilado, sem par (conferido no HML).
+      const retorno = { '0': 'First', '1': 'Last', '2': 'All' }[c['returns'] ?? ''];
       if (!retorno || !c['idNode']) return undefined;
       return {
         id: mecanismo,
@@ -686,6 +693,9 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
         recusar(`atributo ${attr} em ${o.attrs['id'] ?? o.tipo}`);
       } else if (o.tipo === 'BpmnSubProcess' && attr === 'selectColleague') {
         if (valor !== '1') recusar(`${attr}="${valor}" em ${o.attrs['id']}`);
+      } else if (attr === 'esforcoCalculo' || attr === 'esforcoPrevisto') {
+        const ok = attr === 'esforcoCalculo' ? /^\d+$/.test(valor) : /^\d+(\.\d+)?$/.test(valor);
+        if (comEsforco(o) ? !ok : valor !== VALOR_NEUTRO[attr]) recusar(`${attr}="${valor}" em ${o.attrs['id']}`);
       } else if (servico(o) && CAMPOS_DO_SERVICO.has(attr)) {
         if (!/^\d+$/.test(valor)) recusar(`${attr}="${valor}" em ${o.attrs['id']}`);
       } else if (VALOR_NEUTRO[attr] !== undefined && valor !== VALOR_NEUTRO[attr]) {
@@ -782,8 +792,8 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['automatic', false],
       ['positionX', pos.absX],
       ['positionY', pos.absY],
-      ['forecastedEffortType', 0],
-      ['forecastedEffort', 0],
+      ['forecastedEffortType', comEsforco(o) ? Number(a['esforcoCalculo'] ?? 0) : 0],
+      ['forecastedEffort', comEsforco(o) ? segundos(a['esforcoPrevisto'], 0) : 0],
       ['notifyManagerFollowUp', booleano(a['notificaGestor'], false)],
       ['notifyManagerDelay', booleano(a['emAtrasoNotificarGestor'], false)],
       ['allowanceManagerTime', segundos(a['emAtrasoNotificarGestorTolerancia'], 0)],
