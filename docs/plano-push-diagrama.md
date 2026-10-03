@@ -572,6 +572,19 @@ losango do gateway é o quadrado do topo da caixa, eventos sem rótulo). Versão
 do `teste_fluigctl` publicada com a imagem gerada: o svgviewer devolve os
 estados 4, 5, 7 e 8 e destaca a atividade atual.
 
+**Ícones na imagem gerada (03/10/2026).** A imagem gerada ganhou as marcas que o
+Studio desenha: relógio do temporizador (32), seta do link (36 cheia, 42 vazada),
+triângulo do sinal (37/41) e do fim com sinal (64), raio do erro anexado (43),
+"X" do fim com erro (65) e o "+" de traço 6 do paralelo e do join, fora do
+`<g sequence>`. A geometria é a do Studio, relativa ao centro; nos pares do corpus
+405 marcas batem com o `.processimage.svg` (as 8 que não batem são de um SVG que
+desenha cada evento duas vezes). Saiu o círculo interno do evento intermediário,
+que o Studio não desenha. Nas tarefas, o Studio embute PNGs da TOTVS; aqui vão
+desenhos próprios (engrenagem, boneco, envelope, subprocesso normal e ad hoc) na
+posição do `al:Image` do `.process`, que coincide com a do Studio em 420 de 427
+ícones (os 7 restantes são de SVGs com o diagrama deslocado depois). A marca de
+fluxo automático (`automaticFlow`, nos conectores) não é desenhada.
+
 ## Decisões (30/09/2026)
 
 "Fazer como o fluig-cd faz."

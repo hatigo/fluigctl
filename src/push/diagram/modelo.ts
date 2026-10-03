@@ -36,6 +36,17 @@ export interface Diagrama {
   caixas: Map<string, Caixa>;
   /** Bendpoints de cada conexão, pelo id do fluxo, na ordem do arquivo. */
   dobras: Map<string, Ponto[]>;
+  /**
+   * Ícones (`al:Image`) dentro de cada forma, pelo id do objeto: o `id` da imagem
+   * no Studio (`com.totvs.tds.ecm.designer.task.service`...) e a posição absoluta.
+   */
+  icones: Map<string, Icone[]>;
+}
+
+export interface Icone {
+  id: string;
+  absX: number;
+  absY: number;
 }
 
 const numero = (valor: string | undefined): number => (valor ? Number(valor) : 0);
@@ -67,6 +78,7 @@ export function lerDiagrama(texto: string): Diagrama {
 
   const caixas = new Map<string, Caixa>();
   const dobras = new Map<string, Ponto[]>();
+  const icones = new Map<string, Icone[]>();
 
   const diagrama = filhos(raiz, 'pi:Diagram')[0];
   if (diagrama) {
@@ -85,6 +97,9 @@ export function lerDiagrama(texto: string): Diagrama {
           ...(pai === undefined ? {} : { pai }),
         });
       }
+      if (!id && pai && ga?.attrs['xsi:type'] === 'al:Image' && ga.attrs['id']) {
+        icones.set(pai, [...(icones.get(pai) ?? []), { id: ga.attrs['id'], absX, absY }]);
+      }
       for (const filho of filhos(shape, 'children')) visitar(filho, absX, absY, id ?? pai);
     };
     for (const shape of filhos(diagrama, 'children')) visitar(shape, 0, 0);
@@ -99,5 +114,5 @@ export function lerDiagrama(texto: string): Diagrama {
     }
   }
 
-  return { objetos, caixas, dobras };
+  return { objetos, caixas, dobras, icones };
 }

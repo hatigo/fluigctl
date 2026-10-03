@@ -1,5 +1,5 @@
 import { escaparTexto } from './xml.js';
-import type { Caixa, Diagrama, ObjetoBpmn, Ponto } from './modelo.js';
+import type { Caixa, Diagrama, Icone, ObjetoBpmn, Ponto } from './modelo.js';
 
 /**
  * Imagem do diagrama (`<processo>.processimage.svg`) que o Studio manda junto no
@@ -8,8 +8,11 @@ import type { Caixa, Diagrama, ObjetoBpmn, Ponto } from './modelo.js';
  *
  * O visualizador do Fluig (`/webdesk/svgviewer`) destaca a atividade atual pelo
  * `<g sequence="N">` de cada estado; rótulos e raias vão em
- * `<g componentSequence="N">`, como no SVG do Studio. O desenho é uma versão
- * simples do Studio — mesmas formas, cores e posições, sem os ícones.
+ * `<g componentSequence="N">`, como no SVG do Studio. Mesmas formas, cores e
+ * posições do Studio. As marcas de evento e de gateway repetem a geometria que o
+ * Studio desenha (relativa ao centro, medida nos `.processimage.svg` do corpus);
+ * os ícones de tarefa, que no Studio são PNGs da TOTVS, são desenhos próprios na
+ * posição do `al:Image` do `.process`.
  */
 
 const SUFIXO = /(\d+)$/;
@@ -95,6 +98,73 @@ function borda(c: Caixa, alvo: Ponto): Ponto {
   return { x: Math.round(m.x + dx * s), y: Math.round(m.y + dy * s) };
 }
 
+const pontos = (m: Ponto, rel: [number, number][]) => rel.map(([dx, dy]) => `${m.x + dx} ${m.y + dy}`).join(' ');
+const traco = (m: Ponto, [x1, y1, x2, y2]: number[]) =>
+  `<path style="fill:none; stroke-width:1; stroke:#000000;" d="M${m.x + x1!}.0 ${m.y + y1!}.0 L${m.x + x2!}.0 ${m.y + y2!}.0" />`;
+
+const SETA_LINK: [number, number][] = [[-14, -7], [1, -7], [1, -14], [16, 1], [1, 16], [1, 9], [-14, 9]];
+const TRIANGULO: [number, number][] = [[0, -11], [8, 10], [-7, 10]];
+const RAIO: [number, number][] = [[-9, 10], [-3, -10], [3, 0], [11, -10], [3, 10], [-3, 0]];
+const CRUZ: [number, number][] = [[-9, -4], [-4, -9], [1, -4], [6, -9], [11, -4], [6, 1], [11, 6], [6, 11], [1, 6], [-4, 11], [-9, 6], [-4, 1]];
+/** Ponteiros e marcas do relógio do temporizador, como o Studio (x1, y1, x2, y2 relativos ao centro). */
+const RELOGIO = [
+  [-11, 0, -5, 0], [6, 0, 12, 0], [0, -11, 0, -5], [0, 6, 0, 12], [0, 0, 8, -5], [0, 0, -6, -4],
+  [4, -7, 6, -10], [7, -4, 10, -6], [7, 4, 10, 6], [4, 7, 6, 10], [-4, 7, -6, 10], [-7, 4, -10, 6], [-4, -7, -6, -10], [-7, -4, -10, -6],
+];
+
+/** Marca dentro do evento, pelo `type` do `.process`; tipo sem marca no Studio volta vazio. */
+function marcaDoEvento(tipo: string, m: Ponto): string {
+  const cheio = (cor: string) => `style="stroke:none; fill:#${cor}"`;
+  const vazado = (cor: string) => `style="stroke:#${cor}; fill:none"`;
+  switch (tipo) {
+    case '32':
+      return `<ellipse cx="${m.x}" cy="${m.y}" rx="12" ry="12" stroke-width="1" style="stroke:#000000; fill:none" />` +
+        `<ellipse cx="${m.x}" cy="${m.y}" rx="1" ry="1" stroke-width="1" style="stroke:#000000; fill:#000000" />` +
+        RELOGIO.map((t) => traco(m, t)).join('');
+    case '36': return `<polygon points=" ${pontos(m, SETA_LINK)}" ${cheio('999900')} />`;
+    case '42': return `<polygon points=" ${pontos(m, SETA_LINK)}" ${vazado('999900')} />`;
+    case '37': return `<polygon points=" ${pontos(m, TRIANGULO)}" ${cheio('999900')} />`;
+    case '41': return `<polygon points=" ${pontos(m, TRIANGULO)}" ${vazado('999900')} />`;
+    case '43': return `<polygon points=" ${pontos(m, RAIO)}" ${vazado('999900')} />`;
+    case '64': return `<polygon points=" ${pontos(m, TRIANGULO)}" ${cheio('993333')} />`;
+    case '65': return `<polygon points=" ${pontos(m, CRUZ)}" ${cheio('993333')} />`;
+    default: return '';
+  }
+}
+
+/** Ícone de 16×16 no canto da tarefa, desenho próprio para cada `al:Image` do Studio. */
+function desenhoDoIcone(i: Icone): string {
+  const { absX: x, absY: y } = i;
+  const cor = 'stroke:#191970; fill:none; stroke-width:1';
+  switch (i.id) {
+    case 'com.totvs.tds.ecm.designer.task.service': {
+      const cx = x + 8;
+      const cy = y + 8;
+      const dentes = [0, 45, 90, 135, 180, 225, 270, 315].map((g) => {
+        const r = (g * Math.PI) / 180;
+        const p = (d: number) => `${(cx + Math.cos(r) * d).toFixed(1)} ${(cy + Math.sin(r) * d).toFixed(1)}`;
+        return `M${p(5)} L${p(7.5)}`;
+      }).join(' ');
+      return `<ellipse cx="${cx}" cy="${cy}" rx="5" ry="5" style="${cor}" /><ellipse cx="${cx}" cy="${cy}" rx="2" ry="2" style="${cor}" />` +
+        `<path d="${dentes}" style="stroke:#191970; fill:none; stroke-width:2" />`;
+    }
+    case 'com.totvs.tds.ecm.designer.task.user':
+      return `<ellipse cx="${x + 8}" cy="${y + 5}" rx="3" ry="3" style="${cor}" />` +
+        `<path d="M${x + 2} ${y + 15} Q${x + 2} ${y + 9} ${x + 8} ${y + 9} Q${x + 14} ${y + 9} ${x + 14} ${y + 15} Z" style="${cor}" />`;
+    case 'com.totvs.tds.ecm.designer.task.mail':
+      return `<rect x="${x + 1}" y="${y + 3}" width="14" height="10" style="${cor}" />` +
+        `<path d="M${x + 1} ${y + 3} L${x + 8} ${y + 9} L${x + 15} ${y + 3}" style="${cor}" />`;
+    case 'com.totvs.tds.ecm.designer.subprocess.normal':
+      return `<rect x="${x + 2}" y="${y + 2}" width="12" height="12" style="${cor}" />` +
+        `<path d="M${x + 8} ${y + 4} L${x + 8} ${y + 12} M${x + 4} ${y + 8} L${x + 12} ${y + 8}" style="${cor}" />`;
+    case 'com.totvs.tds.ecm.designer.subprocess.adhoc':
+      return `<rect x="${x + 2}" y="${y + 2}" width="12" height="12" style="${cor}" />` +
+        `<path d="M${x + 4} ${y + 9} Q${x + 6} ${y + 5} ${x + 8} ${y + 8} Q${x + 10} ${y + 11} ${x + 12} ${y + 7}" style="${cor}" />`;
+    default:
+      return '';
+  }
+}
+
 function seta(de: Ponto, para: Ponto): string {
   const dx = para.x - de.x;
   const dy = para.y - de.y;
@@ -110,6 +180,7 @@ function seta(de: Ponto, para: Ponto): string {
 
 export function gerarSvg(diagrama: Diagrama): string {
   const { objetos, caixas, dobras } = diagrama;
+  const icones = diagrama.icones ?? new Map<string, Icone[]>();
   const usados = new Set<string>();
   const partes: string[] = [];
 
@@ -147,10 +218,16 @@ export function gerarSvg(diagrama: Diagrama): string {
     if (forma === 'tarefa') {
       partes.push(`<g sequence="${seq}"><rect x="${x}" y="${y}" width="${w}" height="${h}" ry="5" rx="5" ${preenchimento} stroke="#${CONTORNO['tarefa']}" /></g>`);
       partes.push(`<g componentSequence="${seq}">${textoCentrado(m.x, y + 2, nome, w)}</g>`);
+      const desenhos = (icones.get(id) ?? []).map(desenhoDoIcone).join('');
+      if (desenhos) partes.push(`<g sequence="${seq}">${desenhos}</g>`);
     } else if (forma === 'gateway') {
       const pontos = `${x} ${m.y} ${m.x} ${y} ${x + w} ${m.y} ${m.x} ${y + h} ${x} ${m.y}`;
-      const marca = o.attrs['type'] === '120' ? '' : `<path d="M${m.x - 8} ${m.y} L${m.x + 8} ${m.y} M${m.x} ${m.y - 8} L${m.x} ${m.y + 8}" style="stroke:#000000;stroke-width:3" />`;
-      partes.push(`<g sequence="${seq}"><polygon points=" ${pontos}" ${preenchimento} stroke="#${CONTORNO['gateway']}" />${marca}</g>`);
+      partes.push(`<g sequence="${seq}"><polygon points=" ${pontos}" ${preenchimento} stroke="#${CONTORNO['gateway']}" /></g>`);
+      // Paralelo e join: o "+" grosso, fora do <g sequence>, como no Studio; o exclusivo não tem marca.
+      if (o.attrs['type'] !== '120') {
+        partes.push(`<path style="fill:none; stroke-width:6; stroke:#000000;" d="M${m.x - 10}.0 ${m.y}.0 L${m.x + 10}.0 ${m.y}.0" />` +
+          `<path style="fill:none; stroke-width:6; stroke:#000000;" d="M${m.x}.0 ${m.y - 10}.0 L${m.x}.0 ${m.y + 10}.0" />`);
+      }
       partes.push(`<g componentSequence="${seq}">${textoCentrado(m.x, y + h, nome, Math.max(w, 60))}</g>`);
     } else if (forma === 'anotacao') {
       partes.push(`<g componentSequence="${seq}"><path d="M${x + 15} ${y} L${x} ${y} L${x} ${y + h} L${x + 15} ${y + h}" style="fill:none;stroke:#000000" />` +
@@ -159,9 +236,8 @@ export function gerarSvg(diagrama: Diagrama): string {
     } else {
       const r = Math.min(w, h) / 2;
       const borda = forma === 'fim' ? 3 : 1;
-      const interno = forma === 'intermediario' ? `<ellipse cx="${m.x}" cy="${m.y}" rx="${r - 3}" ry="${r - 3}" style="fill:none" stroke="#${CONTORNO['intermediario']}" />` : '';
-      // Eventos sem rótulo, como no Studio.
-      partes.push(`<g sequence="${seq}"><ellipse cx="${m.x}" cy="${m.y}" rx="${r}" ry="${r}" stroke-width="${borda}" ${preenchimento} stroke="#${CONTORNO[forma]}" />${interno}</g>`);
+      // Eventos sem rótulo, como no Studio; a marca do tipo vai no mesmo <g sequence>.
+      partes.push(`<g sequence="${seq}"><ellipse cx="${m.x}" cy="${m.y}" rx="${r}" ry="${r}" stroke-width="${borda}" ${preenchimento} stroke="#${CONTORNO[forma]}" />${marcaDoEvento(o.attrs['type'] ?? '', { x: Math.round(m.x), y: Math.round(m.y) })}</g>`);
     }
   }
 

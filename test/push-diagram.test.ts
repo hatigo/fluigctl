@@ -1251,3 +1251,33 @@ test('subprocesso cujo processo-alvo não existe no destino é recusado com cód
   assert.equal(r.publicado, true);
   assert.deepEqual(r.subprocessos, ['teste_fluigctl_sub']);
 });
+
+test('gerarSvg desenha as marcas de evento e de gateway com a geometria do Studio', () => {
+  const svg = gerarSvg(lerDiagrama(FASE1));
+  const grupo = (seq: number) => [...svg.matchAll(new RegExp(`<g sequence="${seq}">(.*?)</g>`, 'gs'))].map((m) => m[1]).join('');
+  // Temporizador: relógio de raio 12 com ponteiros; erro anexado: o raio vazado.
+  assert.match(grupo(14), /rx="12" ry="12" stroke-width="1" style="stroke:#000000; fill:none"/);
+  assert.equal((grupo(14).match(/<path /g) ?? []).length, 14);
+  assert.match(grupo(6), /<polygon points=" [\d ]+" style="stroke:#999900; fill:none" \/>/);
+  // Sem o círculo interno que o Studio não desenha.
+  assert.equal((grupo(6).match(/<ellipse /g) ?? []).length, 1);
+  // Paralelo e join: o "+" de traço 6 fora do <g sequence>; o exclusivo, sem marca.
+  assert.equal((svg.match(/stroke-width:6/g) ?? []).length, 4);
+  assert.doesNotMatch(grupo(7), /<path /);
+});
+
+test('gerarSvg desenha o ícone da tarefa na posição do al:Image do .process', () => {
+  const comIcone = FASE1.replace(
+    '<link businessObjects="servicetask5"/>',
+    '<link businessObjects="servicetask5"/>\n      <children visible="true"><graphicsAlgorithm xsi:type="al:Image" width="16" height="16" x="5" y="5" ' +
+      'id="com.totvs.tds.ecm.designer.task.service"/></children>',
+  );
+  assert.notEqual(comIcone, FASE1);
+  const d = lerDiagrama(comIcone);
+  assert.deepEqual(d.icones.get('servicetask5'), [{ id: 'com.totvs.tds.ecm.designer.task.service', absX: 125, absY: 55 }]);
+  const svg = gerarSvg(d);
+  assert.match(svg, /<g sequence="5"><ellipse cx="133" cy="63" rx="5" ry="5"/);
+  assert.ok(lerXml(svg.replace(/^<\?xml[^>]*>\n/, '')), 'segue XML válido');
+  // Sem al:Image, nenhum ícone.
+  assert.doesNotMatch(gerarSvg(lerDiagrama(FASE1)), /<g sequence="5"><ellipse cx="133"/);
+});
