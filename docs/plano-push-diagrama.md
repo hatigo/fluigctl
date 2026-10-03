@@ -521,7 +521,8 @@ Aprovação (usuário) → Registrar aprovação (tarefa de serviço, com erro a
 no campo `aprovado` (`sim` → fim; senão → Aprovação). Atribuição de todas as
 tarefas: Usuário Integracao.Fluig. O script `teste_fluigctl.servicetask24.js`
 anota no campo `descricao` que rodou. Fontes em `~/projetos/teste-fluigctl` (o
-desenho anterior ficou em `workflow/diagrams-anterior/`).
+desenho anterior ficou em `~/projetos/teste-fluigctl-anterior/`, fora do projeto, para o Studio
+não ver dois `.process` com o mesmo id).
 
 - HML: versão 18 liberada sem erro de atividade nem de fluxo. Solicitação 689:
   Aprovação → serviço (rodou na hora; `descricao` ganhou "[servico ok, tentativa
