@@ -7,8 +7,12 @@ export interface WorkflowEngineClient {
   /** Definição corrente do processo, nos bytes ISO-8859-1 que o servidor guarda. */
   exportProcess(processId: string): Promise<Buffer>;
   createVersion(processId: string): Promise<void>;
-  /** `novo`: cria o processo (newProcess, sem overWrite), como o fluig-cd; senão sobrescreve a versão em edição. */
-  importProcess(processId: string, xml: Buffer, novo?: boolean): Promise<string>;
+  /**
+   * `novo`: cria o processo (newProcess, sem overWrite), como o fluig-cd; senão sobrescreve a versão em edição.
+   * `imagem`: o `<nome>.processimage.svg` que o Studio manda junto (principal false, attach true);
+   * sem ele, a versão fica sem imagem e a tela do processo não mostra o fluxo.
+   */
+  importProcess(processId: string, xml: Buffer, novo?: boolean, imagem?: { nome: string; svg: Buffer }): Promise<string>;
   releaseProcess(processId: string): Promise<{ ok: boolean; mensagem: string }>;
 }
 
@@ -56,20 +60,28 @@ export async function workflowEngineClient(
       await invoke(cliente, 'createWorkFlowProcessVersion', { ...credencial, processId });
     },
 
-    async importProcess(processId: string, xml: Buffer, novo = false): Promise<string> {
+    async importProcess(processId: string, xml: Buffer, novo = false, imagem?: { nome: string; svg: Buffer }): Promise<string> {
+      const anexos: Record<string, unknown>[] = [
+        {
+          fileName: `${processId}.xml`,
+          fileSize: xml.length,
+          filecontent: xml.toString('base64'),
+          principal: true,
+        },
+      ];
+      if (imagem) {
+        anexos.push({
+          attach: true,
+          fileName: imagem.nome,
+          fileSize: imagem.svg.length,
+          filecontent: imagem.svg.toString('base64'),
+          principal: false,
+        });
+      }
       const r = await invoke<{ result?: string }>(cliente, 'importProcess', {
         ...credencial,
         processId,
-        attachments: {
-          item: [
-            {
-              fileName: `${processId}.xml`,
-              fileSize: xml.length,
-              filecontent: xml.toString('base64'),
-              principal: true,
-            },
-          ],
-        },
+        attachments: { item: anexos },
         newProcess: novo,
         overWrite: !novo,
         colleagueId,

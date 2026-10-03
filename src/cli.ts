@@ -590,6 +590,7 @@ async function pushDiagramCli(argv: string[]): Promise<void> {
   console.log(`  condições            ${c.condicoes}`);
   console.log(`  anotações            ${c.anotacoes}`);
   console.log(`  scripts              ${c.eventos}`);
+  console.log(`  imagem               ${r.imagem.nome} (${r.imagem.origem === 'studio' ? 'do Studio' : 'gerada'}, ${r.imagem.bytes} bytes)`);
   for (const aviso of r.avisos) console.log(`aviso: ${aviso}`);
   if (values['save-xml']) console.log(`XML gravado em ${values['save-xml']}.`);
   if (values['dry-run']) {

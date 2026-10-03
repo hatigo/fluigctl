@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 299 | não | não | — |
+| Testes automatizados | 301 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -360,6 +360,14 @@ vem da definição atual no servidor. Num processo existente: nova versão, impo
 e liberação, como o `push process`; `--no-release` deixa a versão em edição.
 Produção passa pela mesma trava de senha no terminal.
 
+A imagem do diagrama vai junto, como o Studio faz (`<nome>.processimage.svg`,
+anexo não principal): sem ela a tela do processo mostra "Não foi possível exibir
+o fluxo do processo". Vai o `.processimage.svg` do Studio em
+`workflow/.resources` quando ele desenha exatamente os estados do `.process`;
+senão, uma imagem gerada da geometria do `.process`, no mesmo formato (o
+visualizador destaca a atividade atual pelo `<g sequence>` de cada estado). O
+dry-run diz qual vai.
+
 Conferido no HML da Cetenco com um processo descartável (`teste_fluigctl`):
 criado, liberado, uma solicitação passando pela tarefa e pelo gateway até o fim,
 e republicado como versão 2 com outra solicitação de ponta a ponta.
@@ -427,7 +435,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 299 testes, sem rede e sem servidor Fluig
+npm test        # 301 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

@@ -430,6 +430,19 @@ expressões → fim, sem formulário, categoria Backoffice):
 
 O `teste_fluigctl` fica no HML para os próximos testes.
 
+**Imagem do diagrama (03/10/2026).** Aberto no portal, o processo mostrava
+"Não foi possível exibir o fluxo do processo": o visualizador busca
+`/webdesk/svgviewer?processId=…&version=…&currentSequences=…`, e sem imagem o
+servidor devolve o `DefaultDiagram.svg`. O Studio manda a imagem no mesmo
+`importProcess`, como segundo anexo (`<nome>.processimage.svg`,
+`principal=false`, `attach=true`, linhas juntadas com "\n" em UTF-8 —
+`WSMethods.exportProcess` decompilado no fluig-agentic-development). Agora o
+push manda o SVG do Studio quando ele desenha os mesmos `<g sequence>` do
+`.process`, ou um gerado da geometria (mesmas formas, cores e posições; o
+losango do gateway é o quadrado do topo da caixa, eventos sem rótulo). Versão 3
+do `teste_fluigctl` publicada com a imagem gerada: o svgviewer devolve os
+estados 4, 5, 7 e 8 e destaca a atividade atual.
+
 ## Decisões (30/09/2026)
 
 "Fazer como o fluig-cd faz."

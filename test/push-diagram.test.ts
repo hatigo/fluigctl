@@ -14,6 +14,8 @@ import type { Server } from '../src/config.js';
 import { ErroFluigctl } from '../src/errors.js';
 import { converterDiagrama } from '../src/push/diagram/ecm30.js';
 import { lerXml, type No } from '../src/push/diagram/xml.js';
+import { gerarSvg, sequenciasDoSvg } from '../src/push/diagram/svg.js';
+import { lerDiagrama } from '../src/push/diagram/modelo.js';
 
 const FIXTURES = fileURLToPath(new URL('./fixtures/diagrams/', import.meta.url));
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
@@ -550,7 +552,8 @@ test('dry-run lê os scripts de workflow/scripts ao lado de workflow/diagrams; s
     filhosDaRaiz(comPasta.xml)[6]!.filhos.map((e) => texto(e, 'workflowProcessEventPK', 'eventId')),
     ['servicetask5'],
   );
-  assert.deepEqual(comPasta.avisos, []);
+  // Sem o .processimage.svg do Studio ao lado, a imagem é gerada — o único aviso que sobra.
+  assert.deepEqual(comPasta.avisos.filter((a) => !/processimage\.svg/.test(a)), []);
 });
 
 test('regra ou condição que geraria campo inválido ou PK repetida é recusada com código 6', () => {
@@ -1001,4 +1004,50 @@ test('em produção, senha digitada errada não escreve nada', async () => {
 test('bpmnVersionDe lê a PDV do export; ilegível vira undefined', () => {
   assert.equal(bpmnVersionDe(Buffer.from('<list><a/><ProcessDefinitionVersion><bpmnVersion>2</bpmnVersion></ProcessDefinitionVersion></list>')), 2);
   assert.equal(bpmnVersionDe(Buffer.from('não é xml <')), undefined);
+});
+
+
+/* ============================ Imagem do diagrama ============================ */
+
+test('gerarSvg desenha cada estado num <g sequence>, as raias e os fluxos com seta, e é XML válido', () => {
+  const svg = gerarSvg(lerDiagrama(PROCESSO));
+  assert.doesNotThrow(() => lerXml(svg));
+  assert.deepEqual([...sequenciasDoSvg(svg)].sort((a, b) => a - b), [4, 5, 6, 7]);
+  assert.match(svg, /<g componentSequence="3"><text[^>]*rotate\(270\)[^>]*><tspan[^>]*>Aprovação<\/tspan>/);
+  assert.equal((svg.match(/<path style="fill:none; stroke:#000000/g) ?? []).length, 3, 'um path por fluxo');
+  assert.equal((svg.match(/<polygon style="fill:#000000/g) ?? []).length, 3, 'uma seta por fluxo');
+});
+
+/** Monta workflow/diagrams + workflow/.resources numa pasta temporária. */
+function projeto(svgDoStudio?: string): string {
+  const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-svg-'));
+  mkdirSync(join(raiz, 'workflow', 'diagrams'), { recursive: true });
+  mkdirSync(join(raiz, 'workflow', 'scripts'));
+  writeFileSync(join(raiz, 'workflow', 'scripts', 'processoTeste.afterProcessCreate.js'), 'function afterProcessCreate() {}');
+  const arquivo = join(raiz, 'workflow', 'diagrams', 'processoTeste.process');
+  writeFileSync(arquivo, PROCESSO, 'latin1');
+  if (svgDoStudio !== undefined) {
+    mkdirSync(join(raiz, 'workflow', '.resources'));
+    writeFileSync(join(raiz, 'workflow', '.resources', 'processoTeste.processimage.svg'), svgDoStudio);
+  }
+  return arquivo;
+}
+
+test('o .processimage.svg do Studio vai no import quando desenha os mesmos estados; senão, vai um gerado', async () => {
+  const doStudio = '<?xml version="1.0"?>\r\n<svg><g sequence="4"/><g sequence="5"/><g sequence="6"/><g sequence="7"/><!-- studio --></svg>';
+  const capturadas: { nome: string; svg: Buffer }[] = [];
+  const s = servidorDeTeste();
+  const importar = s.cliente.importProcess;
+  s.cliente.importProcess = async (id, xml, novo, imagem) => { if (imagem) capturadas.push(imagem); return importar(id, xml, novo); };
+
+  const r1 = await pushDiagram({ server: SERVER, arquivo: projeto(doStudio), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios });
+  assert.equal(r1.imagem.origem, 'studio');
+  assert.equal(capturadas[0]!.nome, 'processoTeste.processimage.svg');
+  assert.equal(capturadas[0]!.svg.toString('utf8'), doStudio.replace('\r\n', '\n'), 'linhas com \\n, como o Studio manda');
+
+  const deOutraVersao = doStudio.replace('<g sequence="7"/>', '');
+  const r2 = await pushDiagram({ server: SERVER, arquivo: projeto(deOutraVersao), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios });
+  assert.equal(r2.imagem.origem, 'gerada');
+  assert.match(r2.avisos.join('\n'), /não desenha os mesmos estados/);
+  assert.deepEqual([...sequenciasDoSvg(capturadas[1]!.svg.toString('utf8'))].sort((a, b) => a - b), [4, 5, 6, 7]);
 });

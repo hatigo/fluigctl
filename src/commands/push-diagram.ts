@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { basename, dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 import { serverUrl, type Server } from '../config.js';
 import { ErroFluigctl } from '../errors.js';
@@ -8,6 +8,7 @@ import { workflowEngineClient, type WorkflowEngineClient } from '../fluig/workfl
 import { confirmProduction, type PromptSenha } from '../guard.js';
 import { gerarEcm30, type ResultadoConversao } from '../push/diagram/ecm30.js';
 import { lerDiagrama, type Diagrama } from '../push/diagram/modelo.js';
+import { gerarSvg, sequenciasDoSvg } from '../push/diagram/svg.js';
 import { lerXml } from '../push/diagram/xml.js';
 import { semDeclaracaoXml } from '../push/process-events.js';
 import { lerScriptsDoProcesso } from '../push/process-source.js';
@@ -49,6 +50,8 @@ export interface OpcoesPushDiagram {
 }
 
 export interface ResultadoPushDiagram extends ResultadoConversao {
+  /** De onde veio a imagem do diagrama que vai (ou iria) no import. */
+  imagem: { origem: 'studio' | 'gerada'; nome: string; bytes: number };
   publicado: boolean;
   criado: boolean;
   liberado: boolean | null;
@@ -113,6 +116,37 @@ export function resolverFormId(cardIndex: string, catalogo: readonly FormNoServi
   return porNome[0]!.documentId;
 }
 
+/**
+ * A imagem do diagrama que vai no import. O `.processimage.svg` do Studio ao lado
+ * (`workflow/.resources/<nome>.processimage.svg`) é o melhor desenho, mas só vale
+ * se desenha exatamente os estados do `.process` — senão é de outra versão do
+ * diagrama e mostraria o fluxo antigo. Fora isso, gera uma a partir da geometria.
+ * O conteúdo vai como o Studio manda: linhas juntadas com "\n", em UTF-8.
+ */
+async function imagemDoDiagrama(arquivo: string, diagrama: Diagrama, avisos: string[]): Promise<{
+  origem: 'studio' | 'gerada';
+  nome: string;
+  svg: Buffer;
+}> {
+  const base = basename(arquivo, '.process');
+  const nome = `${base}.processimage.svg`;
+  const gerada = gerarSvg(diagrama);
+  const doStudio = await readFile(join(dirname(dirname(arquivo)), '.resources', nome), 'utf8').catch(() => undefined);
+  if (doStudio !== undefined) {
+    const esperado = sequenciasDoSvg(gerada);
+    const desenhado = sequenciasDoSvg(doStudio);
+    if (esperado.size === desenhado.size && [...esperado].every((n) => desenhado.has(n))) {
+      return { origem: 'studio', nome, svg: Buffer.from(doStudio.split(/\r?\n/).join('\n'), 'utf8') };
+    }
+    avisos.push(`${nome} do Studio não desenha os mesmos estados do .process (é de outra versão); vai uma imagem gerada`);
+  } else {
+    avisos.push(`sem ${nome} do Studio em workflow/.resources; vai uma imagem gerada a partir do .process`);
+  }
+  return { origem: 'gerada', nome, svg: Buffer.from(gerada, 'utf8') };
+}
+
+const resumo = (i: { origem: 'studio' | 'gerada'; nome: string; svg: Buffer }) => ({ origem: i.origem, nome: i.nome, bytes: i.svg.length });
+
 /** `bpmnVersion` da definição atual do processo no servidor. */
 export function bpmnVersionDe(exportado: Buffer): number | undefined {
   try {
@@ -149,8 +183,9 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
 
   if (opcoes.dryRun) {
     if (avisoScripts) previa.avisos.push(avisoScripts);
+    const imagem = await imagemDoDiagrama(opcoes.arquivo, diagrama, previa.avisos);
     if (opcoes.salvarXml) await writeFile(opcoes.salvarXml, previa.xml, 'utf8');
-    return { ...previa, publicado: false, criado: false, liberado: null };
+    return { ...previa, imagem: resumo(imagem), publicado: false, criado: false, liberado: null };
   }
 
   if (!opcoes.senha || !opcoes.prompt) {
@@ -186,6 +221,7 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
     r.avisos.push('não consegui ler o bpmnVersion da definição atual no servidor; vai o padrão, 2');
   }
   if (opcoes.salvarXml) await writeFile(opcoes.salvarXml, r.xml, 'utf8');
+  const imagem = await imagemDoDiagrama(opcoes.arquivo, diagrama, r.avisos);
 
   await confirmProduction(
     opcoes.server,
@@ -197,7 +233,7 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
   // O import lê UTF-8 (ver push-process: bytes latin1 viraram "?" nos acentos).
   const definicao = Buffer.from(semDeclaracaoXml(r.xml), 'utf8');
   if (existe) await cliente.createVersion(processId);
-  const mensagemImport = await cliente.importProcess(processId, definicao, !existe);
+  const mensagemImport = await cliente.importProcess(processId, definicao, !existe, { nome: imagem.nome, svg: imagem.svg });
   if (!/sucesso/i.test(mensagemImport)) {
     throw new ErroFluigctl(
       `o servidor não confirmou o import do processo "${processId}": ${mensagemImport || 'resposta vazia'}.` +
@@ -206,7 +242,7 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
     );
   }
 
-  const base = { ...r, publicado: true, criado: !existe, mensagemImport };
+  const base = { ...r, imagem: resumo(imagem), publicado: true, criado: !existe, mensagemImport };
   if (opcoes.liberar === false) return { ...base, liberado: null };
 
   const liberacao = await cliente.releaseProcess(processId);
