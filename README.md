@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 317 | não | não | — |
+| Testes automatizados | 320 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -65,7 +65,7 @@ e layout.
 | `push form` | pronto |
 | `push widget` | pronto (widgets sem Java) |
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
-| `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 438 de 475 diagramas reais convertem |
+| `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 444 de 475 diagramas reais convertem |
 
 Fora de escopo por enquanto: `pull`, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
@@ -517,7 +517,8 @@ mapeamento de campos, gateways exclusivo/paralelo/join com condições e
 atribuição por caminho, eventos intermediários (temporizador, condicional,
 sinal, erro anexado, link), fim, anotação, fluxo de sequência, bendpoints,
 campos descritores, configuração de app, regras e segurança de anexos,
-propriedades estendidas do processo, esforço previsto e as atribuições Grupo,
+propriedades estendidas do processo, esforço previsto, os artefatos de
+documentação (grupo, banco de dados e documento) e as atribuições Grupo,
 Papel, Usuário, Campo, Executor, Grupos Colaborador, Custom e Associado. O que
 não foi conferido — subprocesso ad hoc (101), tarefa de e-mail, banco de dados,
 `BpmnGroup`, entre outros — é recusado com código 6, listando o que falta; nunca
@@ -584,7 +585,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 317 testes, sem rede e sem servidor Fluig
+npm test        # 320 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

@@ -565,6 +565,33 @@ nome segue recusado. O `push process` não muda: ele recebe o id do processo.
   sobram são dos `solicitacao-pessoal` (id de processo vazio e um terceiro nome
   no script), também recusados pelo `appsConfiguration` na tarefa 81.
 
+**Estado (03/10/2026, 16º corte — falta conferir no HML).** Entram os artefatos de
+documentação do Studio, pela regra do `BPMN2ECM30ExportMarshaller` decompilado;
+nenhum dos 7 `.process` que os usam tem par.
+
+- `BpmnGroup` (2 arquivos) → `SwimLane` de tipo 3, na numeração das raias (ordem
+  do arquivo, junto com pool e lanes), sem raia-mãe e com cor vazia
+  (`BpmnGroup.getColor` devolve "").
+- `BpmnDocument` (1) → `ProcessComponGraf` com `componType` 2 e o `documentId` do
+  GED no `stateName`; o fluxo que sai dele vira `ProcessLinkAssoc`, como o da
+  anotação.
+- `BpmnDatabase` (4) → `ProcessComponGraf` com `componType` 3 e o nome. O fluxo
+  entre um estado e o banco (nos dois sentidos, como nos `.process`) é um
+  `ProcessLink` comum, apontando para o sequence do banco — o Studio só tira dos
+  links o que sai de anotação ou documento.
+- Recusa: fluxo chegando em documento, documento sem `documentId` numérico,
+  atributo fora dos vistos, sequence de artefato igual ao de um estado.
+- Imagem gerada: grupo tracejado, banco como cilindro, documento como folha, em
+  `<g componentSequence>`.
+- Corrigida a cor de raia sem `cores`: o EMF não grava no `.process` o valor igual
+  ao padrão do modelo, então ausente é o padrão — `9fc1c6` na lane (o único caso
+  nos pares grava assim; era a divergência de "cor de lane" registrada no
+  terceiro corte) e `B9E9FE` no pool (sem caso no corpus). Antes saía `FFFFFF`.
+- 444/475 `.process` convertem sem recusa (eram 438); gabaritos seguem 67/71.
+- Pendente: publicar no HML um processo com os três artefatos e conferir import,
+  liberação e export — em especial o `ProcessLink` para o banco de dados, que
+  aponta para algo que não é estado.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
