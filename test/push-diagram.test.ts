@@ -1155,3 +1155,13 @@ test('subprocesso sem os booleanos sai com false; formMaps vira SubProcessFieldR
     ['1', 'teste_fluigctl', '12', '1', 'teste_fluigctl_sub', 'descricao', 'descricao', '0'],
   ]);
 });
+
+test('caminho de gateway com mechanism vazio e sem configuração leva só engineAllocationId vazio', () => {
+  const vazio = FASE1.replace('&lt;targetTask>task8&lt;/targetTask>', '&lt;targetTask>task8&lt;/targetTask>&#xA;    &lt;mechanism>&lt;/mechanism>');
+  assert.notEqual(vazio, FASE1);
+  const condicoes = filhosDaRaiz(converterDiagrama(vazio, { companyId: 1 }).xml)[3]!.filhos;
+  const comVazio = condicoes.filter((c) => c.filhos.some((f) => f.nome === 'engineAllocationId'));
+  assert.equal(comVazio.length, 1);
+  assert.equal(texto(comVazio[0]!, 'engineAllocationId'), '');
+  assert.equal(texto(comVazio[0]!, 'engineAllocationConfiguration'), '<ausente>');
+});

@@ -1121,7 +1121,14 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
        * viram os campos de atribuição da condição, no formato do estado (6/6 nos pares).
        */
       const configuracao = filhos(c, CONFIGURACAO_DO_CAMINHO);
-      if (campos.has('mechanism') || configuracao.length > 0) {
+      if (campos.get('mechanism') === '' && configuracao.length === 0) {
+        /*
+         * Caminho sem atribuição: o Studio copia o `mechanism` vazio e a
+         * configuração nula some, como na tarefa com mecanismo vazio (87
+         * condições nos `.process`, nenhuma em par; conferido no HML).
+         */
+        condicao.push(['engineAllocationId', '']);
+      } else if (campos.has('mechanism') || configuracao.length > 0) {
         const mecanismo = campos.get('mechanism') ?? '';
         const cf = configuracao.length === 1 ? folhas(configuracao[0]!) : undefined;
         const classe = (configuracao[0]?.attrs['class'] ?? '').replace(/^.*\./, '');

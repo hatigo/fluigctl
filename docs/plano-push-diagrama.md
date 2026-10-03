@@ -432,6 +432,17 @@ corte aprendido pelo servidor e não por par.
 - 396/475 `.process` convertem sem recusa (eram 384); gabaritos seguem 68/72. O
   ad hoc (101, 7 arquivos, todos com outra recusa junto) segue recusado.
 
+**Estado (03/10/2026, décimo corte).** Caminho de gateway com
+`<mechanism></mechanism>` vazio e sem `mecanismoAtribuicaoConfiguracao` (87
+condições nos `.process`, nenhuma em par; nos ecm30 só há condição sem os campos,
+619, ou com mecanismo e configuração, 16) leva só `engineAllocationId` vazio. O
+Studio copia `getMechanism()` e a configuração nula some, como na tarefa com
+mecanismo vazio, que tem par. HML: versão 8 do `teste_fluigctl` com o caminho 1
+do gateway assim, liberada; solicitação 682 passou pelo subprocesso (filha 683)
+e pelo caminho até o fim, finalizada.
+
+- 412/475 `.process` convertem sem recusa (eram 396); gabaritos seguem 68/72.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
