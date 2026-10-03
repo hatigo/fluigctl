@@ -82,7 +82,8 @@ async function lerConvertivel(opcoes: OpcoesPushDiagram): Promise<{
     semScripts = `${opcoes.arquivo} não está em workflow/diagrams/, então não há onde procurar os scripts`;
   } else {
     try {
-      scripts = await lerScriptsDoProcesso(dirname(dirname(opcoes.arquivo)), processId);
+      // Como o Studio: o prefixo dos scripts é o nome do arquivo, não o id do processo.
+      scripts = await lerScriptsDoProcesso(dirname(dirname(opcoes.arquivo)), basename(opcoes.arquivo, '.process'));
     } catch (erro) {
       if (!(erro instanceof ErroFluigctl) || erro.codigo !== 3) throw erro;
       semScripts = erro.message;
@@ -221,7 +222,11 @@ export function bpmnVersionDe(exportado: Buffer): number | undefined {
  */
 export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoPushDiagram> {
   const { diagrama, processId, scripts, semScripts } = await lerConvertivel(opcoes);
-  const comum = { companyId: opcoes.server.companyId, ...(scripts ? { scripts } : {}) };
+  const comum = {
+    companyId: opcoes.server.companyId,
+    nomeDoArquivo: basename(opcoes.arquivo, '.process'),
+    ...(scripts ? { scripts } : {}),
+  };
 
   // Sempre converte offline primeiro: um diagrama que não converte nem abre sessão.
   const previa = gerarEcm30(diagrama, comum);

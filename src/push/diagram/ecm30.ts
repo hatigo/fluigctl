@@ -41,6 +41,13 @@ export interface OpcoesConversao {
    */
   scripts?: Map<string, string>;
   /**
+   * Nome do arquivo `.process`, sem a extensão. É o prefixo que o Studio usa nos
+   * scripts (`ProjectUtils.getScriptFiles`: `<arquivo>.<eventId>.js`) e no
+   * `scriptFileName`, não o id do processo — os dois divergem quando o processo
+   * foi renomeado depois de criado. Sem ele, vale o id do processo.
+   */
+  nomeDoArquivo?: string;
+  /**
    * `bpmnVersion` da PDV. Não está no `.process`: é do processo no servidor (1 em
    * 9 pares do fluigproduza, 2 nos outros 100). O push o lê da definição atual do
    * destino; sem ele, vale 2.
@@ -1065,9 +1072,11 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     for (const anexo of (a['attachedEvents'] ?? '').split(' ').filter(Boolean)) {
       if (nos.get(anexo)?.attrs['parentTask'] !== a['id']) recusar(`evento anexado ${anexo} em ${a['id']} não aponta de volta`);
     }
-    // O código vem de workflow/scripts/<processId>.<id>.js; outro nome é script de outro processo.
+    // O código vem de workflow/scripts/<arquivo>.<id>.js (o prefixo do Studio); o id do
+    // processo também vale. Outro nome é script de outro processo.
     const script = a['scriptFileName'];
-    if (script !== undefined && script !== '' && script !== `${processId}.${a['id']}.js`) {
+    const aceitos = [opcoes.nomeDoArquivo ?? processId, processId].map((prefixo) => `${prefixo}.${a['id']}.js`);
+    if (script !== undefined && script !== '' && !aceitos.includes(script)) {
       recusar(`scriptFileName "${script}" em ${a['id']}`);
     }
     if (a['frequencyType'] !== undefined && !/^\d+$/.test(a['frequencyType'])) recusar(`frequencyType em ${a['id']}`);

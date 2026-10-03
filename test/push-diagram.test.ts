@@ -1326,3 +1326,32 @@ test('push com volume ou expediente que não existe no destino recusa antes de c
   assert.equal(await codigoDe(publicar(semExpediente, { criar: false })), 6);
   assert.ok(!semExpediente.chamadas.includes('createVersion') && !semExpediente.chamadas.includes('import'));
 });
+
+/*
+ * Processo renomeado depois de criado: o id muda dentro do .process, mas o
+ * arquivo, os scripts e o scriptFileName seguem com o nome antigo. O Studio usa
+ * o nome do arquivo (ProjectUtils.getScriptFiles), e no corpus isso fez 4
+ * scripts a mais baterem com o ecm30 exportado.
+ */
+test('scripts e scriptFileName seguem o nome do arquivo .process, como o Studio, e não o id do processo', async () => {
+  const workflow = join(mkdtempSync(join(tmpdir(), 'fluigctl-renomeado-')), 'workflow');
+  mkdirSync(join(workflow, 'diagrams'), { recursive: true });
+  mkdirSync(join(workflow, 'scripts'));
+  const antigo = FASE1.replace('scriptFileName="processoFase1.servicetask5.js"', 'scriptFileName="nomeAntigo.servicetask5.js"');
+  assert.notEqual(antigo, FASE1);
+  const arquivo = join(workflow, 'diagrams', 'nomeAntigo.process');
+  writeFileSync(arquivo, antigo, 'latin1');
+  writeFileSync(join(workflow, 'scripts', 'nomeAntigo.servicetask5.js'), 'function servicetask5() {}\n');
+  // Com o prefixo do id do processo, o Studio não o incluiria.
+  writeFileSync(join(workflow, 'scripts', 'processoFase1.beforeStateEntry.js'), 'function beforeStateEntry() {}\n');
+
+  const r = await pushDiagram({ server: SERVER, arquivo, dryRun: true });
+  assert.equal(r.processId, 'processoFase1');
+  assert.deepEqual(filhosDaRaiz(r.xml)[6]!.filhos.map((e) => texto(e, 'workflowProcessEventPK', 'eventId')), ['servicetask5']);
+
+  // Na conversão direta: o nome do arquivo e o id do processo valem; um terceiro nome segue recusado.
+  converterDiagrama(antigo, { companyId: 1, nomeDoArquivo: 'nomeAntigo' });
+  converterDiagrama(FASE1, { companyId: 1, nomeDoArquivo: 'nomeAntigo' });
+  const erro = erroDe(() => converterDiagrama(antigo, { companyId: 1, nomeDoArquivo: 'outroNome' }));
+  assert.match(erro.message, /scriptFileName "nomeAntigo.servicetask5.js" em servicetask5/);
+});

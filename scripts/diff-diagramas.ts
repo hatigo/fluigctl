@@ -218,7 +218,7 @@ const iguais = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].e
 
 async function scriptsDoPar(par: Par, processId: string): Promise<Map<string, string>> {
   try {
-    return await lerScriptsDoProcesso(join(par.processo, '..', '..'), processId);
+    return await lerScriptsDoProcesso(join(par.processo, '..', '..'), basename(par.processo, '.process'));
   } catch {
     return new Map();
   }
@@ -275,7 +275,8 @@ async function main(argv: string[]): Promise<void> {
       // bpmnVersion é do processo no destino, não do .process: vem do ecm30, como no push virá do servidor.
       const bpmnVersion = Number(campo(sPDV, 'bpmnVersion')) || undefined;
       const r = gerarEcm30(diagrama, {
-        companyId, parcial: true, scripts: locais, ...(formId === undefined ? {} : { formId }),
+        companyId, parcial: true, scripts: locais, nomeDoArquivo: basename(par.processo, '.process'),
+        ...(formId === undefined ? {} : { formId }),
         ...(bpmnVersion === undefined ? {} : { bpmnVersion }),
       });
       gerado = lerXml(r.xml).filhos[0]!.filhos;
