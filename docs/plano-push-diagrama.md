@@ -412,6 +412,26 @@ corte aprendido pelo servidor e não por par.
   inteiros seguem 68/72.
 - 384/475 `.process` convertem sem recusa (eram 369).
 
+**Estado (03/10/2026, nono corte).** Subprocesso (100) sem `transferAttachments`,
+`sendToNextTaskInSubProcess` ou `cancelSubProcess` passa a sair com `false`.
+
+- Regra do modelo do Studio: `BpmnSubProcess.eIsSet` (decompilado) só grava os
+  três quando são `true`, e nos 40 subprocessos dos `.process` nenhum vem
+  `"false"` — o mesmo que o conversor já fazia com o `cancelSubProcess`. Valor
+  fora de `true`/`false` recusa.
+- HML: processo descartável novo `teste_fluigctl_sub` (cópia do `teste_fluigctl`)
+  e versão 7 do `teste_fluigctl` com início → tarefa → subprocesso → gateway →
+  fim, sem os três booleanos e com um `formMaps` (`descricao` → `descricao`,
+  `mapFlow` 0). Liberada com `subProcessError=[]`. Solicitação 680: ao sair da
+  tarefa abriu a 681 no `teste_fluigctl_sub`, parada no início (efeito de
+  `sendToNextTaskInSubProcess` false) e sem o campo; movida até o fim, devolveu
+  "valor da filha" à 680, que seguiu do subprocesso para o gateway e o fim.
+  `mapFlow` 0 é o `IN` do `BpmnProcessFormMap` (1 = `BOTH`, 2 = `OUT`): a volta
+  da filha para a mãe.
+- A variante é o fixture `test/fixtures/diagrams/subprocessoTeste.process`.
+- 396/475 `.process` convertem sem recusa (eram 384); gabaritos seguem 68/72. O
+  ad hoc (101, 7 arquivos, todos com outra recusa junto) segue recusado.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

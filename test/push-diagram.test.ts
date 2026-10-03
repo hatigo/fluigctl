@@ -159,15 +159,15 @@ test('elemento não suportado é recusado com código 6, listando o tipo', () =>
   assert.match(erro.message, /BpmnSubProcess \(type 101\)/);
 });
 
-test('subprocesso (100) sem os atributos que o ecm30 exige é recusado listando cada um', () => {
+test('subprocesso (100) sem process é recusado; booleano fora de true/false também', () => {
   const incompleto = PROCESSO.replace(
     '<bpmn2:BpmnEndEvent',
-    '<bpmn2:BpmnSubProcess id="subprocess12" name="Filho" type="100"/>\n  <bpmn2:BpmnEndEvent',
+    '<bpmn2:BpmnSubProcess id="subprocess12" name="Filho" type="100" transferAttachments="sim"/>\n  <bpmn2:BpmnEndEvent',
   );
   const erro = erroDe(() => converterDiagrama(incompleto, { companyId: 1 }));
   assert.equal(erro.codigo, 6);
   assert.match(erro.message, /subprocess12 sem process/);
-  assert.match(erro.message, /sem transferAttachments/);
+  assert.match(erro.message, /transferAttachments="sim" em subprocess12/);
 });
 
 test('atribuição que não foi conferida contra o Studio é recusada com código 6', () => {
@@ -1132,4 +1132,26 @@ test('segurança de anexos fora da forma vista nos .process é recusada com cód
     assert.equal(erro.codigo, 6, String(motivo));
     assert.match(erro.message, motivo);
   }
+});
+
+/*
+ * O teste_fluigctl com um subprocesso (100) para teste_fluigctl_sub, publicado
+ * como versão 7 no HML da Cetenco (03/10/2026). O subprocesso não traz
+ * transferAttachments, sendToNextTaskInSubProcess nem cancelSubProcess: o
+ * Studio só grava esses booleanos quando são true. Na solicitação 680 a filha
+ * (681) nasceu parada no início — sendToNextTaskInSubProcess false — e, ao
+ * terminar, devolveu o campo à mãe pelo formMaps com mapFlow 0 (IN).
+ */
+test('subprocesso sem os booleanos sai com false; formMaps vira SubProcessFieldRelationship', () => {
+  const r = converterDiagrama(readFileSync(join(FIXTURES, 'subprocessoTeste.process'), 'latin1'), { companyId: 1 });
+  const filhos = filhosDaRaiz(r.xml);
+  const sub = filhos[2]!.filhos.find((e) => texto(e, 'stateType') === '2')!;
+  assert.equal(texto(sub, 'processStatePK', 'sequence'), '12');
+  assert.equal(texto(sub, 'subProcessId'), 'teste_fluigctl_sub');
+  for (const campo of ['transferAttachments', 'sendToNextTaskInSubProcess', 'cancelSubProcess']) {
+    assert.equal(texto(sub, campo), 'false', campo);
+  }
+  assert.deepEqual(filhos[16]!.filhos.map((e) => e.filhos.map((f) => f.texto)), [
+    ['1', 'teste_fluigctl', '12', '1', 'teste_fluigctl_sub', 'descricao', 'descricao', '0'],
+  ]);
 });

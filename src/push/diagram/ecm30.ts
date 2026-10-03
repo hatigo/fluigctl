@@ -952,11 +952,15 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     const a = o.attrs;
     const id = a['id'] ?? '';
     if (!a['process']) recusar(`subprocesso ${id} sem process`);
-    for (const atributo of ['transferAttachments', 'sendToNextTaskInSubProcess']) {
-      if (a[atributo] !== 'true' && a[atributo] !== 'false') recusar(`subprocesso ${id} sem ${atributo} (true/false)`);
-    }
-    if (a['cancelSubProcess'] !== undefined && a['cancelSubProcess'] !== 'true' && a['cancelSubProcess'] !== 'false') {
-      recusar(`cancelSubProcess="${a['cancelSubProcess']}" em ${id}`);
+    /*
+     * O modelo do Studio (BpmnSubProcess.eIsSet, decompilado) só grava os três
+     * booleanos quando são true; ausente é false. Nos 40 subprocessos dos
+     * `.process` nenhum vem "false".
+     */
+    for (const atributo of ['transferAttachments', 'sendToNextTaskInSubProcess', 'cancelSubProcess']) {
+      if (a[atributo] !== undefined && a[atributo] !== 'true' && a[atributo] !== 'false') {
+        recusar(`${atributo}="${a[atributo]}" em ${id}`);
+      }
     }
     if (!a['formMaps']) continue;
     const lido = lerMapeamentos(a['formMaps']);
