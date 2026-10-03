@@ -11,7 +11,12 @@ import { ErroFluigctl } from '../errors.js';
  */
 export async function fluigSoapClient(
   baseUrl: string,
-  servico: 'ECMDatasetService' | 'ECMCardIndexService' | 'ECMWorkflowEngineService',
+  servico:
+    | 'ECMDatasetService'
+    | 'ECMCardIndexService'
+    | 'ECMWorkflowEngineService'
+    | 'ECMGlobalParamService'
+    | 'ECMBusinessPeriodService',
 ): Promise<Client> {
   const endpoint = `${baseUrl}/webdesk/${servico}`;
   const cliente = await createClientAsync(`${endpoint}?wsdl`, { endpoint });

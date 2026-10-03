@@ -1,0 +1,323 @@
+<?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://ws.foundation.ecm.technology.totvs.com/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:ns1="http://schemas.xmlsoap.org/soap/http" name="ECMGlobalParamServiceService" targetNamespace="http://ws.foundation.ecm.technology.totvs.com/">
+  <wsdl:types>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://ws.foundation.ecm.technology.totvs.com/" attributeFormDefault="unqualified" elementFormDefault="unqualified" targetNamespace="http://ws.foundation.ecm.technology.totvs.com/">
+  <xs:complexType name="globalParamDto">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="ASPServer" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="anonynmousAccess" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="aspUploadFolderVirtual" type="xs:string"/>
+      <xs:element minOccurs="0" name="authServerName" type="xs:string"/>
+      <xs:element minOccurs="0" name="automaticFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="background" type="xs:string"/>
+      <xs:element minOccurs="0" name="banner" type="xs:string"/>
+      <xs:element name="batchNotificationEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="blankPasswdEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="colleagueId" type="xs:string"/>
+      <xs:element minOccurs="0" name="colleaguePhotoFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="companyCNPJ" type="xs:string"/>
+      <xs:element minOccurs="0" name="companyDescription" type="xs:string"/>
+      <xs:element name="companyId" type="xs:long"/>
+      <xs:element minOccurs="0" name="customFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="databaseStorageEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="defaultDialect" type="xs:string"/>
+      <xs:element minOccurs="0" name="defaultLanguage" type="xs:string"/>
+      <xs:element minOccurs="0" name="dmz" type="xs:boolean"/>
+      <xs:element name="documentExpiration" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="documentExpirationDays" type="xs:int"/>
+      <xs:element minOccurs="0" name="documentPublishingFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="domain" type="xs:string"/>
+      <xs:element minOccurs="0" name="downloadFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="downloadFolderVirtual" type="xs:string"/>
+      <xs:element name="emailAuthenticationType" type="xs:int"/>
+      <xs:element minOccurs="0" name="emailPasswd" type="xs:string"/>
+      <xs:element minOccurs="0" name="emailPort" type="xs:int"/>
+      <xs:element minOccurs="0" name="emailServer" type="xs:string"/>
+      <xs:element minOccurs="0" name="emailUser" type="xs:string"/>
+      <xs:element minOccurs="0" name="executionServer" type="xs:string"/>
+      <xs:element minOccurs="0" name="formsFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="homePage" type="xs:string"/>
+      <xs:element minOccurs="0" name="indexFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="intranetAutomaticLogin" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="ipInterval" type="xs:string"/>
+      <xs:element minOccurs="0" name="lastModified" type="xs:dateTime"/>
+      <xs:element minOccurs="0" name="lastModifiedTime" type="xs:string"/>
+      <xs:element minOccurs="0" name="logEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="loginNT" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="manualFirstVersion" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="maxUploadSize" type="xs:long"/>
+      <xs:element minOccurs="0" name="notificationDays" type="xs:int"/>
+      <xs:element name="portalAnonynmousEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="portalFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="portalVirtualFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="privateFolderEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="productRegistryExpiration" type="xs:dateTime"/>
+      <xs:element minOccurs="0" name="publishingFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="publishingFolderAlias" type="xs:string"/>
+      <xs:element minOccurs="0" name="publishingReport" type="xs:string"/>
+      <xs:element minOccurs="0" name="rpwEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="rpwIndexFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="rpwPublishingEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="saasMode" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="searchEngine" type="xs:int"/>
+      <xs:element minOccurs="0" name="searchMaxResults" type="xs:int"/>
+      <xs:element minOccurs="0" name="serialProgress" type="xs:string"/>
+      <xs:element minOccurs="0" name="servletFlexURL" type="xs:string"/>
+      <xs:element minOccurs="0" name="servletWebdavURL" type="xs:string"/>
+      <xs:element minOccurs="0" name="ssl" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="templatesFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="tickerEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="uploadFolder2" type="xs:string"/>
+      <xs:element minOccurs="0" name="uploadingFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="uploadingFolderSugest" type="xs:string"/>
+      <xs:element minOccurs="0" name="urlAcessoName" type="xs:string"/>
+      <xs:element minOccurs="0" name="userId" type="xs:string"/>
+      <xs:element minOccurs="0" name="validation" type="xs:string"/>
+      <xs:element minOccurs="0" name="virtualFolder" type="xs:string"/>
+      <xs:element minOccurs="0" name="webPort" type="xs:int"/>
+      <xs:element minOccurs="0" name="webdavEnabled" type="xs:boolean"/>
+      <xs:element minOccurs="0" name="webdeskServer" type="xs:string"/>
+      <xs:element minOccurs="0" name="webdeskURL" type="xs:string"/>
+      <xs:element minOccurs="0" name="webmailURL" type="xs:string"/>
+      <xs:element minOccurs="0" name="XMLRPCPort" type="xs:int"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="volumeDto">
+    <xs:sequence>
+      <xs:element name="companyId" type="xs:long"/>
+      <xs:element name="documentId" type="xs:int"/>
+      <xs:element minOccurs="0" name="folder" type="xs:string"/>
+      <xs:element name="maxSize" type="xs:float"/>
+      <xs:element name="usedSpace" type="xs:float"/>
+      <xs:element minOccurs="0" name="volumeId" type="xs:string"/>
+      <xs:element name="volumeTypeId" type="xs:int"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType final="#all" name="globalParamDtoArray">
+    <xs:sequence>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="item" nillable="true" type="tns:globalParamDto"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType final="#all" name="volumeDtoArray">
+    <xs:sequence>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="item" nillable="true" type="tns:volumeDto"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="Exception" type="tns:Exception"/>
+  <xs:complexType name="Exception">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="message" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>
+  </wsdl:types>
+  <wsdl:message name="getGlobalParam">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="updateConfigurationsResponse">
+    <wsdl:part name="resultXML" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="updateGlobalParamResponse">
+    <wsdl:part name="resultXML" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="createGlobalParam">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="GlobalParam" type="tns:globalParamDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="updateConfigurations">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="dbDriver" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="dbUser" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="dbPassword" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="dbServer" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="dbPort" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="dbScheme" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="dbInstance" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="emailServer" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="emailPort" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="emailSender" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="emailDefaultSender" type="xsd:boolean">
+    </wsdl:part>
+    <wsdl:part name="emailUser" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="emailPassword" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="emailTLS" type="xsd:boolean">
+    </wsdl:part>
+    <wsdl:part name="paramsRMTPTPort" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="lsType" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="paramsLSHost" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="paramsLSPort" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="paramsOpenOfficeDir" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="paramsOpenOfficePorts" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="portsSetName" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="Exception">
+    <wsdl:part element="tns:Exception" name="Exception">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getVolumes">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="updateGlobalParam">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="GlobalParam" type="tns:globalParamDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getVolumesResponse">
+    <wsdl:part name="resultXML" type="tns:volumeDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getGlobalParamResponse">
+    <wsdl:part name="GlobalParam" type="tns:globalParamDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="createGlobalParamResponse">
+    <wsdl:part name="resultXML" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:portType name="GlobalParamService">
+    <wsdl:operation name="getGlobalParam">
+      <wsdl:input message="tns:getGlobalParam" name="getGlobalParam">
+    </wsdl:input>
+      <wsdl:output message="tns:getGlobalParamResponse" name="getGlobalParamResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="createGlobalParam">
+      <wsdl:input message="tns:createGlobalParam" name="createGlobalParam">
+    </wsdl:input>
+      <wsdl:output message="tns:createGlobalParamResponse" name="createGlobalParamResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getVolumes">
+      <wsdl:input message="tns:getVolumes" name="getVolumes">
+    </wsdl:input>
+      <wsdl:output message="tns:getVolumesResponse" name="getVolumesResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="updateGlobalParam">
+      <wsdl:input message="tns:updateGlobalParam" name="updateGlobalParam">
+    </wsdl:input>
+      <wsdl:output message="tns:updateGlobalParamResponse" name="updateGlobalParamResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="updateConfigurations">
+      <wsdl:input message="tns:updateConfigurations" name="updateConfigurations">
+    </wsdl:input>
+      <wsdl:output message="tns:updateConfigurationsResponse" name="updateConfigurationsResponse">
+    </wsdl:output>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="ECMGlobalParamServiceServiceSoapBinding" type="tns:GlobalParamService">
+    <soap:binding style="rpc" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="getGlobalParam">
+      <soap:operation soapAction="getGlobalParam" style="rpc"/>
+      <wsdl:input name="getGlobalParam">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getGlobalParamResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="createGlobalParam">
+      <soap:operation soapAction="createGlobalParam" style="rpc"/>
+      <wsdl:input name="createGlobalParam">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="createGlobalParamResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getVolumes">
+      <soap:operation soapAction="getVolumes" style="rpc"/>
+      <wsdl:input name="getVolumes">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getVolumesResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="updateGlobalParam">
+      <soap:operation soapAction="updateGlobalParam" style="rpc"/>
+      <wsdl:input name="updateGlobalParam">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="updateGlobalParamResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="updateConfigurations">
+      <soap:operation soapAction="updateConfigurations" style="rpc"/>
+      <wsdl:input name="updateConfigurations">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="updateConfigurationsResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="ECMGlobalParamServiceService">
+    <wsdl:port binding="tns:ECMGlobalParamServiceServiceSoapBinding" name="GlobalParamServicePort">
+      <soap:address location="http://4.201.225.233:8021/webdesk/ECMGlobalParamService"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

@@ -7,9 +7,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fakeFluig } from './helpers/fake-fluig.js';
-import { bpmnVersionDe, pushDiagram, resolverFormId } from '../src/commands/push-diagram.js';
+import { bpmnVersionDe, conferirCadastros, pushDiagram, resolverFormId } from '../src/commands/push-diagram.js';
 import type { WorkflowEngineClient } from '../src/fluig/workflow-service.js';
 import type { FormNoServidor } from '../src/fluig/cardindex-service.js';
+import type { CadastroClient } from '../src/fluig/cadastro-service.js';
 import type { Server } from '../src/config.js';
 import { ErroFluigctl } from '../src/errors.js';
 import { converterDiagrama } from '../src/push/diagram/ecm30.js';
@@ -927,7 +928,9 @@ test('"Associado" com controlador não conferido, aninhado ou tipo desconhecido 
 /* ============================ Fase 3: publicar ============================ */
 
 /** Servidor em memória: registra cada chamada; o export devolve uma definição com bpmnVersion 1. */
-function servidorDeTeste(opcoes: { processos?: string[]; respostaImport?: string; liberacao?: string } = {}) {
+function servidorDeTeste(opcoes: {
+  processos?: string[]; respostaImport?: string; liberacao?: string; volumes?: string[]; expedientes?: string[];
+} = {}) {
   const chamadas: string[] = [];
   const importados: { xml: string; novo: boolean }[] = [];
   const cliente: WorkflowEngineClient = {
@@ -951,21 +954,25 @@ function servidorDeTeste(opcoes: { processos?: string[]; respostaImport?: string
   const formularios = async (): Promise<FormNoServidor[]> => [
     { documentId: 1234, documentDescription: 'formTeste', datasetName: 'dsformTeste' },
   ];
-  return { cliente, formularios, chamadas, importados };
+  const cadastros: CadastroClient = {
+    async listVolumes() { chamadas.push('volumes'); return opcoes.volumes ?? ['Default']; },
+    async listExpedientes() { chamadas.push('expedientes'); return opcoes.expedientes ?? ['Default']; },
+  };
+  return { cliente, formularios, cadastros, chamadas, importados };
 }
 
 const ARQUIVO = join(FIXTURES, 'processoTeste.process');
 const publicar = (s: ReturnType<typeof servidorDeTeste>, extra: Record<string, unknown> = {}) =>
   pushDiagram({
     server: SERVER, arquivo: ARQUIVO, senha: 's', prompt: async () => '',
-    cliente: s.cliente, formularios: s.formularios, ...extra,
+    cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros, ...extra,
   });
 
 test('publica processo existente: nova versão, import sobrescrevendo, liberação; bpmnVersion do servidor', async () => {
   const s = servidorDeTeste();
   const r = await publicar(s);
 
-  assert.deepEqual(s.chamadas, ['list', 'export', 'createVersion', 'import', 'release']);
+  assert.deepEqual(s.chamadas, ['list', 'volumes', 'expedientes', 'export', 'createVersion', 'import', 'release']);
   assert.equal(r.publicado, true);
   assert.equal(r.criado, false);
   assert.equal(r.liberado, true);
@@ -982,7 +989,7 @@ test('processo que não existe: recusa sem --create, cria com ele (import novo, 
 
   const com = servidorDeTeste({ processos: [] });
   const r = await publicar(com, { criar: true });
-  assert.deepEqual(com.chamadas, ['list', 'import-novo', 'release']);
+  assert.deepEqual(com.chamadas, ['list', 'volumes', 'expedientes', 'import-novo', 'release']);
   assert.equal(r.criado, true);
   assert.equal(texto(filhosDaRaiz(com.importados[0]!.xml)[1]!, 'bpmnVersion'), '2');
 });
@@ -1032,7 +1039,7 @@ test('em produção, senha digitada errada não escreve nada', async () => {
   const s = servidorDeTeste();
   const r = pushDiagram({
     server: { ...SERVER, prod: true }, arquivo: ARQUIVO, senha: 'certa', prompt: async () => 'errada',
-    cliente: s.cliente, formularios: s.formularios,
+    cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros,
   });
   assert.equal(await codigoDe(r), 5);
   assert.ok(!s.chamadas.some((c) => c.startsWith('import') || c === 'createVersion'));
@@ -1077,13 +1084,13 @@ test('o .processimage.svg do Studio vai no import quando desenha os mesmos estad
   const importar = s.cliente.importProcess;
   s.cliente.importProcess = async (id, xml, novo, imagem) => { if (imagem) capturadas.push(imagem); return importar(id, xml, novo); };
 
-  const r1 = await pushDiagram({ server: SERVER, arquivo: projeto(doStudio), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios });
+  const r1 = await pushDiagram({ server: SERVER, arquivo: projeto(doStudio), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros });
   assert.equal(r1.imagem.origem, 'studio');
   assert.equal(capturadas[0]!.nome, 'processoTeste.processimage.svg');
   assert.equal(capturadas[0]!.svg.toString('utf8'), doStudio.replace('\r\n', '\n'), 'linhas com \\n, como o Studio manda');
 
   const deOutraVersao = doStudio.replace('<g sequence="7"/>', '');
-  const r2 = await pushDiagram({ server: SERVER, arquivo: projeto(deOutraVersao), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios });
+  const r2 = await pushDiagram({ server: SERVER, arquivo: projeto(deOutraVersao), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros });
   assert.equal(r2.imagem.origem, 'gerada');
   assert.match(r2.avisos.join('\n'), /não desenha os mesmos estados/);
   assert.deepEqual([...sequenciasDoSvg(capturadas[1]!.svg.toString('utf8'))].sort((a, b) => a - b), [4, 5, 6, 7]);
@@ -1236,7 +1243,7 @@ test('subprocesso cujo processo-alvo não existe no destino é recusado com cód
     ];
     return { s, publicar: () => pushDiagram({
       server: SERVER, arquivo: join(FIXTURES, 'subprocessoTeste.process'), senha: 's', prompt: async () => '',
-      cliente: s.cliente, formularios,
+      cliente: s.cliente, formularios, cadastros: s.cadastros,
     }) };
   };
   const sem = comAlvo(['teste_fluigctl']);
@@ -1280,4 +1287,42 @@ test('gerarSvg desenha o ícone da tarefa na posição do al:Image do .process',
   assert.ok(lerXml(svg.replace(/^<\?xml[^>]*>\n/, '')), 'segue XML válido');
   // Sem al:Image, nenhum ícone.
   assert.doesNotMatch(gerarSvg(lerDiagrama(FASE1)), /<g sequence="5"><ellipse cx="133"/);
+});
+
+test('a conversão lista o volume do processo e os expedientes do processo e das tarefas, sem o vazio', () => {
+  const comExpediente = PROCESSO.replace(/(<bpmn2:BpmnTask id="task5"[^\n]*?)expediente=""/, '$1expediente="EX_STR_SP"');
+  assert.notEqual(comExpediente, PROCESSO);
+  const r = converterDiagrama(comExpediente, { companyId: 1 });
+  assert.equal(r.volume, 'Default');
+  assert.deepEqual(r.expedientes, ['Default', 'EX_STR_SP']);
+  const semNada = converterDiagrama(PROCESSO.replace('volume="Default"', 'volume=""').replace('expedient="Default"', 'expedient=""'), { companyId: 1 });
+  assert.equal(semNada.volume, '');
+  assert.deepEqual(semNada.expedientes, []);
+});
+
+test('conferirCadastros: volume ou expediente ausente no destino recusa com código 6, listando cada um', () => {
+  const servidor = { volumes: ['Default', 'Contratos'], expedientes: ['Default', 'EXPEDIENTE NORMAL'] };
+  conferirCadastros({ volume: 'Contratos', expedientes: ['Default', 'EXPEDIENTE NORMAL'] }, servidor);
+  // Vazio é o padrão do servidor; lista não consultada não é conferida.
+  conferirCadastros({ volume: '', expedientes: [] }, {});
+
+  const erro = erroDe(() => conferirCadastros({ volume: 'LGPD', expedientes: ['Default', 'BPM'] }, servidor));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /o volume "LGPD" e o expediente "BPM", que não existe neste servidor/);
+
+  // Só a caixa diferente também recusa, mas aponta o nome do servidor.
+  const caixa = erroDe(() => conferirCadastros({ volume: 'default', expedientes: [] }, servidor));
+  assert.match(caixa.message, /o volume "default" \(o servidor tem "Default"\)/);
+});
+
+test('push com volume ou expediente que não existe no destino recusa antes de criar versão ou importar', async () => {
+  const s = servidorDeTeste({ volumes: ['Homologacao'] });
+  const erro = await publicar(s).then(() => undefined, (e: unknown) => e as ErroFluigctl);
+  assert.equal(erro?.codigo, 6);
+  assert.match(erro!.message, /o volume "Default"/);
+  assert.deepEqual(s.chamadas, ['list', 'volumes', 'expedientes']);
+
+  const semExpediente = servidorDeTeste({ expedientes: ['24 Horas'] });
+  assert.equal(await codigoDe(publicar(semExpediente, { criar: false })), 6);
+  assert.ok(!semExpediente.chamadas.includes('createVersion') && !semExpediente.chamadas.includes('import'));
 });

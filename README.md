@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 313 | não | não | — |
+| Testes automatizados | 316 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -360,9 +360,12 @@ de um formulário do servidor.
 
 Publicar converte primeiro (o que não converte nem abre sessão) e confere o
 destino: o processo tem de existir, ou vir `--create`; o formulário do
-`cardIndex` tem de existir (número) ou casar com um único formulário (nome); e
-cada processo chamado como subprocesso tem de existir. O `bpmnVersion`, que não
-está no `.process`, vem da definição atual no servidor. Num processo existente:
+`cardIndex` tem de existir (número) ou casar com um único formulário (nome);
+cada processo chamado como subprocesso tem de existir; e o volume do processo e
+os expedientes do processo e das tarefas têm de estar cadastrados no destino
+(vazio é o padrão do servidor e não é conferido). A categoria não é conferida: no
+Studio ela é texto livre e o servidor não tem cadastro de categorias. O
+`bpmnVersion`, que não está no `.process`, vem da definição atual no servidor. Num processo existente:
 nova versão, import e liberação, como o `push process`; `--no-release` deixa a
 versão em edição. Produção passa pela mesma trava de senha no terminal.
 
@@ -579,7 +582,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 313 testes, sem rede e sem servidor Fluig
+npm test        # 316 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

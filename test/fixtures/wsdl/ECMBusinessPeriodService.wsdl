@@ -1,0 +1,78 @@
+<?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://ws.foundation.ecm.technology.totvs.com/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:ns1="http://schemas.xmlsoap.org/soap/http" name="ECMBusinessPeriodServiceService" targetNamespace="http://ws.foundation.ecm.technology.totvs.com/">
+  <wsdl:types>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://ws.foundation.ecm.technology.totvs.com/" attributeFormDefault="unqualified" elementFormDefault="unqualified" targetNamespace="http://ws.foundation.ecm.technology.totvs.com/">
+  <xs:complexType name="businessPeriodDto">
+    <xs:sequence>
+      <xs:element name="companyId" type="xs:long"/>
+      <xs:element minOccurs="0" name="periodId" type="xs:string"/>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="periodInfos" nillable="true" type="tns:businessPeriodInfoDto"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="businessPeriodInfoDto">
+    <xs:sequence>
+      <xs:element name="finalHour" type="xs:int"/>
+      <xs:element name="initialHour" type="xs:int"/>
+      <xs:element name="sequence" type="xs:int"/>
+      <xs:element name="weekDay" type="xs:int"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType final="#all" name="businessPeriodDtoArray">
+    <xs:sequence>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="item" nillable="true" type="tns:businessPeriodDto"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="Exception" type="tns:Exception"/>
+  <xs:complexType name="Exception">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="message" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>
+  </wsdl:types>
+  <wsdl:message name="getBusinessPeriods">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getBusinessPeriodsResponse">
+    <wsdl:part name="resultXML" type="tns:businessPeriodDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="Exception">
+    <wsdl:part element="tns:Exception" name="Exception">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:portType name="BusinessPeriodService">
+    <wsdl:operation name="getBusinessPeriods">
+      <wsdl:input message="tns:getBusinessPeriods" name="getBusinessPeriods">
+    </wsdl:input>
+      <wsdl:output message="tns:getBusinessPeriodsResponse" name="getBusinessPeriodsResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="ECMBusinessPeriodServiceServiceSoapBinding" type="tns:BusinessPeriodService">
+    <soap:binding style="rpc" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="getBusinessPeriods">
+      <soap:operation soapAction="getBusinessPeriods" style="rpc"/>
+      <wsdl:input name="getBusinessPeriods">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getBusinessPeriodsResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="ECMBusinessPeriodServiceService">
+    <wsdl:port binding="tns:ECMBusinessPeriodServiceServiceSoapBinding" name="BusinessPeriodServicePort">
+      <soap:address location="http://4.201.225.233:8021/webdesk/ECMBusinessPeriodService"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>
