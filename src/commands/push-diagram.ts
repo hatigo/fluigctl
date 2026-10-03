@@ -1,10 +1,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 
-import type { Server } from '../config.js';
+import { serverUrl, type Server } from '../config.js';
 import { ErroFluigctl } from '../errors.js';
+import { cardIndexClient, type FormNoServidor } from '../fluig/cardindex-service.js';
+import { workflowEngineClient, type WorkflowEngineClient } from '../fluig/workflow-service.js';
+import { confirmProduction, type PromptSenha } from '../guard.js';
 import { gerarEcm30, type ResultadoConversao } from '../push/diagram/ecm30.js';
-import { lerDiagrama } from '../push/diagram/modelo.js';
+import { lerDiagrama, type Diagrama } from '../push/diagram/modelo.js';
+import { lerXml } from '../push/diagram/xml.js';
+import { semDeclaracaoXml } from '../push/process-events.js';
 import { lerScriptsDoProcesso } from '../push/process-source.js';
 
 /**
@@ -31,23 +36,32 @@ export interface OpcoesPushDiagram {
   dryRun?: boolean;
   /** Grava o XML gerado, para inspeção ou comparação com o `.ecm30.xml`. */
   salvarXml?: string;
+  /** Senha do servidor; obrigatória para publicar. O dry-run não abre sessão. */
+  senha?: string;
+  prompt?: PromptSenha;
+  /** Cria o processo quando ele não existe no destino. Sem isso, processo ausente é recusado. */
+  criar?: boolean;
+  /** Libera a versão importada (padrão). Com `false`, ela fica em edição. */
+  liberar?: boolean;
+  /** Para testes: clientes do servidor já prontos. */
+  cliente?: WorkflowEngineClient;
+  formularios?: () => Promise<FormNoServidor[]>;
 }
 
-/**
- * Converte o `.process` no XML que o servidor importa.
- *
- * Fase 1 do docs/plano-push-diagrama.md: só `--dry-run`, sem sessão e sem
- * rede. O `companyId` vem do cadastro do servidor; o `formId`, do `cardIndex`
- * numérico — um nome fica 0, com aviso, para ser resolvido no destino quando a
- * publicação existir. Os scripts vêm de `workflow/scripts/<processId>.*.js`,
- * ao lado de `workflow/diagrams/`, como o Studio: sem a pasta, o XML sai sem
- * eles e com aviso.
- */
-export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoConversao> {
-  if (!opcoes.dryRun) {
-    throw new ErroFluigctl('publicação do diagrama ainda não implementada (fase 3); use --dry-run', 2);
-  }
+export interface ResultadoPushDiagram extends ResultadoConversao {
+  publicado: boolean;
+  criado: boolean;
+  liberado: boolean | null;
+  mensagemImport?: string;
+  mensagemLiberacao?: string;
+}
 
+async function lerConvertivel(opcoes: OpcoesPushDiagram): Promise<{
+  diagrama: Diagrama;
+  processId: string;
+  scripts: Map<string, string> | undefined;
+  semScripts: string | undefined;
+}> {
   let bytes: Buffer;
   try {
     bytes = await readFile(opcoes.arquivo);
@@ -69,9 +83,139 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoC
       semScripts = erro.message;
     }
   }
+  return { diagrama, processId, scripts, semScripts };
+}
 
-  const r = gerarEcm30(diagrama, { companyId: opcoes.server.companyId, ...(scripts ? { scripts } : {}) });
-  if (semScripts) r.avisos.push(`${semScripts}; o XML sai sem os scripts do processo (WorkflowProcessEvent)`);
+/**
+ * O formulário do processo no destino. `cardIndex` numérico tem de existir; um
+ * nome tem de casar com exatamente um formulário; vazio é processo sem
+ * formulário (formId 0). Qualquer dúvida recusa antes de escrever — um formId
+ * errado liga o processo ao formulário de outra pessoa.
+ */
+export function resolverFormId(cardIndex: string, catalogo: readonly FormNoServidor[]): number {
+  if (cardIndex === '') return 0;
+  if (/^\d+$/.test(cardIndex)) {
+    const id = Number(cardIndex);
+    if (!catalogo.some((f) => f.documentId === id)) {
+      throw new ErroFluigctl(`o processo usa o formulário ${id} (cardIndex), que não existe neste servidor`, 6);
+    }
+    return id;
+  }
+  const porNome = catalogo.filter((f) => f.documentDescription === cardIndex);
+  if (porNome.length !== 1) {
+    throw new ErroFluigctl(
+      `o processo usa o formulário "${cardIndex}" pelo nome, e ${porNome.length === 0 ? 'nenhum' : porNome.length} ` +
+        `formulário deste servidor tem esse nome` +
+        (porNome.length > 1 ? `: ${porNome.map((f) => f.documentId).join(', ')}` : ''),
+      6,
+    );
+  }
+  return porNome[0]!.documentId;
+}
+
+/** `bpmnVersion` da definição atual do processo no servidor. */
+export function bpmnVersionDe(exportado: Buffer): number | undefined {
+  try {
+    const raiz = lerXml(semDeclaracaoXml(exportado.toString('latin1'))).filhos[0];
+    const pdv = raiz?.filhos[1];
+    const valor = pdv?.filhos.find((f) => f.nome === 'bpmnVersion')?.texto;
+    return valor && /^\d+$/.test(valor) ? Number(valor) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Converte o `.process` no XML que o servidor importa e, sem `--dry-run`, publica.
+ *
+ * O dry-run é offline: o `companyId` vem do cadastro, o `formId` do `cardIndex`
+ * numérico (um nome fica 0, com aviso). Os scripts vêm de
+ * `workflow/scripts/<processId>.*.js`, ao lado de `workflow/diagrams/`.
+ *
+ * Publicar (fase 3 do docs/plano-push-diagrama.md) converte primeiro — toda
+ * recusa acontece antes de abrir sessão —, confere o destino (o processo existe,
+ * ou `--create`; o formulário existe) e lê dele o que não está no `.process`
+ * (`bpmnVersion`). Processo existente: nova versão → import → liberação, como o
+ * `push process`. Processo novo: import com `newProcess` → liberação, como o
+ * fluig-cd.
+ */
+export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoPushDiagram> {
+  const { diagrama, processId, scripts, semScripts } = await lerConvertivel(opcoes);
+  const comum = { companyId: opcoes.server.companyId, ...(scripts ? { scripts } : {}) };
+
+  // Sempre converte offline primeiro: um diagrama que não converte nem abre sessão.
+  const previa = gerarEcm30(diagrama, comum);
+  const avisoScripts = semScripts ? `${semScripts}; o XML sai sem os scripts do processo (WorkflowProcessEvent)` : undefined;
+
+  if (opcoes.dryRun) {
+    if (avisoScripts) previa.avisos.push(avisoScripts);
+    if (opcoes.salvarXml) await writeFile(opcoes.salvarXml, previa.xml, 'utf8');
+    return { ...previa, publicado: false, criado: false, liberado: null };
+  }
+
+  if (!opcoes.senha || !opcoes.prompt) {
+    throw new ErroFluigctl('publicar o diagrama exige a senha do servidor', 4);
+  }
+  if (!processId) throw new ErroFluigctl('o .process não tem o id do processo (BpmnProcess)', 6);
+
+  const url = serverUrl(opcoes.server);
+  const cliente =
+    opcoes.cliente ??
+    (await workflowEngineClient(url, opcoes.server.companyId, opcoes.server.username, opcoes.senha, opcoes.server.userCode));
+  const listarFormularios =
+    opcoes.formularios ??
+    (async () =>
+      (await cardIndexClient(url, opcoes.server.companyId, opcoes.server.username, opcoes.senha!, opcoes.server.userCode)).listForms());
+
+  const existe = (await cliente.listProcessIds()).includes(processId);
+  if (!existe && !opcoes.criar) {
+    throw new ErroFluigctl(
+      `o processo "${processId}" não existe em ${url}. Para criá-lo a partir do .process, use --create.`,
+      3,
+    );
+  }
+  if (existe && opcoes.criar) {
+    throw new ErroFluigctl(`--create foi pedido, mas o processo "${processId}" já existe em ${url}. Remova --create.`, 6);
+  }
+
+  const formId = resolverFormId(previa.cardIndex, await listarFormularios());
+  const bpmnVersion = existe ? bpmnVersionDe(await cliente.exportProcess(processId)) : undefined;
+  const r = gerarEcm30(diagrama, { ...comum, formId, ...(bpmnVersion === undefined ? {} : { bpmnVersion }) });
+  if (avisoScripts) r.avisos.push(avisoScripts);
+  if (existe && bpmnVersion === undefined) {
+    r.avisos.push('não consegui ler o bpmnVersion da definição atual no servidor; vai o padrão, 2');
+  }
   if (opcoes.salvarXml) await writeFile(opcoes.salvarXml, r.xml, 'utf8');
-  return r;
+
+  await confirmProduction(
+    opcoes.server,
+    opcoes.senha,
+    `push diagram ${processId} (${existe ? 'nova versão' : 'processo novo'})`,
+    opcoes.prompt,
+  );
+
+  // O import lê UTF-8 (ver push-process: bytes latin1 viraram "?" nos acentos).
+  const definicao = Buffer.from(semDeclaracaoXml(r.xml), 'utf8');
+  if (existe) await cliente.createVersion(processId);
+  const mensagemImport = await cliente.importProcess(processId, definicao, !existe);
+  if (!/sucesso/i.test(mensagemImport)) {
+    throw new ErroFluigctl(
+      `o servidor não confirmou o import do processo "${processId}": ${mensagemImport || 'resposta vazia'}.` +
+        (existe ? ' A versão nova pode ter ficado em edição.' : ''),
+      7,
+    );
+  }
+
+  const base = { ...r, publicado: true, criado: !existe, mensagemImport };
+  if (opcoes.liberar === false) return { ...base, liberado: null };
+
+  const liberacao = await cliente.releaseProcess(processId);
+  if (!liberacao.ok) {
+    throw new ErroFluigctl(
+      `o processo "${processId}" foi importado, mas o servidor não liberou a versão: ${liberacao.mensagem || 'sem mensagem'}. ` +
+        'A versão ficou em edição.',
+      7,
+    );
+  }
+  return { ...base, liberado: true, mensagemLiberacao: liberacao.mensagem };
 }

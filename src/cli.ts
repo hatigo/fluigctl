@@ -51,9 +51,10 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e scripts de proc
       diagrama e atividades continuam sendo publicados pelo Fluig Studio
   fluigctl push widget <wcm/widget/nome> --server <nome> [--dry-run]
       empacota a widget num .war e envia; o servidor instala ou atualiza em segundo plano
-  fluigctl push diagram <arquivo.process> --server <nome> --dry-run [--save-xml <arquivo>]
-      converte o diagrama no XML que o servidor importa, sem rede e sem senha;
-      por enquanto só --dry-run (fase 1 de docs/plano-push-diagrama.md)
+  fluigctl push diagram <arquivo.process> --server <nome> [--dry-run] [--save-xml <arquivo>]
+                              [--create] [--no-release]
+      converte o diagrama no XML que o servidor importa e publica: nova versão, import e liberação;
+      --create cria o processo que não existe no destino. O --dry-run converte sem rede e sem senha
 
 A senha de cada servidor vem, nesta ordem: da variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD),
 do arquivo de senhas do fluigctl (~/.config/fluigctl/env, permissão 600) ou do .vscode/servers.json
@@ -552,25 +553,31 @@ async function pushDiagramCli(argv: string[]): Promise<void> {
       server: { type: 'string', short: 's' },
       'dry-run': { type: 'boolean', default: false },
       'save-xml': { type: 'string' },
+      create: { type: 'boolean', default: false },
+      'no-release': { type: 'boolean', default: false },
     },
   });
 
   const arquivo = positionals[0];
   if (!arquivo || !values.server) {
     throw new ErroFluigctl(
-      'uso: fluigctl push diagram <arquivo.process> --server <nome> --dry-run [--save-xml <arquivo>]',
+      'uso: fluigctl push diagram <arquivo.process> --server <nome> [--dry-run] [--save-xml <arquivo>] [--create] [--no-release]',
       2,
     );
   }
 
-  // Sem resolvePassword: o dry-run do diagrama não abre sessão, só usa o companyId do cadastro.
+  // O dry-run não abre sessão: só usa o companyId do cadastro. Publicar precisa da senha.
   const servidor = resolveServer(loadConfig(), values.server);
+  const senha = values['dry-run'] ? undefined : resolvePassword(servidor);
 
   const r = await pushDiagram({
     server: servidor,
     arquivo,
     dryRun: values['dry-run'],
     ...(values['save-xml'] === undefined ? {} : { salvarXml: values['save-xml'] }),
+    ...(senha === undefined ? {} : { senha, prompt: promptPassword }),
+    criar: values.create,
+    liberar: !values['no-release'],
   });
 
   const c = r.contagens;
@@ -585,7 +592,15 @@ async function pushDiagramCli(argv: string[]): Promise<void> {
   console.log(`  scripts              ${c.eventos}`);
   for (const aviso of r.avisos) console.log(`aviso: ${aviso}`);
   if (values['save-xml']) console.log(`XML gravado em ${values['save-xml']}.`);
-  console.log('[dry-run] Nada foi enviado.');
+  if (values['dry-run']) {
+    console.log('[dry-run] Nada foi enviado.');
+    return;
+  }
+  const alvo = `${values.server} (${serverUrl(servidor)})`;
+  console.log(
+    `${r.processId} ${r.criado ? 'criado' : 'publicado'} em ${alvo} com formId ${r.formId}. Import: ${r.mensagemImport || '-'}` +
+      (r.liberado === null ? ' · versão em edição (--no-release)' : ` · Liberação: ${r.mensagemLiberacao || '-'}`),
+  );
 }
 
 function comandoChanged(argv: string[]): void {

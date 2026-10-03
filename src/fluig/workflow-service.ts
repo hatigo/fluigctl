@@ -7,7 +7,8 @@ export interface WorkflowEngineClient {
   /** Definição corrente do processo, nos bytes ISO-8859-1 que o servidor guarda. */
   exportProcess(processId: string): Promise<Buffer>;
   createVersion(processId: string): Promise<void>;
-  importProcess(processId: string, xml: Buffer): Promise<string>;
+  /** `novo`: cria o processo (newProcess, sem overWrite), como o fluig-cd; senão sobrescreve a versão em edição. */
+  importProcess(processId: string, xml: Buffer, novo?: boolean): Promise<string>;
   releaseProcess(processId: string): Promise<{ ok: boolean; mensagem: string }>;
 }
 
@@ -55,7 +56,7 @@ export async function workflowEngineClient(
       await invoke(cliente, 'createWorkFlowProcessVersion', { ...credencial, processId });
     },
 
-    async importProcess(processId: string, xml: Buffer): Promise<string> {
+    async importProcess(processId: string, xml: Buffer, novo = false): Promise<string> {
       const r = await invoke<{ result?: string }>(cliente, 'importProcess', {
         ...credencial,
         processId,
@@ -69,8 +70,8 @@ export async function workflowEngineClient(
             },
           ],
         },
-        newProcess: false,
-        overWrite: true,
+        newProcess: novo,
+        overWrite: !novo,
         colleagueId,
       });
       return String(r?.result ?? '');

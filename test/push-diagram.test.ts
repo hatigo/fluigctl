@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fakeFluig } from './helpers/fake-fluig.js';
-import { pushDiagram } from '../src/commands/push-diagram.js';
+import { bpmnVersionDe, pushDiagram, resolverFormId } from '../src/commands/push-diagram.js';
+import type { WorkflowEngineClient } from '../src/fluig/workflow-service.js';
+import type { FormNoServidor } from '../src/fluig/cardindex-service.js';
 import type { Server } from '../src/config.js';
 import { ErroFluigctl } from '../src/errors.js';
 import { converterDiagrama } from '../src/push/diagram/ecm30.js';
@@ -183,8 +185,8 @@ test('cardIndex por nome: formId 0 e aviso de que será resolvido no destino', (
   assert.match(r.avisos.join('\n'), /pelo nome \("Formulario de Teste"\).*resolvido pelo nome/);
 });
 
-test('push diagram sem --dry-run é recusado com código 2', async () => {
-  assert.equal(await codigoDe(pushDiagram({ server: SERVER, arquivo: join(FIXTURES, 'processoTeste.process') })), 2);
+test('push diagram sem --dry-run e sem senha é recusado com código 4', async () => {
+  assert.equal(await codigoDe(pushDiagram({ server: SERVER, arquivo: join(FIXTURES, 'processoTeste.process') })), 4);
 });
 
 test('--save-xml grava o XML gerado', async () => {
@@ -229,9 +231,10 @@ test('CLI: dry-run com cardIndex por nome avisa, não pede senha e não faz nenh
     assert.match(r.saida, /\[dry-run\] Nada foi enviado/);
     assert.equal(fluig.requests.length, 0);
 
-    const semDryRun = await rodarCli(['push', 'diagram', arquivo, '--server', 'teste'], env);
-    assert.equal(semDryRun.codigo, 2);
-    assert.match(semDryRun.saida, /ainda não implementada \(fase 3\); use --dry-run/);
+    // Sem --dry-run publica, e isso exige a senha: sem ela, código 4 e nenhuma requisição.
+    const semDryRun = await rodarCli(['push', 'diagram', arquivo, '--server', 'teste'], { ...env, FLUIGCTL_NO_VSCODE: '1' });
+    assert.equal(semDryRun.codigo, 4);
+    assert.match(semDryRun.saida, /FLUIG_DIAGRAMA_TESTE_PASSWORD/);
     assert.equal(fluig.requests.length, 0);
   } finally {
     await fluig.close();
@@ -878,4 +881,124 @@ test('"Associado" com controlador não conferido, aninhado ou tipo desconhecido 
     assert.equal(erro.codigo, 6);
     assert.match(erro.message, /atribuição AssignmentControllerAssociated em task7/);
   }
+});
+
+
+/* ============================ Fase 3: publicar ============================ */
+
+/** Servidor em memória: registra cada chamada; o export devolve uma definição com bpmnVersion 1. */
+function servidorDeTeste(opcoes: { processos?: string[]; respostaImport?: string; liberacao?: string } = {}) {
+  const chamadas: string[] = [];
+  const importados: { xml: string; novo: boolean }[] = [];
+  const cliente: WorkflowEngineClient = {
+    async listProcessIds() { chamadas.push('list'); return opcoes.processos ?? ['processoTeste']; },
+    async exportProcess() {
+      chamadas.push('export');
+      return Buffer.from('<?xml version="1.0"?><list><ProcessDefinition/><ProcessDefinitionVersion><bpmnVersion>1</bpmnVersion></ProcessDefinitionVersion></list>', 'latin1');
+    },
+    async createVersion() { chamadas.push('createVersion'); },
+    async importProcess(_id, xml, novo = false) {
+      chamadas.push(novo ? 'import-novo' : 'import');
+      importados.push({ xml: xml.toString('utf8'), novo });
+      return opcoes.respostaImport ?? 'Processo importado com sucesso!';
+    },
+    async releaseProcess() {
+      chamadas.push('release');
+      const m = opcoes.liberacao ?? '{ok=true}';
+      return { ok: /ok=true/.test(m), mensagem: m };
+    },
+  };
+  const formularios = async (): Promise<FormNoServidor[]> => [
+    { documentId: 1234, documentDescription: 'formTeste', datasetName: 'dsformTeste' },
+  ];
+  return { cliente, formularios, chamadas, importados };
+}
+
+const ARQUIVO = join(FIXTURES, 'processoTeste.process');
+const publicar = (s: ReturnType<typeof servidorDeTeste>, extra: Record<string, unknown> = {}) =>
+  pushDiagram({
+    server: SERVER, arquivo: ARQUIVO, senha: 's', prompt: async () => '',
+    cliente: s.cliente, formularios: s.formularios, ...extra,
+  });
+
+test('publica processo existente: nova versão, import sobrescrevendo, liberação; bpmnVersion do servidor', async () => {
+  const s = servidorDeTeste();
+  const r = await publicar(s);
+
+  assert.deepEqual(s.chamadas, ['list', 'export', 'createVersion', 'import', 'release']);
+  assert.equal(r.publicado, true);
+  assert.equal(r.criado, false);
+  assert.equal(r.liberado, true);
+  assert.equal(r.formId, 1234);
+  const enviado = s.importados[0]!.xml;
+  assert.doesNotMatch(enviado, /^<\?xml/, 'vai sem declaração, como no push process');
+  assert.equal(texto(filhosDaRaiz(enviado)[1]!, 'bpmnVersion'), '1');
+});
+
+test('processo que não existe: recusa sem --create, cria com ele (import novo, sem nova versão)', async () => {
+  const sem = servidorDeTeste({ processos: [] });
+  assert.equal(await codigoDe(publicar(sem)), 3);
+  assert.deepEqual(sem.chamadas, ['list']);
+
+  const com = servidorDeTeste({ processos: [] });
+  const r = await publicar(com, { criar: true });
+  assert.deepEqual(com.chamadas, ['list', 'import-novo', 'release']);
+  assert.equal(r.criado, true);
+  assert.equal(texto(filhosDaRaiz(com.importados[0]!.xml)[1]!, 'bpmnVersion'), '2');
+});
+
+test('--create com processo existente é recusado sem escrever', async () => {
+  const s = servidorDeTeste();
+  assert.equal(await codigoDe(publicar(s, { criar: true })), 6);
+  assert.deepEqual(s.chamadas, ['list']);
+});
+
+test('formulário do cardIndex que não existe no destino recusa antes de escrever', async () => {
+  const s = servidorDeTeste();
+  s.formularios = async () => [{ documentId: 99, documentDescription: 'outro', datasetName: 'dsOutro' }];
+  assert.equal(await codigoDe(publicar(s)), 6);
+  assert.ok(!s.chamadas.some((c) => c.startsWith('import') || c === 'createVersion'));
+});
+
+test('resolverFormId: número tem de existir, nome tem de ser único, vazio é sem formulário', () => {
+  const cat: FormNoServidor[] = [
+    { documentId: 5, documentDescription: 'formA', datasetName: 'dsA' },
+    { documentId: 6, documentDescription: 'formB', datasetName: 'dsB' },
+    { documentId: 7, documentDescription: 'formB', datasetName: 'dsB2' },
+  ];
+  assert.equal(resolverFormId('', cat), 0);
+  assert.equal(resolverFormId('5', cat), 5);
+  assert.equal(resolverFormId('formA', cat), 5);
+  assert.throws(() => resolverFormId('8', cat), /8 \(cardIndex\), que não existe/);
+  assert.throws(() => resolverFormId('formB', cat), /2 formulário.*6, 7/);
+  assert.throws(() => resolverFormId('formC', cat), /nenhum formulário/);
+});
+
+test('import sem sucesso e liberação recusada viram código 7', async () => {
+  assert.equal(await codigoDe(publicar(servidorDeTeste({ respostaImport: 'erro qualquer' }))), 7);
+  const s = servidorDeTeste({ liberacao: '{ok=false, activityError=[x]}' });
+  assert.equal(await codigoDe(publicar(s)), 7);
+  assert.deepEqual(s.chamadas.slice(-1), ['release']);
+});
+
+test('--no-release importa e deixa a versão em edição', async () => {
+  const s = servidorDeTeste();
+  const r = await publicar(s, { liberar: false });
+  assert.equal(r.liberado, null);
+  assert.ok(!s.chamadas.includes('release'));
+});
+
+test('em produção, senha digitada errada não escreve nada', async () => {
+  const s = servidorDeTeste();
+  const r = pushDiagram({
+    server: { ...SERVER, prod: true }, arquivo: ARQUIVO, senha: 'certa', prompt: async () => 'errada',
+    cliente: s.cliente, formularios: s.formularios,
+  });
+  assert.equal(await codigoDe(r), 5);
+  assert.ok(!s.chamadas.some((c) => c.startsWith('import') || c === 'createVersion'));
+});
+
+test('bpmnVersionDe lê a PDV do export; ilegível vira undefined', () => {
+  assert.equal(bpmnVersionDe(Buffer.from('<list><a/><ProcessDefinitionVersion><bpmnVersion>2</bpmnVersion></ProcessDefinitionVersion></list>')), 2);
+  assert.equal(bpmnVersionDe(Buffer.from('não é xml <')), undefined);
 });
