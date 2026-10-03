@@ -361,10 +361,10 @@ de um formulário do servidor.
 Publicar converte primeiro (o que não converte nem abre sessão) e confere o
 destino: o processo tem de existir, ou vir `--create`; o formulário do
 `cardIndex` tem de existir (número) ou casar com um único formulário (nome); e
-cada processo chamado como subprocesso tem de existir. O `bpmnVersion`, que não está no `.process`,
-vem da definição atual no servidor. Num processo existente: nova versão, import
-e liberação, como o `push process`; `--no-release` deixa a versão em edição.
-Produção passa pela mesma trava de senha no terminal.
+cada processo chamado como subprocesso tem de existir. O `bpmnVersion`, que não
+está no `.process`, vem da definição atual no servidor. Num processo existente:
+nova versão, import e liberação, como o `push process`; `--no-release` deixa a
+versão em edição. Produção passa pela mesma trava de senha no terminal.
 
 A imagem do diagrama vai junto, como o Studio faz (`<nome>.processimage.svg`,
 anexo não principal): sem ela a tela do processo mostra "Não foi possível exibir
@@ -375,16 +375,141 @@ marcas de evento e de gateway do Studio e ícones próprios nas tarefas (o
 visualizador destaca a atividade atual pelo `<g sequence>` de cada estado). O
 dry-run diz qual vai.
 
-Conferido no HML da Cetenco com dois processos descartáveis: `teste_fluigctl`
-(hoje na versão 18 — pool com duas raias, tarefa de usuário, tarefa de serviço
-com erro anexado e gateway por regra —, ligado ao formulário `formTesteFluigctl`,
-documentId 1192) e
-`teste_fluigctl_sub`, o alvo do subprocesso dele. Cada mapeamento sem par do
-Studio foi publicado numa versão própria, conferido no export e, quando muda a
-execução, com uma solicitação aberta e movida pela API (detalhes por corte no
-plano).
+### Exemplo completo: o processo de teste
 
-Cobre pool, lane, início, tarefas de usuário e de serviço, subprocesso (100) com
+O processo usado para conferir o `push diagram` no HML da Cetenco, publicado sem
+o Studio. Pool com duas raias; uma tarefa de usuário, uma tarefa de serviço com
+evento de erro anexado e tratamento, e um gateway exclusivo decidido por regra
+num campo do formulário:
+
+![Processo de teste: Aprovação → Registrar aprovação (serviço) → Conferência → Aprovado?](docs/img/processo-teste.png)
+
+*Imagem gerada pelo fluigctl a partir do `.process`, a mesma que vai no import e
+que o portal mostra em "Visualizar diagrama". O `.process` também abre no
+Eclipse (Fluig Studio) com o mesmo desenho.*
+
+| estado | tipo | o que faz |
+|---|---|---|
+| Início | início (10) | aberto por quem tem permissão no processo |
+| Aprovação | tarefa de usuário (80) | atribuída a um usuário (mecanismo Usuário) |
+| Registrar aprovação | tarefa de serviço (82) | roda `workflow/scripts/<processId>.servicetask24.js` |
+| Tratar erro do serviço | tarefa de usuário | recebe a solicitação se o serviço falhar (erro anexado, 43) |
+| Conferência | tarefa de usuário | |
+| Aprovado? | gateway exclusivo (120) | `aprovado = sim` → Fim; senão → Aprovação |
+
+**1. A pasta.** O mesmo layout de um projeto do Studio; o `.project` só é preciso
+para abrir no Eclipse.
+
+```text
+teste-fluigctl/
+├── .project                                   # natureza com.totvs.tds.ecm.designer.nature
+├── forms/formTesteFluigctl/
+│   ├── formTesteFluigctl.html                 # campos descricao e aprovado
+│   └── events/validateForm.js
+└── workflow/
+    ├── diagrams/teste_fluigctl.process
+    └── scripts/teste_fluigctl.servicetask24.js
+```
+
+O script da tarefa de serviço segue a assinatura do Fluig, com o `eventId`
+(`servicetask24`, o id da tarefa no `.process`) como nome da função:
+
+```js
+function servicetask24(attempt, message) {
+	var descricao = hAPI.getCardValue("descricao") || "";
+	hAPI.setCardValue("descricao", descricao + " [servico ok, tentativa " + attempt + "]");
+	return true;
+}
+```
+
+**2. O formulário primeiro.** O processo aponta para ele pelo `cardIndex`; sem
+formulário no destino, o push recusa.
+
+```sh
+fluigctl push form forms/formTesteFluigctl --server cetenco-hml \
+  --create --parent-id <pasta> --dataset-name dsformTesteFluigctl --persistence-type form
+```
+
+Ponha o documentId devolvido no `cardIndex` do `BpmnProcess` (no Studio:
+propriedades do processo → formulário).
+
+**3. Simular.** Converte offline, diz o que vai e grava o XML para conferir:
+
+```console
+$ fluigctl push diagram workflow/diagrams/teste_fluigctl.process --server cetenco-hml \
+    --dry-run --save-xml /tmp/teste_fluigctl.xml
+teste_fluigctl versão 1 para cetenco-hml (companyId 1)
+  formId               1192
+  estados              8
+  links                8
+  raias                3
+  bendpoints           5
+  condições            2
+  anotações            0
+  scripts              1
+  imagem               teste_fluigctl.processimage.svg (gerada, 6877 bytes)
+aviso: sem teste_fluigctl.processimage.svg do Studio em workflow/.resources; vai uma imagem gerada a partir do .process
+XML gravado em /tmp/teste_fluigctl.xml.
+[dry-run] Nada foi enviado.
+```
+
+`raias 3` são a pool e as duas lanes; `scripts 1` é o da tarefa de serviço.
+Algo que a conversão não cobre aparece aqui como erro com código 6, listando o
+motivo — e nada é enviado.
+
+**4. Publicar.** A primeira vez cria o processo; depois, cada push vira uma
+versão nova, importada e liberada:
+
+```sh
+fluigctl push diagram workflow/diagrams/teste_fluigctl.process --server cetenco-hml --create
+fluigctl push diagram workflow/diagrams/teste_fluigctl.process --server cetenco-hml
+```
+
+A resposta traz a liberação do servidor; `ok=true` com `activityError=[]` e
+`flowError=[]` quer dizer versão liberada sem erro. Se o diagrama chama outro
+processo como subprocesso, publique o processo-alvo antes.
+
+**5. Testar o andamento.** Para ver o processo rodar, abra e mova solicitações
+pela API do Fluig. No console do navegador, logado no portal (a sessão vai nos
+cookies), o roteiro usado no HML foi:
+
+```js
+const post = (url, corpo) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(corpo) }).then((r) => r.json());
+const aberta = async (id) => (await (await fetch(`/process-management/api/v2/requests/${id}/tasks`)).json())
+  .items.find((t) => t.status === 'NOT_COMPLETED');
+
+// abre; a solicitação para na Aprovação
+const { processInstanceId: id } = await post('/process-management/api/v2/processes/teste_fluigctl/start',
+  { formFields: { descricao: 'teste', aprovado: 'nao' } });
+
+// Aprovação → tarefa de serviço; o serviço roda e a solicitação segue para a Conferência
+let t = await aberta(id);
+await post(`/process-management/api/v2/requests/${id}/move`,
+  { movementSequence: t.movementSequence, assignee: 'Integracao.Fluig', targetState: 24 });
+
+// Conferência → gateway (19): "nao" volta para a Aprovação; "sim" vai ao Fim
+t = await aberta(id);
+await post(`/process-management/api/v2/requests/${id}/move`,
+  { movementSequence: t.movementSequence, assignee: 'Integracao.Fluig', targetState: 19,
+    formFields: { aprovado: 'sim' } });
+```
+
+`targetState` é o sequence do estado (o número no fim do id no `.process`:
+`servicetask24` → 24). Confira o resultado em
+`/process-management/api/v2/requests/<id>?expand=formFields` (o `descricao`
+ganha a marca do serviço) e em `.../requests/<id>/tasks` (o caminho percorrido).
+No HML, a solicitação 689 passou pelo gateway nos dois sentidos e finalizou.
+
+**6. Limpar.** Versão liberada não se remove pela API
+(`BPMProcessDefinitionVersionReleasedException`), e solicitação não se exclui,
+só se cancela; um processo de teste com versões liberadas sai pelo portal. Os
+processos de teste e o formulário foram removidos do HML em 03/10/2026; as
+fontes ficam em `~/projetos/teste-fluigctl`.
+
+### O que a conversão cobre
+
+Pool, lane, início, tarefas de usuário e de serviço, subprocesso (100) com
 mapeamento de campos, gateways exclusivo/paralelo/join com condições e
 atribuição por caminho, eventos intermediários (temporizador, condicional,
 sinal, erro anexado, link), fim, anotação, fluxo de sequência, bendpoints,
@@ -397,9 +522,12 @@ sai XML parcial. Os scripts entram no XML quando há
 `workflow/scripts/<processId>.*.js` ao lado de `workflow/diagrams/`; sem a
 pasta, o comando avisa.
 
-O plano, as fases e o que foi medido estão em `docs/plano-push-diagrama.md`.
-`npm run diff-diagramas [raiz]` compara a conversão com os `.ecm30.xml` do Studio
-de uma pasta de workspaces, sem escrever nela.
+Cada mapeamento sem par do Studio foi publicado numa versão própria do processo
+de teste no HML, conferido no export e, quando muda a execução, com uma
+solicitação aberta e movida pela API. O plano, as fases e o que foi medido estão
+em `docs/plano-push-diagrama.md`. `npm run diff-diagramas [raiz]` compara a
+conversão com os `.ecm30.xml` do Studio de uma pasta de workspaces, sem escrever
+nela.
 
 ## Códigos de saída
 
