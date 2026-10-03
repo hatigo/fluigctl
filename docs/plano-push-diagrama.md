@@ -529,6 +529,24 @@ não ver dois `.process` com o mesmo id).
   1]") → Conferência → gateway com `aprovado = nao` → de volta à Aprovação →
   serviço de novo → Conferência → gateway com `sim` → fim, finalizada.
 
+**Volume e expediente no destino (03/10/2026).** A publicação passa a conferir,
+antes de criar versão ou importar, que o volume do processo e os expedientes do
+processo e das tarefas existem no destino — as listas que o Studio oferece
+(`ECMGlobalParamService.getVolumes` e `ECMBusinessPeriodService.getBusinessPeriods`,
+WSDLs reais em `test/fixtures/wsdl/`). Nome ausente recusa com código 6; diferença
+só de maiúsculas é apontada e também recusa. Vazio não é conferido. A categoria
+fica de fora: no Studio é texto livre (`categoryText`) e não há cadastro no
+servidor — o corpus tem 125 vazias e dezenas de nomes livres.
+
+- No corpus: volume `Default` em 474 de 476 processos (e `LGPD`, `Contratos`);
+  expediente do processo `Default` em 473; expediente de tarefa vazio em 4508
+  estados, `Default` em 618 e nomes próprios de cada cliente no resto.
+- HML: o servidor só tem o volume e o expediente `Default`, mas dois processos
+  publicados antes gravam os volumes `homolog` e `Homologacao` — o import aceita
+  nome que não existe, e é isso que a conferência impede. Uma cópia do processo
+  de teste com `volume="homolog"` e `--create` saiu com código 6 depois da
+  consulta e sem criar nada.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

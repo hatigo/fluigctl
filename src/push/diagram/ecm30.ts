@@ -66,6 +66,10 @@ export interface ResultadoConversao {
   avisos: string[];
   /** Processos chamados como subprocesso; a publicação confere que existem no destino. */
   subprocessos: string[];
+  /** Volume do processo (vazio: o padrão do servidor); a publicação confere que existe no destino. */
+  volume: string;
+  /** Expedientes citados pelo processo e pelas tarefas, sem repetição e sem o vazio; idem. */
+  expedientes: string[];
   /** Vazio, a não ser em modo parcial. */
   naoSuportados: string[];
 }
@@ -1672,6 +1676,8 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     },
     avisos,
     subprocessos: alvos,
+    volume: p['volume'] ?? '',
+    expedientes: [...new Set([p['expedient'] ?? '', ...estadosBpmn.map((o) => o.attrs['expediente'] ?? '')])].filter(Boolean),
     naoSuportados: [...naoSuportados],
   };
 }

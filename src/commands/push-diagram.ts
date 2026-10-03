@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path';
 
 import { serverUrl, type Server } from '../config.js';
 import { ErroFluigctl } from '../errors.js';
+import { cadastroClient, type CadastroClient } from '../fluig/cadastro-service.js';
 import { cardIndexClient, type FormNoServidor } from '../fluig/cardindex-service.js';
 import { workflowEngineClient, type WorkflowEngineClient } from '../fluig/workflow-service.js';
 import { confirmProduction, type PromptSenha } from '../guard.js';
@@ -47,6 +48,7 @@ export interface OpcoesPushDiagram {
   /** Para testes: clientes do servidor já prontos. */
   cliente?: WorkflowEngineClient;
   formularios?: () => Promise<FormNoServidor[]>;
+  cadastros?: CadastroClient;
 }
 
 export interface ResultadoPushDiagram extends ResultadoConversao {
@@ -130,6 +132,34 @@ export function resolverFormId(cardIndex: string, catalogo: readonly FormNoServi
     );
   }
   return porNome[0]!.documentId;
+}
+
+/**
+ * Volume e expedientes que o `.process` cita têm de existir no destino: o
+ * servidor grava o nome como veio, e um nome que não existe só aparece depois,
+ * ao gravar anexo ou calcular prazo. Vazio é o padrão do servidor e não é
+ * conferido. A diferença só de maiúsculas é apontada, mas também recusa — não
+ * se sabe se o servidor as trata como iguais.
+ */
+export function conferirCadastros(
+  usados: { volume: string; expedientes: readonly string[] },
+  noServidor: { volumes?: readonly string[]; expedientes?: readonly string[] },
+): void {
+  const faltas: string[] = [];
+  const falta = (tipo: string, nome: string, existentes: readonly string[]) => {
+    if (existentes.includes(nome)) return;
+    const parecido = existentes.find((e) => e.toLowerCase() === nome.toLowerCase());
+    faltas.push(`${tipo} "${nome}"` + (parecido ? ` (o servidor tem "${parecido}")` : ''));
+  };
+  if (usados.volume && noServidor.volumes) falta('o volume', usados.volume, noServidor.volumes);
+  if (noServidor.expedientes) for (const e of usados.expedientes) falta('o expediente', e, noServidor.expedientes);
+  if (faltas.length > 0) {
+    throw new ErroFluigctl(
+      `o diagrama usa ${faltas.join(' e ')}, que não existe neste servidor. ` +
+        'Cadastre no destino (Painel de Controle) ou corrija no Studio.',
+      6,
+    );
+  }
 }
 
 /**
@@ -240,6 +270,14 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
       6,
     );
   }
+
+  const cadastros =
+    opcoes.cadastros ??
+    (await cadastroClient(url, opcoes.server.companyId, opcoes.server.username, opcoes.senha));
+  conferirCadastros(previa, {
+    ...(previa.volume ? { volumes: await cadastros.listVolumes() } : {}),
+    ...(previa.expedientes.length > 0 ? { expedientes: await cadastros.listExpedientes() } : {}),
+  });
 
   const formId = resolverFormId(previa.cardIndex, await listarFormularios());
   const bpmnVersion = existe ? bpmnVersionDe(await cliente.exportProcess(processId)) : undefined;
