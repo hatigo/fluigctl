@@ -513,6 +513,21 @@ de gateway, `expression` no fluxo, `activeProcess`, propriedades estendidas no
 gateway, o fluxo sem origem das 5 cópias do `cotacao` e 2 arquivos que não são
 XML válido.
 
+**Processo de teste redesenhado (03/10/2026).** O `teste_fluigctl` passou a usar
+a geometria de um processo real do corpus (`SolicitacaoDeConsultoriaGeral`, do
+fluigbsm), com os mesmos ids: pool com as raias "Solicitante" e "Execução",
+Aprovação (usuário) → Registrar aprovação (tarefa de serviço, com erro anexado e
+"Tratar erro do serviço") → Conferência (usuário) → gateway "Aprovado?" por regra
+no campo `aprovado` (`sim` → fim; senão → Aprovação). Atribuição de todas as
+tarefas: Usuário Integracao.Fluig. O script `teste_fluigctl.servicetask24.js`
+anota no campo `descricao` que rodou. Fontes em `~/projetos/teste-fluigctl` (o
+desenho anterior ficou em `workflow/diagrams-anterior/`).
+
+- HML: versão 18 liberada sem erro de atividade nem de fluxo. Solicitação 689:
+  Aprovação → serviço (rodou na hora; `descricao` ganhou "[servico ok, tentativa
+  1]") → Conferência → gateway com `aprovado = nao` → de volta à Aprovação →
+  serviço de novo → Conferência → gateway com `sim` → fim, finalizada.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

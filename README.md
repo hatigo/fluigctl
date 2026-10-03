@@ -376,7 +376,9 @@ visualizador destaca a atividade atual pelo `<g sequence>` de cada estado). O
 dry-run diz qual vai.
 
 Conferido no HML da Cetenco com dois processos descartáveis: `teste_fluigctl`
-(hoje na versão 16, ligado ao formulário `formTesteFluigctl`, documentId 1192) e
+(hoje na versão 18 — pool com duas raias, tarefa de usuário, tarefa de serviço
+com erro anexado e gateway por regra —, ligado ao formulário `formTesteFluigctl`,
+documentId 1192) e
 `teste_fluigctl_sub`, o alvo do subprocesso dele. Cada mapeamento sem par do
 Studio foi publicado numa versão própria, conferido no export e, quando muda a
 execução, com uma solicitação aberta e movida pela API (detalhes por corte no
