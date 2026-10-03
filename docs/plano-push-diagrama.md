@@ -490,6 +490,16 @@ no formato do `String.format` do Studio decompilado. Aparece só dentro do
   Versão 14 republicada com a variante de referência.
 - 429/475 `.process` convertem sem recusa (eram 423); gabaritos seguem 68/72.
 
+**Estado (03/10/2026, 14º corte).** `approve`/`reject` do `appsConfiguration` com
+o texto literal `null` (5 tarefas, sem par) vão como estão: o
+`getProcessAppConfiguration` do Studio copia a `description` sem tratar. Número
+continua tendo de nomear um estado; outro texto segue recusado.
+
+- HML: versão 15 do `teste_fluigctl` com `title` e `approve` = `null` na tarefa 5.
+  Liberada; o export devolve `null`; a solicitação 687 saiu da tarefa para o
+  subprocesso (filha 688). Versão 16 republicada com a variante de referência.
+- 435/475 `.process` convertem sem recusa (eram 429); gabaritos seguem 68/72.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

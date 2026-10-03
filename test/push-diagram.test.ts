@@ -778,13 +778,14 @@ test('descriptorFields e appsConfiguration vazios ou ausentes deixam os filhos 1
 
 test('appsConfiguration: uma linha por campo e por tarefa, com a versão do .process e o sequence da tarefa', () => {
   // approve/reject nomeiam estados do diagrama (185/185 nos .process medidos): aqui 7 e 6.
-  const blob = APPS(CAMPO_APP('title', ''), CAMPO_APP('description', '@[form:descr] &amp; mais'), CAMPO_APP('approve', '7'), CAMPO_APP('reject', ''));
+  // reject "null" literal: o Studio copia como está (conferido no HML).
+  const blob = APPS(CAMPO_APP('title', ''), CAMPO_APP('description', '@[form:descr] &amp; mais'), CAMPO_APP('approve', '7'), CAMPO_APP('reject', 'null'));
   const outro = APPS(CAMPO_APP('highlight', '@[form:valor]'), CAMPO_APP('approve', '6'));
   const xml = comApps('task7', outro).replace('<bpmn2:BpmnTask id="task5"', `<bpmn2:BpmnTask appsConfiguration="${comoAtributo(blob)}" id="task5"`);
   const linhas = filhosDaRaiz(converterDiagrama(xml, { companyId: 1 }).xml)[17]!.filhos;
   assert.deepEqual(
     linhas.map((l) => [texto(l, 'stateSequence'), texto(l, 'appField'), texto(l, 'description')].join('|')),
-    ['5|title|', '5|description|@[form:descr] & mais', '5|approve|7', '5|reject|', '7|highlight|@[form:valor]', '7|approve|6'],
+    ['5|title|', '5|description|@[form:descr] & mais', '5|approve|7', '5|reject|null', '7|highlight|@[form:valor]', '7|approve|6'],
   );
   assert.deepEqual(linhas[0]!.filhos.map((f) => f.nome), [
     'id', 'tenantId', 'processId', 'processVersion', 'stateSequence', 'appKey', 'appField', 'description',

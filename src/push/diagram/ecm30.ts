@@ -344,11 +344,12 @@ function lerAppsConfiguracao(blob: string, estados: Set<number>): Lido<{ chave: 
     const descricao = f.get('description');
     if (!APP_CAMPOS.includes(campo)) return { erro: `appsConfiguration com appField "${campo}"` };
     if (descricao === undefined) return { erro: `appsConfiguration sem description em ${campo}` };
-    if (APP_CAMPOS_NUMERICOS.has(campo) && descricao !== '' && !/^\d+$/.test(descricao)) {
+    // "null" literal (5 tarefas, sem par): o Studio copia a description como está.
+    if (APP_CAMPOS_NUMERICOS.has(campo) && descricao !== '' && descricao !== 'null' && !/^\d+$/.test(descricao)) {
       return { erro: `appsConfiguration com ${campo} não numérico` };
     }
     // approve/reject nomeiam um sequence de estado do diagrama (não só o destino direto do fluxo).
-    if (APP_CAMPOS_NUMERICOS.has(campo) && descricao !== '' && !estados.has(Number(descricao))) {
+    if (APP_CAMPOS_NUMERICOS.has(campo) && /^\d+$/.test(descricao) && !estados.has(Number(descricao))) {
       return { erro: `appsConfiguration com ${campo} ${descricao}, que não é um estado do diagrama` };
     }
     if (itens.some((i) => i.campo === campo)) return { erro: `appsConfiguration com appField ${campo} repetido` };
