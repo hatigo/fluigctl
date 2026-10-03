@@ -547,6 +547,24 @@ servidor — o corpus tem 125 vazias e dezenas de nomes livres.
   de teste com `volume="homolog"` e `--create` saiu com código 6 depois da
   consulta e sem criar nada.
 
+**Estado (03/10/2026, 15º corte).** Scripts pelo nome do arquivo. O Studio monta
+o nome dos scripts com o nome do `.process` sem a extensão, não com o id do
+processo: `ProjectUtils.getScriptFiles` inclui todo
+`workflow/scripts/<arquivo>.*.js` e `getScriptFileName` grava
+`<arquivo>.<eventId>.js` (decompilados; `ProcessUtil.getFileName` corta a
+extensão). Os dois nomes divergem quando o processo foi renomeado depois de
+criado (`AdiantamentoRessarcimento.process` com id `Ressarcimento_v2`). O
+`push diagram` e o harness passam a ler os scripts pelo nome do arquivo, e o
+`scriptFileName` vale com o nome do arquivo ou com o id do processo; um terceiro
+nome segue recusado. O `push process` não muda: ele recebe o id do processo.
+
+- Harness, scripts contra `workflow/scripts`: 655 iguais (eram 651), 25
+  diferentes (eram 29), 17 só no local (eram 21) — quatro scripts que antes
+  "não batiam" agora batem com o ecm30 do Studio. Gabaritos seguem 67/71.
+- 438/475 `.process` convertem sem recusa (eram 435). Os 2 `scriptFileName` que
+  sobram são dos `solicitacao-pessoal` (id de processo vazio e um terceiro nome
+  no script), também recusados pelo `appsConfiguration` na tarefa 81.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

@@ -8,6 +8,11 @@ import { ErroFluigctl } from '../errors.js';
  * `<workflow>/scripts/<processId>.<eventId>.js` — por exemplo
  * `reembolso.servicetask13.js` ou `reembolso.beforeStateEntry.js`.
  */
+/**
+ * Scripts `workflow/scripts/<prefixo>.<eventId>.js`. No `push process` o prefixo
+ * é o id do processo; no `push diagram`, o nome do arquivo `.process`, como o
+ * Studio (`ProjectUtils.getScriptFiles`).
+ */
 export async function lerScriptsDoProcesso(pastaWorkflow: string, processId: string): Promise<Map<string, string>> {
   const pasta = join(pastaWorkflow, 'scripts');
   let arquivos: string[];
