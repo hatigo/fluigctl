@@ -476,6 +476,20 @@ esforço previsto.
   mecanismo vazio), que agora é o fixture `subprocessoTeste.process`.
 - 423/475 `.process` convertem sem recusa (eram 418); gabaritos seguem 68/72.
 
+**Estado (03/10/2026, 13º corte).** Entra o "Grupos Colaborador"
+(`AssignmentControllerColleagueGroup`): `<AssignmentController><GroupsOf>colleagueId</GroupsOf>
+<OnlyWorkGroup>ON|OFF</OnlyWorkGroup><IncludeCommunityGroups>ON|OFF</IncludeCommunityGroups></AssignmentController>`,
+no formato do `String.format` do Studio decompilado. Aparece só dentro do
+"Associado" (8 controladores, 6 arquivos bloqueados só por isso), sem par.
+
+- HML: versão 13 do `teste_fluigctl` com a tarefa 5 em "Associado" AND (Grupos
+  Colaborador de Integracao.Fluig + Usuário Integracao.Fluig). Liberada sem
+  `activityError`; o export devolve a configuração igual; a solicitação 686 caiu
+  na tarefa 5 para Integracao.Fluig. O AND com o próprio usuário mostra que o
+  servidor aceita e resolve o mecanismo, não o efeito isolado do `GroupsOf`.
+  Versão 14 republicada com a variante de referência.
+- 429/475 `.process` convertem sem recusa (eram 423); gabaritos seguem 68/72.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

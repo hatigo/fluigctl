@@ -894,6 +894,24 @@ test('"Associado" com OR é aceito, mas avisa que nenhum par o confere', () => {
   assert.match(r.avisos.join('\n'), /Associado" com OR.*task7/);
 });
 
+const GRUPOS_DE = (colega: string, so = 'false') =>
+  `    <org.eclipse.bpmn2.impl.AssignmentControllerColleagueGroup>\n      <colleagueId>${colega}</colleagueId>\n` +
+  `      <onlyWorkGroup>${so}</onlyWorkGroup>\n      <includeCommunityGroups>false</includeCommunityGroups>\n` +
+  '      <mechanismName>Grupos Colaborador</mechanismName>\n    </org.eclipse.bpmn2.impl.AssignmentControllerColleagueGroup>';
+
+test('"Grupos Colaborador" vira GroupsOf com OnlyWorkGroup e IncludeCommunityGroups ON/OFF', () => {
+  const r = converterDiagrama(comAssociado('AND', GRUPOS_DE('fulano', 'true'), PAPEL('Gestor')), { companyId: 1 });
+  assert.equal(
+    atribuicaoDaTask7(r.xml)[1],
+    '<AssociatedController ConditionAssociated="AND"><ControlXML TypeAssociated="Grupos Colaborador"><AssignmentController>' +
+      '<GroupsOf>fulano</GroupsOf><OnlyWorkGroup>ON</OnlyWorkGroup><IncludeCommunityGroups>OFF</IncludeCommunityGroups>' +
+      '</AssignmentController></ControlXML><ControlXML TypeAssociated="Papel"><AssignmentController><Role>Gestor</Role>' +
+      '</AssignmentController></ControlXML></AssociatedController>',
+  );
+  const erro = erroDe(() => converterDiagrama(comAssociado('AND', GRUPOS_DE('fulano', 'sim')), { companyId: 1 }));
+  assert.match(erro.message, /atribuição AssignmentControllerAssociated em task7/);
+});
+
 test('"Associado" com controlador não conferido, aninhado ou tipo desconhecido é recusado', () => {
   const colegaGrupo = `    <org.eclipse.bpmn2.impl.AssignmentControllerColleagueGroup>\n      <groupId>X</groupId>\n      <mechanismName>Colaborador do Grupo</mechanismName>\n    </org.eclipse.bpmn2.impl.AssignmentControllerColleagueGroup>`;
   const aninhado = `    <org.eclipse.bpmn2.impl.AssignmentControllerAssociated>\n      <type>AND</type>\n      <mechanismName>Associado</mechanismName>\n    </org.eclipse.bpmn2.impl.AssignmentControllerAssociated>`;

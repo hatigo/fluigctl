@@ -580,6 +580,21 @@ function atribuicaoLida(
       return comConfiguracao(mecanismo, controlador('Role', c['roleId']));
     case 'AssignmentControllerColleague':
       return comConfiguracao(mecanismo, controlador('User', c['colleagueId']));
+    case 'AssignmentControllerColleagueGroup': {
+      // "Grupos Colaborador": formato do Studio decompilado, sem par (conferido no HML).
+      const liga = (v: string | undefined) => ({ true: 'ON', false: 'OFF' })[v ?? ''];
+      const grupos = controlador('GroupsOf', c['colleagueId']);
+      const so = liga(c['onlyWorkGroup']);
+      const comunidade = liga(c['includeCommunityGroups']);
+      if (!grupos || !so || !comunidade) return undefined;
+      return {
+        id: mecanismo,
+        configuracao: grupos.replace(
+          '</AssignmentController>',
+          `<OnlyWorkGroup>${so}</OnlyWorkGroup><IncludeCommunityGroups>${comunidade}</IncludeCommunityGroups></AssignmentController>`,
+        ),
+      };
+    }
     case 'AssignmentControllerFormField':
       return comConfiguracao(mecanismo, controlador('FormField', c['formField']));
     case 'AssignmentControllerExecutorMechanism': {
