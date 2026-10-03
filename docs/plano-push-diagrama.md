@@ -408,6 +408,28 @@ enviado não vale logo depois do import: no HML da Cetenco o export devolveu a
 versão nova com os eventos antigos (ver o comentário no fim de
 `src/commands/push-process.ts`).
 
+**Estado (03/10/2026, fase 3 publicada).** `push diagram` sem `--dry-run`
+publica. Converte offline primeiro; confere no destino se o processo existe (e
+só cria com `--create`), se o formulário do `cardIndex` existe (número, ou nome
+único; vazio é sem formulário) e lê da definição atual o `bpmnVersion`. Processo
+existente: `createVersion` → `importProcess` (overWrite) → `releaseProcess`.
+Processo novo: `importProcess` com `newProcess` → `releaseProcess`, como o
+fluig-cd — o item 5 das Decisões foi revisto a pedido, atrás de `--create`.
+
+Aceite, no HML da Cetenco, com o processo descartável `teste_fluigctl` (adaptado
+de um diagrama do corpus: início → tarefa de usuário → gateway exclusivo com
+expressões → fim, sem formulário, categoria Backoffice):
+
+- `push diagram --create`: importado e versão 1 liberada (`ok=true`, sem erro de
+  atividade nem de fluxo); estados, atribuição (`<User>Integracao.Fluig</User>`)
+  e `formId` 0 conferidos no banco.
+- Solicitação 677: aberta pela API, tarefa movida para o gateway, que avaliou
+  `true` e levou ao fim; histórico 4 → 5 → 8 → 7, status finalizado.
+- `push diagram` de novo, sem `--create`: versão 2 criada, importada e liberada.
+  Solicitação 678 na versão 2, de ponta a ponta, finalizada.
+
+O `teste_fluigctl` fica no HML para os próximos testes.
+
 ## Decisões (30/09/2026)
 
 "Fazer como o fluig-cd faz."

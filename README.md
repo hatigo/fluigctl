@@ -48,11 +48,11 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 283 | não | não | — |
+| Testes automatizados | 299 | não | não | — |
 
-Fica para o Studio: criar processo novo, o diagrama (aqui só `--dry-run`, ou o
-import com `push process --base`), widget com código Java, evento global,
-mecanismo de atribuição e layout.
+Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
+lista o motivo), widget com código Java, evento global, mecanismo de atribuição
+e layout.
 
 ## Estado
 
@@ -65,7 +65,7 @@ mecanismo de atribuição e layout.
 | `push form` | pronto |
 | `push widget` | pronto (widgets sem Java) |
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
-| `push diagram` | só `--dry-run`, fase 1 |
+| `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 369 de 475 diagramas reais convertem |
 
 Fora de escopo por enquanto: `pull`, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
@@ -338,17 +338,31 @@ workspaces: 147 empacotadas, todas aprovadas por `unzip -t`; 7 recusadas por
 terem Java; 6 recusadas por não serem pasta de widget (dois `.zip`, um `.txt`,
 duas pastas só com `target/` e uma sem `WEB-INF`).
 
-## Convertendo um diagrama
+## Publicando um diagrama
 
 ```sh
 fluigctl push diagram workflow/diagrams/meuProcesso.process --server cetenco-hml \
-  --dry-run --save-xml /tmp/meuProcesso.xml
+  --dry-run --save-xml /tmp/meuProcesso.xml                                         # converte, sem rede
+fluigctl push diagram workflow/diagrams/meuProcesso.process --server cetenco-hml   # publica
+fluigctl push diagram workflow/diagrams/novo.process --server cetenco-hml --create  # processo novo
 ```
 
 Converte o `.process` no XML que o servidor importa (o formato do
-`.ecm30.xml` do Studio), sem rede e sem senha: do servidor só se usa o
-`companyId` do cadastro. Nada é publicado ainda — sem `--dry-run` o comando sai
-com código 2. `cardIndex` numérico vira o `formId`; um nome fica 0, com aviso.
+`.ecm30.xml` do Studio). O `--dry-run` não abre sessão: do servidor só usa o
+`companyId` do cadastro; `cardIndex` numérico vira o `formId`, um nome fica 0,
+com aviso.
+
+Publicar converte primeiro (o que não converte nem abre sessão) e confere o
+destino: o processo tem de existir, ou vir `--create`; o formulário do
+`cardIndex` tem de existir (número) ou casar com um único formulário (nome);
+vazio é processo sem formulário. O `bpmnVersion`, que não está no `.process`,
+vem da definição atual no servidor. Num processo existente: nova versão, import
+e liberação, como o `push process`; `--no-release` deixa a versão em edição.
+Produção passa pela mesma trava de senha no terminal.
+
+Conferido no HML da Cetenco com um processo descartável (`teste_fluigctl`):
+criado, liberado, uma solicitação passando pela tarefa e pelo gateway até o fim,
+e republicado como versão 2 com outra solicitação de ponta a ponta.
 
 Por enquanto cobre pool, lane, início, tarefas de usuário e de serviço,
 gateways exclusivo/paralelo/join com condições, eventos intermediários
@@ -413,7 +427,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 283 testes, sem rede e sem servidor Fluig
+npm test        # 299 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
