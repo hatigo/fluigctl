@@ -194,6 +194,10 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
   ],
   BpmnPool: ['id', 'name', 'cores'],
   BpmnSwimLane: ['id', 'name', 'cores'],
+  // Artefatos de documentação (ver artefatosBpmn): só a forma vista nos .process.
+  BpmnGroup: ['id', 'name'],
+  BpmnDatabase: ['id', 'name', 'incoming', 'outgoing', 'type'],
+  BpmnDocument: ['id', 'name', 'outgoing', 'type', 'documentId'],
 };
 
 /** Atributos conhecidos que não viram campo; só o valor neutro é aceito. */
@@ -685,14 +689,20 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   const gateways: ObjetoBpmn[] = [];
   const fins: ObjetoBpmn[] = [];
   const anotacoes: ObjetoBpmn[] = [];
-  /** Pools e lanes na ordem do arquivo. */
+  /** Pools, lanes e grupos na ordem do arquivo: no Studio, todos são `SwimLane`. */
   const raiasBpmn: ObjetoBpmn[] = [];
+  /**
+   * Anotações, documentos e bancos de dados na ordem do arquivo: todos viram
+   * `ProcessComponGraf` (componType 1, 2 e 3), como no `getProcessComponGraf` do
+   * Studio decompilado. Documento e banco de dados não têm par do Studio.
+   */
+  const graficosBpmn: ObjetoBpmn[] = [];
   const fluxos: ObjetoBpmn[] = [];
 
   for (const o of objetos) {
     const tipo = o.attrs['type'] ?? '';
     if (o.tipo === 'BpmnProcess') continue;
-    else if (o.tipo === 'BpmnPool' || o.tipo === 'BpmnSwimLane') raiasBpmn.push(o);
+    else if (o.tipo === 'BpmnPool' || o.tipo === 'BpmnSwimLane' || o.tipo === 'BpmnGroup') raiasBpmn.push(o);
     else if (o.tipo === 'SequenceFlow') fluxos.push(o);
     else if (o.tipo === 'BpmnStartEvent' && tipo === '10') inicios.push(o);
     else if (o.tipo === 'BpmnTask' && TAREFAS.has(tipo)) tarefas.push(o);
@@ -700,7 +710,10 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     else if (o.tipo === 'BpmnSubProcess' && tipo === SUBPROCESSO) subprocessos.push(o);
     else if (o.tipo === 'BpmnGateway' && GATEWAYS[tipo] !== undefined) gateways.push(o);
     else if (o.tipo === 'BpmnEndEvent' && FINS.has(tipo)) fins.push(o);
-    else if (o.tipo === 'BpmnAnnotation' && tipo === '0') anotacoes.push(o);
+    else if (o.tipo === 'BpmnAnnotation' && tipo === '0') {
+      anotacoes.push(o);
+      graficosBpmn.push(o);
+    } else if ((o.tipo === 'BpmnDocument' || o.tipo === 'BpmnDatabase') && tipo === '0') graficosBpmn.push(o);
     else {
       recusar(tipo ? `${o.tipo} (type ${tipo})` : o.tipo);
       continue;
@@ -715,7 +728,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   const idsDeEstado = new Set(estadosBpmn.map((o) => o.attrs['id'] ?? ''));
   const ehEstado = (id: string | undefined) => id !== undefined && id !== '' && idsDeEstado.has(id);
 
-  for (const o of [processo, ...estadosBpmn, ...anotacoes, ...raiasBpmn, ...fluxos]) {
+  for (const o of [processo, ...estadosBpmn, ...graficosBpmn, ...raiasBpmn, ...fluxos]) {
     const conhecidos = [...(ATRIBUTOS_CONHECIDOS[o.tipo] ?? []), ...(servico(o) ? SERVICO_ATRIBUTOS : [])];
     for (const [attr, valor] of Object.entries(o.attrs)) {
       if (!conhecidos.includes(attr)) {
@@ -1276,12 +1289,19 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   }
 
   /*
-   * Fluxo liga dois estados; associação sai de uma anotação para um estado.
-   * Pool, lane ou anotação em qualquer outra ponta é recusada.
+   * Fluxo liga dois estados; associação sai de uma anotação ou de um documento
+   * para um estado. Como no Studio (`getProcessLinkFromSequenceFlow`), o fluxo
+   * entre um estado e um banco de dados é um ProcessLink comum, apontando para o
+   * sequence do banco (nos .process: tarefa → banco e banco → tarefa). Pool,
+   * lane, grupo ou artefato em qualquer outra ponta é recusado.
    */
-  const deAnotacao = (f: ObjetoBpmn) => nos.get(f.attrs['sourceRef'] ?? '')?.tipo === 'BpmnAnnotation';
+  const tipoNo = (id: string | undefined) => nos.get(id ?? '')?.tipo;
+  const deAnotacao = (f: ObjetoBpmn) => ['BpmnAnnotation', 'BpmnDocument'].includes(tipoNo(f.attrs['sourceRef']) ?? '');
+  const banco = (id: string | undefined) => tipoNo(id) === 'BpmnDatabase';
   const fluxosCobertos = fluxos.filter((f) => {
-    if ((deAnotacao(f) || ehEstado(f.attrs['sourceRef'])) && ehEstado(f.attrs['targetRef'])) return true;
+    const { sourceRef: de, targetRef: para } = f.attrs;
+    if ((deAnotacao(f) || ehEstado(de)) && ehEstado(para)) return true;
+    if ((banco(de) && ehEstado(para)) || (ehEstado(de) && banco(para))) return true;
     recusar(`fluxo ${f.attrs['id']} ligado a elemento não suportado`);
     return false;
   });
@@ -1351,18 +1371,22 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   });
 
   /*
-   * Anotação → `ProcessComponGraf` (componType 1); o fluxo que sai dela →
-   * `ProcessLinkAssoc`, que não tem rótulo, retorno nem movimentação: com
-   * qualquer um deles preenchido, recusa.
+   * Anotação → `ProcessComponGraf` (componType 1, `stateName` = o texto);
+   * documento → 2, com o `documentId` do GED no `stateName`; banco de dados → 3,
+   * com o nome. O fluxo que sai de anotação ou documento → `ProcessLinkAssoc`, que
+   * não tem rótulo, retorno nem movimentação: com qualquer um deles preenchido,
+   * recusa.
    */
-  const anotacoesXml = anotacoes.map((o): Campo[] => {
+  const graficosXml = graficosBpmn.map((o): Campo[] => {
     const pos = caixa(o.attrs['id'] ?? '');
+    const documento = o.tipo === 'BpmnDocument';
+    if (documento && !/^\d+$/.test(o.attrs['documentId'] ?? '')) recusar(`documento ${o.attrs['id']} sem documentId numérico`);
     return [
-      ['componType', 1],
+      ['componType', o.tipo === 'BpmnAnnotation' ? 1 : documento ? 2 : 3],
       ['positionX', pos.absX],
       ['positionY', pos.absY],
       ['processComponGrafPK', pk([['componGrafSequence', sufixo(o.attrs['id'])]])],
-      ['stateName', o.attrs['name'] ?? ''],
+      ['stateName', documento ? (o.attrs['documentId'] ?? '') : (o.attrs['name'] ?? '')],
     ];
   });
   const associacoes = associacoesBpmn.map((f): Campo[] => {
@@ -1410,13 +1434,20 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
    * arquivo — e não o sufixo do id: com lanes criadas depois de outros nós
    * (`swimlane13`), o Studio grava 4, 5... (medido nos pares; ver o harness).
    */
+  /*
+   * O EMF não grava no .process a cor igual ao padrão do modelo: sem `cores`, a
+   * cor é a padrão — `9fc1c6` na lane (o único caso nos pares grava assim) e
+   * `B9E9FE` no pool (BpmnPool.COLOR_EDEFAULT; nenhum pool sem `cores` no corpus).
+   */
+  const COR_PADRAO: Record<number, string> = { 1: 'B9E9FE', 2: '9fc1c6' };
   const sequenciaRaia = new Map(raiasBpmn.map((o, i) => [o.attrs['id'] ?? '', i + 1]));
   const raias = raiasBpmn.map((o): Campo[] => {
-    const tipo = o.tipo === 'BpmnPool' ? 1 : 2;
+    // Grupo é uma SwimLane de tipo 3, sem raia-mãe e com cor vazia (BpmnGroup.getColor devolve "").
+    const tipo = o.tipo === 'BpmnPool' ? 1 : o.tipo === 'BpmnGroup' ? 3 : 2;
     const c = caixa(o.attrs['id'] ?? '');
     const pai = tipo === 2 ? (sequenciaRaia.get(c.pai ?? '') ?? 0) : 0;
     return [
-      ['color', o.attrs['cores'] || 'FFFFFF'],
+      ['color', tipo === 3 ? '' : (o.attrs['cores'] ?? COR_PADRAO[tipo] ?? '')],
       ['height', c.altura],
       ['width', c.largura],
       ['positionX', c.absX],
@@ -1574,7 +1605,11 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     }
   };
   semRepeticao('estado', estadosBpmn.map((o) => o.attrs['id'] ?? ''));
-  semRepeticao('anotação', anotacoes.map((o) => o.attrs['id'] ?? ''));
+  semRepeticao('componente gráfico', graficosBpmn.map((o) => o.attrs['id'] ?? ''));
+  // O fluxo para o banco de dados aponta para o sequence dele: não pode coincidir com o de um estado.
+  for (const o of graficosBpmn.filter((g) => g.tipo !== 'BpmnAnnotation')) {
+    if (sequenciasDeEstado.has(sufixo(o.attrs['id']))) recusar(`${o.attrs['id']} com o sequence de um estado`);
+  }
   semRepeticao('fluxo', fluxosCobertos.map((f) => f.attrs['id'] ?? ''));
 
   if (naoSuportados.size > 0 && !opcoes.parcial) {
@@ -1655,7 +1690,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     lista('WorkflowProcessEvent', eventos),
     lista('AdvancedProcessProperties', propriedadesAvancadas),
     lista('SwimLane', raias),
-    lista('ProcessComponGraf', anotacoesXml),
+    lista('ProcessComponGraf', graficosXml),
     lista('ProcessLinkAssoc', associacoes),
     lista('ProcessLinkBend', bends),
     lista('ProcessStateTrigger', gatilhos),

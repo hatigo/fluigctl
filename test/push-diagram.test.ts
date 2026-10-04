@@ -100,7 +100,8 @@ test('sequence da lane é a posição entre pools e lanes, não o sufixo do id',
   // Posição da lane é absoluta: pool (10,10) + lane (30,150).
   assert.equal(texto(aprovacao, 'positionX'), '40');
   assert.equal(texto(aprovacao, 'positionY'), '160');
-  assert.equal(texto(aprovacao, 'color'), 'FFFFFF', 'lane sem cores fica branca');
+  // Sem `cores`, a cor padrão do modelo do Studio (o EMF não grava o padrão): o único caso nos pares grava 9fc1c6.
+  assert.equal(texto(aprovacao, 'color'), '9fc1c6', 'lane sem cores fica com a cor padrão do Studio');
 });
 
 test('PK de estado, link e lane usa version 1; a PDV e os bends usam a versão do .process', () => {
@@ -1354,4 +1355,81 @@ test('scripts e scriptFileName seguem o nome do arquivo .process, como o Studio,
   converterDiagrama(FASE1, { companyId: 1, nomeDoArquivo: 'nomeAntigo' });
   const erro = erroDe(() => converterDiagrama(antigo, { companyId: 1, nomeDoArquivo: 'outroNome' }));
   assert.match(erro.message, /scriptFileName "nomeAntigo.servicetask5.js" em servicetask5/);
+});
+
+/**
+ * Artefatos de documentação no processoTeste: um grupo, um banco de dados entre
+ * a task5 e a task7 e um documento apontando para a task7.
+ */
+function comArtefatos(ajuste: (s: string) => string = (s) => s): string {
+  const formas =
+    '    <children xsi:type="pi:ContainerShape" visible="true" active="true">\n' +
+    '      <graphicsAlgorithm xsi:type="al:RoundedRectangle" lineStyle="DASH" filled="false" width="200" height="150" x="600" y="20"/>\n' +
+    '      <link businessObjects="bpmngroup20"/>\n    </children>\n' +
+    '    <children xsi:type="pi:ContainerShape" visible="true" active="true">\n' +
+    '      <graphicsAlgorithm xsi:type="al:Rectangle" width="50" height="50" x="500" y="200"/>\n' +
+    '      <link businessObjects="databasetask21"/>\n    </children>\n' +
+    '    <children xsi:type="pi:ContainerShape" visible="true" active="true">\n' +
+    '      <graphicsAlgorithm xsi:type="al:Rectangle" width="40" height="50" x="300" y="300"/>\n' +
+    '      <link businessObjects="documenttask22"/>\n    </children>\n';
+  const objetos =
+    '  <bpmn2:BpmnGroup id="bpmngroup20" name="Fase 1"/>\n' +
+    '  <bpmn2:BpmnDatabase id="databasetask21" name="RM" incoming="flow23" outgoing="flow25" type="0"/>\n' +
+    '  <bpmn2:BpmnDocument id="documenttask22" name="Documento" outgoing="flow24" type="0" documentId="566"/>\n';
+  const fluxo = (id: string, de: string, para: string) =>
+    `  <bpmn2:SequenceFlow id="${id}" name="" sourceRef="${de}" targetRef="${para}" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>\n`;
+  let s = PROCESSO
+    .replace('    <connections ', `${formas}    <connections `)
+    .replace('  <bpmn2:BpmnStartEvent ', `${objetos}  <bpmn2:BpmnStartEvent `)
+    .replace('  <bpmn2:SequenceFlow id="flow8"', fluxo('flow23', 'task5', 'databasetask21') + fluxo('flow24', 'documenttask22', 'task7') +
+      fluxo('flow25', 'databasetask21', 'task7') + '  <bpmn2:SequenceFlow id="flow8"');
+  s = ajuste(s);
+  assert.notEqual(s, PROCESSO);
+  return s;
+}
+
+test('grupo vira SwimLane tipo 3; documento e banco de dados, ProcessComponGraf 2 e 3, como no Studio decompilado', () => {
+  const filhos = filhosDaRaiz(converterDiagrama(comArtefatos(), { companyId: 1 }).xml);
+
+  const grupo = filhos[8]!.filhos.find((l) => texto(l, 'stateName') === 'Fase 1')!;
+  assert.deepEqual(['type', 'color', 'parentSequence', 'positionX', 'positionY', 'width', 'height'].map((c) => texto(grupo, c)),
+    ['3', '', '0', '600', '20', '200', '150']);
+  // Entra na numeração das raias, na ordem do arquivo (depois do pool e das duas lanes).
+  assert.equal(texto(grupo, 'swimLanePK', 'sequence'), '4');
+
+  const graficos = filhos[9]!.filhos.map((g) =>
+    [texto(g, 'processComponGrafPK', 'componGrafSequence'), texto(g, 'componType'), texto(g, 'stateName'), texto(g, 'positionX')].join('|'));
+  assert.deepEqual(graficos, ['21|3|RM|500', '22|2|566|300']);
+
+  // Fluxo entre estado e banco de dados é ProcessLink comum; o que sai do documento, associação.
+  const links = filhos[4]!.filhos.map((l) => [texto(l, 'processLinkPK', 'linkSequence'), texto(l, 'initialStateSequence'), texto(l, 'finalStateSequence')].join('>'));
+  assert.ok(links.includes('23>5>21') && links.includes('25>21>7'), links.join(' '));
+  assert.ok(!links.some((l) => l.startsWith('24>')));
+  assert.deepEqual(filhos[10]!.filhos.map((a) => [texto(a, 'initialStateSequence'), texto(a, 'finalStateSequence')].join('>')), ['22>7']);
+});
+
+test('artefato fora da forma vista nos .process é recusado com código 6', () => {
+  const casos: [string, RegExp][] = [
+    // Fluxo chegando no documento: nunca visto.
+    [comArtefatos((s) => s.replace('sourceRef="documenttask22" targetRef="task7"', 'sourceRef="task7" targetRef="documenttask22"')), /fluxo flow24 ligado a elemento não suportado/],
+    [comArtefatos((s) => s.replace(' documentId="566"', '')), /documento documenttask22 sem documentId numérico/],
+    [comArtefatos((s) => s.replace('<bpmn2:BpmnGroup id="bpmngroup20" name="Fase 1"/>', '<bpmn2:BpmnGroup id="bpmngroup20" name="Fase 1" cores="FFFFFF"/>')), /atributo cores em bpmngroup20/],
+    // Sequence do banco igual ao de um estado: o ProcessLink apontaria para os dois.
+    [comArtefatos((s) => s.replaceAll('databasetask21', 'databasetask5')), /databasetask5 com o sequence de um estado/],
+  ];
+  for (const [diagrama, motivo] of casos) {
+    const erro = erroDe(() => converterDiagrama(diagrama, { companyId: 1 }));
+    assert.equal(erro.codigo, 6, String(motivo));
+    assert.match(erro.message, motivo);
+  }
+});
+
+test('gerarSvg desenha grupo, banco de dados e documento em <g componentSequence>, fora dos estados', () => {
+  const svg = gerarSvg(lerDiagrama(comArtefatos()));
+  assert.match(svg, /<g componentSequence="20"><rect [^>]*stroke-dasharray/);
+  assert.match(svg, /<g componentSequence="21"><path [^>]*\/><ellipse /);
+  assert.match(svg, /<g componentSequence="22"><path d="M300 300 /);
+  // Não são estados: o visualizador não os destaca.
+  for (const seq of [20, 21, 22]) assert.ok(!sequenciasDoSvg(svg).has(seq));
+  assert.ok(lerXml(svg.replace(/^<\?xml[^>]*>\n/, '')));
 });

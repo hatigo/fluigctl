@@ -201,6 +201,32 @@ export function gerarSvg(diagrama: Diagrama): string {
     );
   }
 
+  // Artefatos de documentação: só desenho, em <g componentSequence> (não são estados).
+  for (const o of objetos) {
+    const c = caixas.get(o.attrs['id'] ?? '');
+    if (!c || !['BpmnGroup', 'BpmnDatabase', 'BpmnDocument'].includes(o.tipo)) continue;
+    const { absX: x, absY: y, largura: w, altura: h } = c;
+    const seq = sequencia(o.attrs['id']);
+    const nome = o.attrs['name'] ?? '';
+    const traco = 'stroke:#191970; fill:#F8FBFE; stroke-width:1';
+    let desenho = '';
+    if (o.tipo === 'BpmnGroup') {
+      desenho = `<rect x="${x}" y="${y}" width="${w}" height="${h}" ry="5" rx="5" style="fill:none; stroke:#000000; stroke-dasharray:6,4" />` +
+        `<text x="${x + 6}" y="${y + 14}" style="font-weight:bold;font-size:10px;stroke:none; fill:#434343">${escaparTexto(nome)}</text>`;
+    } else if (o.tipo === 'BpmnDatabase') {
+      const ry = Math.max(4, Math.round(h / 8));
+      desenho = `<path d="M${x} ${y + ry} L${x} ${y + h - ry} A${w / 2} ${ry} 0 0 0 ${x + w} ${y + h - ry} L${x + w} ${y + ry}" style="${traco}" />` +
+        `<ellipse cx="${x + w / 2}" cy="${y + ry}" rx="${w / 2}" ry="${ry}" style="${traco}" />` +
+        textoCentrado(x + w / 2, y + h, nome, Math.max(w, 80));
+    } else {
+      const dobra = Math.min(10, Math.round(w / 3));
+      desenho = `<path d="M${x} ${y} L${x + w - dobra} ${y} L${x + w} ${y + dobra} L${x + w} ${y + h} L${x} ${y + h} Z" style="${traco}" />` +
+        `<path d="M${x + w - dobra} ${y} L${x + w - dobra} ${y + dobra} L${x + w} ${y + dobra}" style="fill:none; stroke:#191970" />` +
+        textoCentrado(x + w / 2, y + h, nome, Math.max(w, 80));
+    }
+    partes.push(`<g componentSequence="${seq}">${desenho}</g>`);
+  }
+
   // Estados.
   for (const o of objetos) {
     const forma = formaDe(o);
