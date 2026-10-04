@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 320 | não | não | — |
+| Testes automatizados | 322 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -65,7 +65,7 @@ e layout.
 | `push form` | pronto |
 | `push widget` | pronto (widgets sem Java) |
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
-| `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 444 de 475 diagramas reais convertem |
+| `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 449 de 475 diagramas reais convertem |
 
 Fora de escopo por enquanto: `pull`, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
@@ -585,7 +585,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 320 testes, sem rede e sem servidor Fluig
+npm test        # 322 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
