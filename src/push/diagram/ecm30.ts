@@ -116,6 +116,10 @@ const CONFIGURACAO_DO_CAMINHO = 'mecanismoAtribuicaoConfiguracao';
  * O ad hoc (101) não aparece em nenhum ecm30, então segue recusado.
  */
 const SUBPROCESSO = '100';
+/** Subprocesso ad hoc: o usuário cria as tarefas durante a execução. */
+const SUBPROCESSO_ADHOC = '101';
+/** Atributos que o Studio só lê no ad hoc (`getProcessStatesFromSubProcess`, decompilado). */
+const SO_DO_ADHOC = ['managerMechanism', 'managerAssignmentController', 'instructions', 'initialTask'];
 const MAPEAMENTO_CAMPOS = ['processField', 'subProcessField', 'mapFlow'];
 /** Tipos que carregam `attachmentRules` nos pares: início (10) e tarefa de usuário (80). */
 const REGRA_DE_ANEXO_EM = new Set(['BpmnStartEvent:10', 'BpmnTask:80']);
@@ -180,6 +184,8 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
   BpmnSubProcess: [
     'id', 'name', 'incoming', 'outgoing', 'type', 'process', 'loopType', 'selectColleague', 'transferAttachments',
     'cancelSubProcess', 'sendToNextTaskInSubProcess', 'formMaps',
+    // Só do ad hoc (101); no 100 são recusados (ver SO_DO_ADHOC).
+    'managerMechanism', 'managerAssignmentController', 'instructions', 'initialTask',
   ],
   BpmnEndEvent: ['id', 'name', 'incoming', 'type', 'extendedFields', 'signalId', 'notificaRequisitante'],
   BpmnGateway: ['id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'condition'],
@@ -707,7 +713,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     else if (o.tipo === 'BpmnStartEvent' && tipo === '10') inicios.push(o);
     else if (o.tipo === 'BpmnTask' && TAREFAS.has(tipo)) tarefas.push(o);
     else if (o.tipo === 'BpmnIntermediateEvent' && INTERMEDIARIOS.has(tipo)) intermediarios.push(o);
-    else if (o.tipo === 'BpmnSubProcess' && tipo === SUBPROCESSO) subprocessos.push(o);
+    else if (o.tipo === 'BpmnSubProcess' && (tipo === SUBPROCESSO || tipo === SUBPROCESSO_ADHOC)) subprocessos.push(o);
     else if (o.tipo === 'BpmnGateway' && GATEWAYS[tipo] !== undefined) gateways.push(o);
     else if (o.tipo === 'BpmnEndEvent' && FINS.has(tipo)) fins.push(o);
     else if (o.tipo === 'BpmnAnnotation' && tipo === '0') {
@@ -947,20 +953,36 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
    * precisam vir no `.process` (nenhum par mostra o que o Studio grava sem
    * eles); `cancelSubProcess` ausente sai false (3 estados em pares).
    */
+  /*
+   * Ad hoc (101): o Studio parte do subprocesso comum e troca `stateType` (0),
+   * `instruction` (instructions), `initialState` (initialTask), `selectColleague`
+   * e a atribuição (managerMechanism + configuração, nula sem blob); não tem
+   * processo-alvo, então `subProcessId` some. O export do FLUIGADHOC instalado no
+   * fluig-localdev confirma a forma (stateType 0, sem subProcessId, atribuição no
+   * estado).
+   */
   const estadoSubprocesso = (o: ObjetoBpmn): Campo[] => {
     const a = o.attrs;
     const pos = caixa(a['id'] ?? '');
+    const adhoc = a['type'] === SUBPROCESSO_ADHOC;
+    const at = adhoc ? atribuicaoDe(o, a['managerMechanism'], a['managerAssignmentController']) : undefined;
+    const atribuicaoAdhoc: Campo[] = adhoc
+      ? [
+          ['engineAllocationId', at?.id ?? ''],
+          ...(at?.configuracao === undefined ? [] : [['engineAllocationConfiguration', at.configuracao] as Campo]),
+          ['selectColleague', a['selectColleague'] ?? 1],
+          ['initialState', booleano(a['initialTask'], false)],
+        ]
+      : [['engineAllocationId', ''], ['engineAllocationConfiguration', ''], ['initialState', false]];
     return [
       ['processStatePK', pk([['sequence', sufixo(a['id'])]])],
       ['stateName', a['name'] ?? ''],
       ['stateDescription', a['name'] ?? ''],
-      ['instruction', ''],
+      ['instruction', adhoc ? (a['instructions'] ?? '') : ''],
       ['deadlineTime', 0],
       ['joint', false],
       ['agreementPercentage', 0],
-      ['engineAllocationId', ''],
-      ['engineAllocationConfiguration', ''],
-      ['initialState', false],
+      ...atribuicaoAdhoc,
       ['notifyAuthorityDelay', false],
       ['notifyRequisitionerDelay', false],
       ['allowanceAuthorityTime', 0],
@@ -968,7 +990,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['allowanceRequisitionerTime', 0],
       ['frequenceRequisitionerTime', 0],
       ['transferAttachments', a['transferAttachments'] === 'true'],
-      ['subProcessId', a['process'] ?? ''],
+      ...(adhoc ? [] : [['subProcessId', a['process'] ?? ''] as Campo]),
       ['formFolder', 0],
       ['notifyAuthorityFollowUp', false],
       ['notifyRequisitionerFollowUp', false],
@@ -982,7 +1004,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['allowanceManagerTime', 0],
       ['frequenceManagerTime', 0],
       ['inhibitTransfer', false],
-      ['stateType', 2],
+      ['stateType', adhoc ? 0 : 2],
       ['bpmnType', a['type'] ?? ''],
       ['signalId', 0],
       ['counterSign', false],
@@ -1016,6 +1038,15 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   for (const o of subprocessos) {
     const a = o.attrs;
     const id = a['id'] ?? '';
+    if (a['type'] === SUBPROCESSO_ADHOC) {
+      // O ad hoc não chama outro processo: o que é do subprocesso comum nunca apareceu nele.
+      for (const attr of ['process', 'formMaps', 'transferAttachments', 'cancelSubProcess', 'sendToNextTaskInSubProcess']) {
+        if (a[attr] !== undefined) recusar(`${attr} no subprocesso ad hoc ${id}`);
+      }
+      if (a['initialTask'] !== undefined && a['initialTask'] !== 'true' && a['initialTask'] !== 'false') recusar(`initialTask="${a['initialTask']}" em ${id}`);
+      continue;
+    }
+    for (const attr of SO_DO_ADHOC) if (a[attr] !== undefined) recusar(`${attr} no subprocesso ${id} (só visto no ad hoc)`);
     if (!a['process']) recusar(`subprocesso ${id} sem process`);
     /*
      * O modelo do Studio (BpmnSubProcess.eIsSet, decompilado) só grava os três

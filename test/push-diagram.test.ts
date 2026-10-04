@@ -151,14 +151,14 @@ test('tarefa sem managerMechanism não leva os campos de atribuição', () => {
 });
 
 test('elemento não suportado é recusado com código 6, listando o tipo', () => {
-  // O subprocesso ad hoc (101) não aparece em nenhum ecm30: segue recusado pelo tipo.
-  const adHoc = PROCESSO.replace(
+  // Gateway inclusivo (121): nenhum par nem regra conferida — segue recusado pelo tipo.
+  const inclusivo = PROCESSO.replace(
     '<bpmn2:BpmnEndEvent',
-    '<bpmn2:BpmnSubProcess id="subprocess12" name="Filho" type="101"/>\n  <bpmn2:BpmnEndEvent',
+    '<bpmn2:BpmnGateway id="inclusivegateway12" name="Inclusivo" type="121"/>\n  <bpmn2:BpmnEndEvent',
   );
-  const erro = erroDe(() => converterDiagrama(adHoc, { companyId: 1 }));
+  const erro = erroDe(() => converterDiagrama(inclusivo, { companyId: 1 }));
   assert.equal(erro.codigo, 6);
-  assert.match(erro.message, /BpmnSubProcess \(type 101\)/);
+  assert.match(erro.message, /BpmnGateway \(type 121\)/);
 });
 
 test('subprocesso (100) sem process é recusado; booleano fora de true/false também', () => {
