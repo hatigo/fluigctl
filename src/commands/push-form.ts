@@ -92,6 +92,31 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
     avisos: decisao.avisos,
   };
 
+  /*
+   * O servidor grava cada anexo em disco com o nome do arquivo, e há servidor que
+   * não aceita nome fora do ASCII: o Fluig local recusou a criação de um
+   * formulário com "Requisitos Formulário gestão….md" ("Malformed input or input
+   * contains unmappable characters"). Não se sabe se todos recusam, então avisa
+   * antes e, se o servidor recusar, diz qual arquivo renomear.
+   */
+  const foraDoAscii = fonte.anexos.map((a) => a.fileName).filter((n) => /[^\x20-\x7e]/.test(n));
+  if (foraDoAscii.length > 0) {
+    base.avisos.push(
+      `anexo com nome fora do ASCII (${foraDoAscii.join(', ')}): há servidor que recusa o formulário inteiro ` +
+        'por isso. Se for o caso, renomeie sem acento ou tire o arquivo da pasta.',
+    );
+  }
+  const traduzir = (erro: unknown): never => {
+    if (foraDoAscii.length > 0 && erro instanceof ErroFluigctl && /unmappable characters|Malformed input/i.test(erro.message)) {
+      throw new ErroFluigctl(
+        `o servidor não aceitou anexo com nome fora do ASCII: ${foraDoAscii.join(', ')}. ` +
+          'Renomeie sem acento ou tire o arquivo da pasta do formulário e publique de novo.',
+        7,
+      );
+    }
+    throw erro;
+  };
+
   // Na criação, nada é adivinhado: errar a pasta-mãe ou o tipo de persistência
   // produz um formulário que não dá para consertar por update.
   if (decisao.acao === 'create') {
@@ -188,7 +213,7 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
       anexos: fonte.anexos,
       eventos: fonte.eventos,
       versionOption,
-    });
+    }).catch(traduzir);
 
     return {
       ...base,
@@ -207,7 +232,7 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
     anexos: fonte.anexos,
     eventos: fonte.eventos,
     persistenceType: PERSISTENCE_TYPE[opcoes.persistenceType!],
-  });
+  }).catch(traduzir);
 
   return { ...base, acao: 'create', documentId };
 }
