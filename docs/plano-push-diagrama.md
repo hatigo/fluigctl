@@ -604,6 +604,28 @@ nenhum dos 7 `.process` que os usam tem par.
   (41) é recusado com `BPMProcessStateNotFoundException` e a solicitação fica
   intacta: o link existe na definição, mas não é caminho.
 
+**Processo real no Fluig local (03/10/2026).** Primeiro processo de cliente
+publicado só pelo fluigctl: `validacao_minutas` da Cetenco (45 estados — 16
+tarefas de usuário, 9 de serviço com erro anexado, 6 gateways —, 47 links, 30
+bendpoints, 10 scripts), num `fluig-localdev` vazio. Sem mecanismo de atribuição
+nas tarefas; os outros processos da Cetenco dependem do mecanismo customizado
+`MEC_STG_ALCADAS`, que o fluigctl não publica.
+
+- Formulário `formValidacaoMinutas` criado com `push form --create` (documentId
+  10). A primeira tentativa foi recusada pelo servidor: a pasta tinha um `.md` de
+  requisitos com acento no nome, e o servidor local não aceita nome de anexo fora
+  do ASCII ("Malformed input or input contains unmappable characters"). Nada foi
+  criado; sem o `.md`, criou. Pendente: o `push form` conferir o nome dos anexos
+  antes de enviar.
+- `cardIndex` trocado pelo nome do formulário na cópia de trabalho; o push
+  resolveu pelo nome (formId 10). Versão 1 importada e liberada sem erro.
+- Solicitações 4 e 5: Tipo Contratação (gateway) → Notifica Solicitante (serviço,
+  rodou sem cair no erro) → Aceite da Solicitação (usuário, admin) → Aceite?
+  (gateway) → Notifica Cancelamento (serviço) → Fim, finalizadas. Os gateways do
+  processo têm só uma regra provisória (campo `anexo`, operador 0), que vale com
+  qualquer valor: os outros caminhos não são alcançáveis por dados — é o desenho
+  em desenvolvimento, não a conversão.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
