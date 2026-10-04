@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fakeFluig } from './helpers/fake-fluig.js';
 import { pushForm } from '../src/commands/push-form.js';
 import type { Server } from '../src/config.js';
+import { ErroFluigctl } from '../src/errors.js';
 
 const WSDL = readFileSync(new URL('./fixtures/wsdl/ECMCardIndexService.wsdl', import.meta.url), 'utf8');
 const CAMINHO = '/webdesk/ECMCardIndexService';
@@ -348,6 +351,60 @@ test('campo descritor vazio no servidor (tag vazia) vai vazio, sem aviso', async
     });
     assert.equal(r.descritorEnviado, '');
     assert.doesNotMatch(r.avisos.join('\n'), /campo descritor/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+/** Pasta de formulário temporária com um anexo de nome acentuado. */
+function pastaComAcento(): string {
+  const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-acento-'));
+  const p = join(raiz, 'formAcento');
+  mkdirSync(p);
+  writeFileSync(join(p, 'formAcento.html'), '<html><body><form name="form"><input name="campo"></form></body></html>');
+  writeFileSync(join(p, 'Requisitos Formulário gestão.md'), '# requisitos\n');
+  return p;
+}
+
+test('anexo com nome fora do ASCII: o dry-run avisa, e a recusa do servidor diz qual arquivo renomear', async () => {
+  const p = pastaComAcento();
+  const recusa = env(`<ns:createSimpleCardIndexWithDatasetPersisteTypeResponse xmlns:ns="${NS}"><result><item>` +
+    '<webServiceMessage>Malformed input or input contains unmappable characters: /var/fluig-volume/upload/admin/Requisitos Formulário gestão.md</webServiceMessage>' +
+    `</item></result></ns:createSimpleCardIndexWithDatasetPersisteTypeResponse>`);
+  const fluig = await fakeFluig({
+    [CAMINHO]: (req) => ({
+      headers: { 'content-type': 'text/xml' },
+      body: req.method === 'GET' ? WSDL : req.body.includes('getCardIndexes') ? LISTA : recusa,
+    }),
+  });
+  const u = new URL(fluig.url);
+  const server: Server = { host: u.hostname, port: Number(u.port), ssl: false, username: 'u', companyId: 1, userCode: 'u', passwordEnv: 'X' };
+  try {
+    const simulado = await pushForm({
+      server, senha: 's', pasta: p, create: true, parentId: 5, datasetName: 'dsformAcento', persistenceType: 'form',
+      dryRun: true, prompt: async () => '',
+    });
+    assert.match(simulado.avisos.join('\n'), /nome fora do ASCII \(Requisitos Formulário gestão\.md\)/);
+
+    const erro = await pushForm({
+      server, senha: 's', pasta: p, create: true, parentId: 5, datasetName: 'dsformAcento', persistenceType: 'form',
+      prompt: async () => '',
+    }).then(() => undefined, (e: unknown) => e as ErroFluigctl);
+    assert.equal(erro?.codigo, 7);
+    assert.match(erro!.message, /não aceitou anexo com nome fora do ASCII: Requisitos Formulário gestão\.md\. Renomeie/);
+  } finally {
+    await fluig.close();
+  }
+});
+
+test('anexos só com nome ASCII não geram o aviso', async () => {
+  const a = await ambiente();
+  try {
+    const r = await pushForm({
+      server: a.server, senha: 's', pasta: pasta('formNovoSimples'), create: true, parentId: 5,
+      datasetName: 'dsformEditalFiart', persistenceType: 'form', dryRun: true, prompt: async () => '',
+    });
+    assert.ok(!r.avisos.some((x) => /ASCII/.test(x)));
   } finally {
     await a.fluig.close();
   }

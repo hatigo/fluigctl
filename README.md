@@ -264,7 +264,9 @@ conteúdo antigo continua acessível por `getCardIndexContent`, então
 
 Vão como anexo todos os arquivos da pasta, com o caminho relativo preservado,
 **exceto** `events/` (que vira `customEvents`, em texto puro), o `.metadata` do
-Eclipse e dotfiles. O arquivo principal é o `.html` único da raiz, ou o que
+Eclipse e dotfiles. Anexo com nome fora do ASCII gera aviso: há servidor que
+recusa o formulário inteiro por isso (o Fluig local recusou um `.md` com acento
+no nome), e então o erro diz qual arquivo renomear. O arquivo principal é o `.html` único da raiz, ou o que
 tiver o nome da pasta, ou o que você indicar em `--principal`.
 
 Rodado contra as 657 pastas de formulário reais dos 12 workspaces: 646 lidas
