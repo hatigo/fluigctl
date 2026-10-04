@@ -565,7 +565,7 @@ nome segue recusado. O `push process` não muda: ele recebe o id do processo.
   sobram são dos `solicitacao-pessoal` (id de processo vazio e um terceiro nome
   no script), também recusados pelo `appsConfiguration` na tarefa 81.
 
-**Estado (03/10/2026, 16º corte — falta conferir no HML).** Entram os artefatos de
+**Estado (03/10/2026, 16º corte).** Entram os artefatos de
 documentação do Studio, pela regra do `BPMN2ECM30ExportMarshaller` decompilado;
 nenhum dos 7 `.process` que os usam tem par.
 
@@ -588,9 +588,21 @@ nenhum dos 7 `.process` que os usam tem par.
   nos pares grava assim; era a divergência de "cor de lane" registrada no
   terceiro corte) e `B9E9FE` no pool (sem caso no corpus). Antes saía `FFFFFF`.
 - 444/475 `.process` convertem sem recusa (eram 438); gabaritos seguem 67/71.
-- Pendente: publicar no HML um processo com os três artefatos e conferir import,
-  liberação e export — em especial o `ProcessLink` para o banco de dados, que
-  aponta para algo que não é estado.
+- Conferido no `fluig-localdev` (Fluig local descartável, criado para este
+  desenvolvimento): formulário `formTesteFluigctl` criado (documentId 5) e o
+  `teste_fluigctl` com um grupo em volta da tarefa de serviço, um banco de dados
+  "RM" com fluxo saindo da Conferência e chegando na Aprovação, e um documento
+  (documentId 5) apontando para a Aprovação. Versão 2 importada e liberada sem
+  nenhum erro (`flowError`, `activityError`, `gatewayError` vazios — a versão 1
+  só falhou porque o usuário da atribuição não existia ali). O export devolve os
+  dois `ProcessComponGraf` (41 tipo 3 "RM", 42 tipo 2 "5"), o grupo como
+  `SwimLane` tipo 3 com cor vazia, os dois links do banco e a associação do
+  documento, como enviados.
+- Andamento: solicitação 2 percorreu 10 → 24 → 7 → 19 → 10 → 24 → 7 → 19 → 5,
+  finalizada; ali a tarefa de serviço roda em segundo plano (~3 s), não no
+  movimento como no HML da Cetenco. Mover a Conferência para o banco de dados
+  (41) é recusado com `BPMProcessStateNotFoundException` e a solicitação fica
+  intacta: o link existe na definição, mas não é caminho.
 
 ### 2. O resto da definição
 
