@@ -151,14 +151,14 @@ test('tarefa sem managerMechanism não leva os campos de atribuição', () => {
 });
 
 test('elemento não suportado é recusado com código 6, listando o tipo', () => {
-  // Gateway inclusivo (121): nenhum par nem regra conferida — segue recusado pelo tipo.
-  const inclusivo = PROCESSO.replace(
+  // Fim com erro (63): nenhum par nem regra conferida — segue recusado pelo tipo.
+  const fimErro = PROCESSO.replace(
     '<bpmn2:BpmnEndEvent',
-    '<bpmn2:BpmnGateway id="inclusivegateway12" name="Inclusivo" type="121"/>\n  <bpmn2:BpmnEndEvent',
+    '<bpmn2:BpmnEndEvent id="endevent12" name="Erro" type="63"/>\n  <bpmn2:BpmnEndEvent',
   );
-  const erro = erroDe(() => converterDiagrama(inclusivo, { companyId: 1 }));
+  const erro = erroDe(() => converterDiagrama(fimErro, { companyId: 1 }));
   assert.equal(erro.codigo, 6);
-  assert.match(erro.message, /BpmnGateway \(type 121\)/);
+  assert.match(erro.message, /BpmnEndEvent \(type 63\)/);
 });
 
 test('subprocesso (100) sem process é recusado; booleano fora de true/false também', () => {
@@ -514,7 +514,7 @@ test('extendedFields do processo vira AdvancedProcessProperties (7) e ExtendedPr
 test('valor sem mapeamento conferido continua recusado com código 6', () => {
   const casos: [string, RegExp][] = [
     [FASE1.replace('&lt;runType>HOUR', '&lt;runType>WEEK'), /gatilho não suportado em intermediatetimer14/],
-    [FASE1.replace('type="126"', 'type="121"'), /BpmnGateway \(type 121\)/],
+    [FASE1.replace('type="126"', 'type="122"'), /BpmnGateway \(type 122\)/],
     [
       FASE1.replace('<bpmn2:BpmnEndEvent', '<bpmn2:BpmnIntermediateEvent id="intermediatelink40" name="L" type="44" sequenceAttached="0" signalId="0"/>\n  <bpmn2:BpmnEndEvent'),
       /BpmnIntermediateEvent \(type 44\)/,
@@ -1495,4 +1495,20 @@ test('activeProcess="false" publica inativo; expression do fluxo sai no ProcessL
   const naTarefa = FASE1.replace(/(<bpmn2:BpmnTask id="task8"[^\n]*?)extendedFields="[^"]*"/, `$1extendedFields="${comoAtributo(prop)}"`);
   assert.notEqual(naTarefa, FASE1);
   assert.match(erroDe(() => converterDiagrama(naTarefa, { companyId: 1 })).message, /propriedades estendidas \(extendedFields\) em task8/);
+});
+
+test('gateway inclusivo (121): estado como o paralelo (tipo 3, não automático) e condições como as do exclusivo', () => {
+  const inclusivo = FASE1.replace(/(<bpmn2:BpmnGateway id="exclusivegateway7"[^\n]*?)type="120"/, '$1type="121"');
+  assert.notEqual(inclusivo, FASE1);
+  const filhos = filhosDaRaiz(converterDiagrama(inclusivo, { companyId: 1 }).xml);
+  const g = filhos[2]!.filhos.find((e) => texto(e, 'processStatePK', 'sequence') === '7')!;
+  assert.deepEqual(['bpmnType', 'stateType', 'automatic'].map((c) => texto(g, c)), ['121', '3', 'false']);
+  const comExclusivo = filhosDaRaiz(converterDiagrama(FASE1, { companyId: 1 }).xml);
+  // As mesmas condições e regras do exclusivo.
+  assert.equal(filhos[3]!.filhos.length, comExclusivo[3]!.filhos.length);
+  assert.equal(filhos[19]!.filhos.length, comExclusivo[19]!.filhos.length);
+  assert.ok(filhos[3]!.filhos.length > 0);
+  // Na imagem, o círculo do inclusivo no lugar do "+".
+  const svg = gerarSvg(lerDiagrama(inclusivo));
+  assert.match(svg, /rx="12" ry="12" style="fill:none; stroke:#000000; stroke-width:3"/);
 });

@@ -89,8 +89,14 @@ type Campo = [string, Valor];
 const TAREFAS = new Set(['80', '81', '82', '84', '87']);
 const SERVICO = '82';
 const FINS = new Set(['60', '64', '65', '68']);
-/** `stateType` de cada gateway; o 121 só aparece num ecm30, sem `.process` que o mostre. */
-const GATEWAYS: Record<string, number> = { '120': 1, '126': 3, '127': 4 };
+/**
+ * `stateType` de cada gateway. O inclusivo (121) é montado como o paralelo
+ * (`getProcessStatesFromGateways` decompilado: só o exclusivo é automático e de
+ * tipo 1, só o join é 4), e as condições dele são exportadas como as do exclusivo.
+ */
+const GATEWAYS: Record<string, number> = { '120': 1, '121': 3, '126': 3, '127': 4 };
+/** Gateways cujas condições o Studio exporta (`getConditionFromGateways`). */
+const GATEWAYS_COM_CONDICAO = new Set(['120', '121']);
 /**
  * 32 temporizador, 35 condicional, 37/41 sinal (envio/recebimento), 43 erro
  * anexado a tarefa de serviço, 36/42 link (envio/recebimento). O link não tem
@@ -1182,7 +1188,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     const blob = (a['condition'] ?? '').trim();
     // Exclusivo sem condição: o Studio não grava nenhum ConditionProcessState (um par gabarito).
     if (blob === '' || /^<list\s*\/>$/.test(blob)) continue;
-    if (a['type'] !== '120') {
+    if (!GATEWAYS_COM_CONDICAO.has(a['type'] ?? '')) {
       recusar(`condição em gateway ${id} (type ${a['type']})`);
       continue;
     }

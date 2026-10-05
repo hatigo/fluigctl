@@ -674,6 +674,23 @@ subprocesso comum, e do comum no ad hoc, seguem recusados.
   pela seta dele (para o fim direto: "Tarefa informada 11 não é válida").
 - 456/475 `.process` convertem sem recusa (eram 449); gabaritos seguem 67/71.
 
+**Estado (05/10/2026, 19º corte).** Entra o gateway inclusivo (121), pela regra
+do `getProcessStatesFromGateways` decompilado: estado como o do paralelo
+(`stateType` 3, sem `automatic`), condições exportadas como as do exclusivo
+(`getConditionFromGateways` aceita 120 e 121). Na imagem gerada, o círculo do
+BPMN dentro do losango (desenho próprio).
+
+- O servidor trata o inclusivo como abertura paralela: um processo com o
+  inclusivo levando direto ao fim foi recusado na liberação ("O gateway paralelo
+  … não pode possuir atividade final antes do join"). Os três `.process` reais
+  com 121 têm join (127).
+- `fluig-localdev`: processo mínimo `teste_inclusivo` (Preencher → Inclusivo com
+  duas condições por expressão → Ramo A / Ramo B → Join → Fim), liberado sem
+  erro. Solicitação 5 (as duas condições verdadeiras): abriu os dois ramos e o
+  join esperou os dois. Solicitação 6 (só a primeira): abriu só o Ramo A, e o
+  join seguiu sem esperar o ramo que não abriu — a semântica do inclusivo.
+- 459/475 `.process` convertem sem recusa (eram 456); gabaritos seguem 67/71.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
