@@ -88,6 +88,8 @@ type Campo = [string, Valor];
 
 const TAREFAS = new Set(['80', '81', '82', '84', '87']);
 const SERVICO = '82';
+/** Tarefa de script: o Studio não a trata à parte no estado; o código entra pelos scripts da pasta. */
+const TAREFA_DE_SCRIPT = '87';
 const FINS = new Set(['60', '63', '64', '65', '68']);
 /**
  * Instrução do estado final por tipo (`getProcessStateFromEndEvents`, decompilado):
@@ -764,7 +766,12 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   const ehEstado = (id: string | undefined) => id !== undefined && id !== '' && idsDeEstado.has(id);
 
   for (const o of [processo, ...estadosBpmn, ...graficosBpmn, ...raiasBpmn, ...fluxos]) {
-    const conhecidos = [...(ATRIBUTOS_CONHECIDOS[o.tipo] ?? []), ...(servico(o) ? SERVICO_ATRIBUTOS : [])];
+    const conhecidos = [
+      ...(ATRIBUTOS_CONHECIDOS[o.tipo] ?? []),
+      ...(servico(o) ? SERVICO_ATRIBUTOS : []),
+      // Tarefa de script (87): o código vem de <arquivo>.<id>.js, como o da tarefa de serviço.
+      ...(o.tipo === 'BpmnTask' && o.attrs['type'] === TAREFA_DE_SCRIPT ? ['scriptFileName'] : []),
+    ];
     for (const [attr, valor] of Object.entries(o.attrs)) {
       if (!conhecidos.includes(attr)) {
         recusar(`atributo ${attr} em ${o.attrs['id'] ?? o.tipo}`);
@@ -1144,18 +1151,22 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     }
     if (a['type'] !== '37' && a['type'] !== '41' && (a['signalId'] ?? '0') !== '0') recusar(`signalId em ${id}`);
   }
-  for (const o of tarefas.filter(servico)) {
-    const a = o.attrs;
-    for (const anexo of (a['attachedEvents'] ?? '').split(' ').filter(Boolean)) {
-      if (nos.get(anexo)?.attrs['parentTask'] !== a['id']) recusar(`evento anexado ${anexo} em ${a['id']} não aponta de volta`);
-    }
-    // O código vem de workflow/scripts/<arquivo>.<id>.js (o prefixo do Studio); o id do
-    // processo também vale. Outro nome é script de outro processo.
+  // O código vem de workflow/scripts/<arquivo>.<id>.js (o prefixo do Studio); o id do
+  // processo também vale. Outro nome é script de outro processo.
+  const conferirScript = (a: Record<string, string>) => {
     const script = a['scriptFileName'];
     const aceitos = [opcoes.nomeDoArquivo ?? processId, processId].map((prefixo) => `${prefixo}.${a['id']}.js`);
     if (script !== undefined && script !== '' && !aceitos.includes(script)) {
       recusar(`scriptFileName "${script}" em ${a['id']}`);
     }
+  };
+  for (const o of tarefas.filter((t) => t.attrs['type'] === TAREFA_DE_SCRIPT)) conferirScript(o.attrs);
+  for (const o of tarefas.filter(servico)) {
+    const a = o.attrs;
+    for (const anexo of (a['attachedEvents'] ?? '').split(' ').filter(Boolean)) {
+      if (nos.get(anexo)?.attrs['parentTask'] !== a['id']) recusar(`evento anexado ${anexo} em ${a['id']} não aponta de volta`);
+    }
+    conferirScript(a);
     if (a['frequencyType'] !== undefined && !/^\d+$/.test(a['frequencyType'])) recusar(`frequencyType em ${a['id']}`);
     if (!/^\d+$/.test(a['executionType'] ?? '')) recusar(`executionType em ${a['id']}`);
   }

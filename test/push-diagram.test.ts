@@ -1561,3 +1561,14 @@ test('fim com erro (63) e terminal (68) levam a instrução do Studio; quantidad
   assert.equal(texto(linhas[0]!, 'amount'), '@[form:qnt_descontos]');
   assert.match(erroDe(() => converterDiagrama(comRegras(REGRA(1, 2, '@[dataset:x]')), { companyId: 1 })).message, /amount fora da forma vista/);
 });
+
+test('tarefa de script (87): scriptFileName vale com o nome do arquivo ou o id do processo, como na de serviço', () => {
+  const comScript = (nome: string) => PROCESSO.replace(/(<bpmn2:BpmnTask id="task5"[^\n]*?)type="80"/, `$1type="87" scriptFileName="${nome}"`);
+  assert.notEqual(comScript('x'), PROCESSO);
+  converterDiagrama(comScript('processoTeste.task5.js'), { companyId: 1 });
+  converterDiagrama(comScript('nomeAntigo.task5.js'), { companyId: 1, nomeDoArquivo: 'nomeAntigo' });
+  assert.match(erroDe(() => converterDiagrama(comScript('outro.task5.js'), { companyId: 1 })).message, /scriptFileName "outro.task5.js" em task5/);
+  // Em tarefa de usuário o atributo não existe no Studio: segue recusado.
+  const naTarefa80 = PROCESSO.replace(/(<bpmn2:BpmnTask id="task5"[^\n]*?)type="80"/, '$1type="80" scriptFileName="processoTeste.task5.js"');
+  assert.match(erroDe(() => converterDiagrama(naTarefa80, { companyId: 1 })).message, /atributo scriptFileName em task5/);
+});

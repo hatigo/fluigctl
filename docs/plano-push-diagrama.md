@@ -731,6 +731,25 @@ anexos por campo do formulário; corrigido o fim terminal (68).
   (no HML da Cetenco o bloqueio tinha vindo com erro genérico).
 - 464/475 `.process` convertem sem recusa (eram 462); gabaritos seguem 67/71.
 
+**Estado (05/10/2026, 22º corte).** Tarefa de script (87) com `scriptFileName`:
+o Studio não trata a 87 à parte no estado nem grava o atributo; o código entra
+pelos scripts da pasta, com o id da tarefa como evento. O atributo vale com o
+nome do arquivo ou o id do processo, como na tarefa de serviço (as duas únicas
+87 do corpus, no `prestacao-de-contas-economia-criativa`, seguem o nome do
+arquivo).
+
+- `fluig-localdev`, versão 4 do `teste_inclusivo` com o Ramo B como tarefa de
+  script (`teste_inclusivo.scripttask8.js` anota no `descricao`): liberada. A
+  solicitação 10 passou pelos dois ramos e finalizou; o script rodou (o campo
+  terminou com "[script ok] [script ok]"). Observado, sem par do Studio para
+  comparar: a tarefa ficou aberta para o admin e foi movida à mão, e o script
+  rodou duas vezes.
+- 465/475 `.process` convertem sem recusa (eram 464). Os 10 que sobram estão
+  incompletos ou quebrados na origem: `helpdesk` (mecanismo sem configuração no
+  caminho, que o servidor não libera), os dois `solicitacao-pessoal` (id de
+  processo vazio e um terceiro nome de script), as 5 cópias do `cotacao` (fluxo
+  sem origem) e 2 arquivos que não são XML válido.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
