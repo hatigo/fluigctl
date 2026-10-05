@@ -178,6 +178,21 @@ function seta(de: Ponto, para: Ponto): string {
   return `<polygon style="fill:#000000; stroke:#000000;" points=" ${r(p1.x)} ${r(p1.y)} ${r(para.x)} ${r(para.y)} ${r(p2.x)} ${r(p2.y)}" />`;
 }
 
+/** A mesma linha que o SVG desenha, exposta para a camada de seleção do visualizador. */
+export function pontosDoFluxo(diagrama: Diagrama, fluxo: ObjetoBpmn): Ponto[] | undefined {
+  if (fluxo.tipo !== 'SequenceFlow') return undefined;
+  const objeto = (id: string | undefined) => diagrama.objetos.find((x) => x.attrs['id'] === id);
+  const caixaOrigem = diagrama.caixas.get(fluxo.attrs['sourceRef'] ?? '');
+  const caixaDestino = diagrama.caixas.get(fluxo.attrs['targetRef'] ?? '');
+  if (!caixaOrigem || !caixaDestino) return undefined;
+  const origem = figura(objeto(fluxo.attrs['sourceRef']), caixaOrigem);
+  const destino = figura(objeto(fluxo.attrs['targetRef']), caixaDestino);
+  const meio = diagrama.dobras.get(fluxo.attrs['id'] ?? '') ?? [];
+  const inicio = borda(origem, meio[0] ?? centro(destino));
+  const fim = borda(destino, meio.at(-1) ?? centro(origem));
+  return [inicio, ...meio, fim];
+}
+
 export function gerarSvg(diagrama: Diagrama): string {
   const { objetos, caixas, dobras } = diagrama;
   const icones = diagrama.icones ?? new Map<string, Icone[]>();
@@ -273,16 +288,9 @@ export function gerarSvg(diagrama: Diagrama): string {
   // Fluxos: da borda da origem, pelas dobras, até a borda do destino, com seta.
   for (const o of objetos) {
     if (o.tipo !== 'SequenceFlow') continue;
-    const objeto = (id: string | undefined) => objetos.find((x) => x.attrs['id'] === id);
-    const caixaOrigem = caixas.get(o.attrs['sourceRef'] ?? '');
-    const caixaDestino = caixas.get(o.attrs['targetRef'] ?? '');
-    if (!caixaOrigem || !caixaDestino) continue;
-    const origem = figura(objeto(o.attrs['sourceRef']), caixaOrigem);
-    const destino = figura(objeto(o.attrs['targetRef']), caixaDestino);
-    const meio = dobras.get(o.attrs['id'] ?? '') ?? [];
-    const inicio = borda(origem, meio[0] ?? centro(destino));
-    const fim = borda(destino, meio.at(-1) ?? centro(origem));
-    const pontos = [inicio, ...meio, fim];
+    const pontos = pontosDoFluxo(diagrama, o);
+    if (!pontos) continue;
+    const fim = pontos.at(-1)!;
     const d = pontos.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x}.0 ${p.y}.0`).join(' ');
     const anotacao = formaDe(objetos.find((x) => x.attrs['id'] === o.attrs['sourceRef']) ?? { tipo: '', attrs: {} }) === 'anotacao';
     partes.push(`<path style="fill:none; stroke:#000000;stroke-width:1${anotacao ? ';stroke-dasharray:3,3' : ''}" d="${d}" />`);
