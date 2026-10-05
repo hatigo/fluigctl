@@ -222,8 +222,16 @@ desenho válido permanece e uma faixa explica o erro.
 
 O desenho vem sempre do `.process`, nunca do `.processimage.svg` do Studio, que
 pode estar velho. A interface enquadra o processo ao abrir, aceita zoom pela
-roda, pan arrastando o fundo e tem o botão **Ajustar**. Para automação sem
-navegador use `--no-open`; para depurar o servidor no processo atual,
+roda, pan arrastando o fundo e tem o botão **Ajustar**.
+
+Clique em qualquer pool, raia, atividade, evento, gateway, fluxo ou artefato
+para destacá-lo e abrir o painel de propriedades. O painel traduz os campos
+úteis e deixa atributos simples em **Detalhes técnicos**; blobs XML internos do
+Studio nunca são enviados ao navegador. `Tab` percorre os elementos, `Enter` ou
+espaço seleciona e `Esc` fecha. A seleção sobrevive a movimento, renomeação e
+outras mudanças enquanto o ID existir.
+
+Para automação sem navegador use `--no-open`; para depurar o servidor no processo atual,
 `--foreground`.
 
 Cada instância escuta apenas em `127.0.0.1`, numa porta aleatória, e exige um

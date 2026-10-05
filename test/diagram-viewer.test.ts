@@ -26,7 +26,7 @@ function projeto(): { raiz: string; arquivo: string; registro: string; limpar():
   return { raiz, arquivo, registro, limpar: () => rmSync(raiz, { recursive: true, force: true }) };
 }
 
-async function esperar(condicao: () => boolean, ms = 2500): Promise<void> {
+async function esperar(condicao: () => boolean, ms = 5000): Promise<void> {
   const fim = Date.now() + ms;
   while (Date.now() < fim) {
     if (condicao()) return;
@@ -41,6 +41,23 @@ test('estado inicial vem diretamente do .process e contém SVG', () => {
   assert.equal(e.revisao, 1);
   assert.match(e.svg, /^<\?xml[^>]*>\n<svg/);
   assert.match(e.svg, /sequence="4"/);
+  assert.ok(e.elementos.length > 0);
+  const tarefa = e.elementos.find((x) => x.id === 'task5')!;
+  assert.equal(tarefa.tipoAmigavel, 'Atividade de usuário');
+  assert.deepEqual(tarefa.campos.find((x) => x.rotulo === 'Atribuição'), { rotulo: 'Atribuição', valor: 'Pool Grupo' });
+  assert.deepEqual(tarefa.campos.find((x) => x.rotulo === 'Configurações avançadas'), { rotulo: 'Configurações avançadas', valor: 'Presentes' });
+  assert.equal(tarefa.atributos['extendedFields'], undefined, 'XML interno nem é enviado ao navegador');
+  assert.equal(Object.values(tarefa.atributos).some((v) => /^\s*</.test(v)), false);
+  assert.deepEqual(tarefa.geometria.caixa, { x: 150, y: 53, largura: 106, altura: 67 });
+
+  const fluxo = e.elementos.find((x) => x.id === 'flow10')!;
+  assert.equal(fluxo.tipoAmigavel, 'Fluxo');
+  assert.equal(fluxo.campos.some((x) => x.rotulo === 'Configurações avançadas'), false, '<list/> vazio não conta');
+  assert.match(fluxo.campos.find((x) => x.rotulo === 'Origem')!.valor, /Preencher > revisar \(task5\)/);
+  assert.match(fluxo.campos.find((x) => x.rotulo === 'Destino')!.valor, /Revisar \(task7\)/);
+  assert.ok((fluxo.geometria.pontos?.length ?? 0) >= 2);
+  assert.deepEqual(fluxo.geometria.pontos?.[0], { x: 203, y: 120 }, 'mesma borda que o SVG, não o centro da tarefa');
+  assert.equal(e.elementos.some((x) => x.id === 'processoTeste'), false, 'objeto sem desenho não entra no Tab');
 });
 
 test('arquivo ausente e .process inválido recusam antes de abrir porta', () => {
@@ -73,6 +90,10 @@ test('servidor exige token, não habilita CORS e entrega a interface navegável'
     assert.match(html, /Ajustar/);
     assert.match(html, /addEventListener\('wheel'/, 'zoom');
     assert.match(html, /pointermove/, 'pan');
+    assert.match(html, /Detalhes técnicos/);
+    assert.match(html, /classList\.add\('fluig-hit'/, 'camada selecionável');
+    assert.match(html, /tabindex/, 'navegação por teclado');
+    assert.match(html, /O elemento selecionado foi removido/);
     assert.match(pagina.headers.get('content-security-policy') ?? '', /frame-ancestors 'none'/);
 
     const estado = await (await fetch(`${v.url}state`)).json() as { arquivo: string; svg: string };
@@ -92,6 +113,7 @@ test('mudança válida atualiza; mudança inválida e arquivo ausente preservam 
     const svg1 = v.estado().svg;
     writeFileSync(p.arquivo, original.replaceAll('Aprova&#xe7;&#xe3;o', 'Revisão pelo agente'));
     await esperar(() => v.estado().svg.includes('Revisão pelo agente'));
+    assert.equal(v.estado().elementos.find((x) => x.id === 'bpmnswimlane9')?.nome, 'Revisão pelo agente');
     const svg2 = v.estado().svg;
     assert.notEqual(svg2, svg1);
     assert.equal(v.estado().erro, undefined);

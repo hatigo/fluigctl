@@ -94,7 +94,11 @@ The command opens the browser even when an agent invokes it, then returns
 immediately while the viewer stays in the background. Do not add `--no-open`
 when the human asked to see it. The drawing updates whenever you write a valid
 `.process`; an invalid intermediate write leaves the last valid drawing visible
-and shows the error. Running `open` again reuses the same viewer.
+and shows the error. Running `open` again reuses the same viewer. The human can
+click or keyboard-select pools, lanes, activities, events, gateways, flows and
+artifacts to inspect friendly properties. Selection follows the same object ID
+across your writes; XML serialization blobs from Studio are deliberately not
+shown or sent to the browser.
 
 The URL contains a local access token. It is safe to show to the human in this
 session, but do not publish it in logs, issues or commits. When they ask to stop:
