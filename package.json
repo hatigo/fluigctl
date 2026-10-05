@@ -10,7 +10,7 @@
     "node": ">=22.2"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/src/cli.js",
     "typecheck": "tsc --noEmit",
     "diff-diagramas": "tsc && node dist/scripts/diff-diagramas.js",
     "validar-pull-diagramas": "tsc && node dist/scripts/validar-pull-diagramas.js",
