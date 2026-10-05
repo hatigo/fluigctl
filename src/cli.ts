@@ -681,13 +681,14 @@ async function pushWcmCli(argv: string[], tipo: 'widget' | 'layout'): Promise<vo
     prompt: promptPassword,
   });
 
-  const detalhe = `${r.nome}.war — ${r.entradas} arquivo(s), ${r.bytes} bytes`;
+  const detalhe = `${r.codigo}.war — ${r.entradas} arquivo(s), ${r.bytes} bytes`;
   console.log(
     values['dry-run']
       ? `[dry-run] ${detalhe} seria enviado para ${r.url}. Nada foi enviado.`
       : `${detalhe} enviado para ${values.server} (${serverUrl(servidor)}). ` +
           'A instalação acontece em segundo plano no servidor.',
   );
+  if (r.aviso) console.log(`  aviso: ${r.aviso}`);
 }
 
 async function pushDiagramCli(argv: string[]): Promise<void> {
