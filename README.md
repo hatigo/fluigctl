@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 448 | não | não | — |
+| Testes automatizados | 451 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -84,6 +84,12 @@ veja "Widget com Java").
 npm install && npm run build
 npm link            # deixa `fluigctl` no PATH
 ```
+
+O `bin` do pacote é `bin/fluigctl.js`, um arquivo versionado que carrega o
+compilado — e não o compilado direto. O `tsc` reescreve `dist/src/cli.js` sem o
+bit de execução, então apontar o `bin` para lá fazia o `fluigctl` do PATH
+responder "permissão negada" depois de qualquer `npm run build` ou `npm test`.
+Com o wrapper versionado, recompilar não mexe no que está no PATH.
 
 Node 22.2 ou mais novo.
 
@@ -845,7 +851,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 448 testes, sem rede e sem servidor Fluig
+npm test        # 451 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
