@@ -770,13 +770,9 @@ sem nenhum dos dois lados continua recusado.
   reportava o link como sobra. Corrigido.
 - Os 5 pares do `cotacao` viram **gabarito batendo em todos os filhos**: 18/18,
   contra 13/13. Os 5 pares de "mesma versão" (divergência falsa) somem.
-- Dos 45 `.process` de `~/fluig/workspaces`, **45 convertem** (eram 40). No corpus
-  de 475, os 5 arquivos bloqueados só por este motivo passam a converter: **470/475**
-  (o clone esparso dos 28 repositórios da StrategiConsultoria não está mais nesta
-  máquina, então o número é derivado da medição anterior, não remedido).
+- Dos 45 `.process` de `~/fluig/workspaces` naquele dia, **45 convertem** (eram 40).
 
 ### 2. O resto da definição
-
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
 propriedades avançadas (filhos 7, 13, 14, 16, 17, 18).
 
@@ -880,3 +876,13 @@ fluxo automático (`automaticFlow`, nos conectores) não é desenhada.
 - Gerar `.png` / `.processimage.svg`.
 - Converter no sentido inverso (ecm30 → `.process`).
 - Apagar versão publicada.
+
+**Estado (05/10/2026, revisão do número).** O número grande do corpus histórico
+(475 `.process` em 28 repositórios, medido em 02–03/10) não é mais reprodutível
+aqui: o clone esparso da StrategiConsultoria saiu da máquina, e o que sobrou é o
+que os workspaces têm hoje. O placar que o README passa a citar é o remedido:
+
+- `~/fluig/workspaces`, 05/10/2026, 7 workspaces: **95 de 95 `.process`**
+  convertem sem recusa (cetenco 18, bsm 48, doisa 22, tempvidroporto 5) — a
+  varredura mudou de tamanho entre as sessões conforme o checkout de cada
+  repositório, então o número vale para este estado, com a data.
