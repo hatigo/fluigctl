@@ -244,6 +244,24 @@ test('o mesmo export sempre gera o mesmo .process', () => {
   assert.equal(gerarProcess(xml).process, gerarProcess(xml).process);
 });
 
+test('evento de erro anexado a estado inexistente recusa: o Studio descartaria o evento', () => {
+  const xml = definicao({ estados: estado(7, 43, '<parentSequence>6</parentSequence>') });
+  assert.throws(
+    () => gerarProcess(xml),
+    (e) => codigoDe(e) === 6 && /anexado ao estado 6, que não existe/.test((e as Error).message),
+  );
+});
+
+test('fim terminal (68) com notifyAuthorityDelay=true recusa: o Studio grava false sempre', () => {
+  const xml = definicao({ estados: estado(11, 68, '<notifyAuthorityDelay>true</notifyAuthorityDelay>') });
+  assert.throws(
+    () => gerarProcess(xml),
+    (e) => codigoDe(e) === 6 && /não tem campo para isso/.test((e as Error).message),
+  );
+  // O mesmo fim com o valor que o Studio grava passa.
+  assert.doesNotThrow(() => gerarProcess(definicao({ estados: estado(11, 68) })));
+});
+
 test('pull diagram baixa somente a definição e grava workflow/diagrams/<id>.process', async () => {
   const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-pull-diagram-'));
   const workflow = join(raiz, 'workflow');

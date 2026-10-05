@@ -119,7 +119,17 @@ export function gerarProcess(definicao: string, nomeDoArquivo?: string): { proce
   const errosPorTarefa = new Map<number, Estado[]>();
   for (const e of estados.filter((x) => x.tipo === 43)) {
     const pai = numero(e.no, 'parentSequence');
-    if (!porSeq.has(pai)) throw new ErroFluigctl(`o evento de erro ${e.seq} aponta para a tarefa inexistente ${pai}`, 6);
+    if (!porSeq.has(pai)) {
+      // O importador do Studio (`populateIntermediateEventLink`, decompilado) faz
+      // `mapParentIds.get(parentSequence) == null` e dá `continue`: descarta o
+      // evento em silêncio. Publicar sem ele mudaria o processo, então paramos.
+      throw new ErroFluigctl(
+        `o evento de erro do estado ${e.seq} está anexado ao estado ${pai}, que não existe nesta definição. ` +
+          'O Fluig Studio descartaria o evento ao abrir; publicar sem ele mudaria o processo. ' +
+          'Corrija o vínculo no servidor antes de baixar.',
+        6,
+      );
+    }
     errosPorTarefa.set(pai, [...(errosPorTarefa.get(pai) ?? []), e]);
   }
 
@@ -265,7 +275,13 @@ export function gerarProcess(definicao: string, nomeDoArquivo?: string): { proce
     if ([60, 64, 65, 68].includes(e.tipo)) {
       const esperado = e.tipo === 68 ? 'false' : 'true';
       if (texto(n, 'notifyAuthorityDelay', esperado) !== esperado) {
-        throw new ErroFluigctl(`o fim ${e.id} tem notifyAuthorityDelay=${texto(n, 'notifyAuthorityDelay')}, valor que o formato .process não representa`, 6);
+        throw new ErroFluigctl(
+          `o fim ${e.id} é do tipo ${e.tipo} com notifyAuthorityDelay=${texto(n, 'notifyAuthorityDelay')}, ` +
+            'e o .process não tem campo para isso: no fim terminal (68) o Studio grava false sempre ' +
+            '(`getProcessStateFromEndEvents`, decompilado). Republicar gravaria false. ' +
+            'Ajuste o valor no servidor antes de baixar.',
+          6,
+        );
       }
       if (texto(n, 'notifyRequisitionerFollowUp') === 'true') a.push('notificaRequisitante="true"');
     }
