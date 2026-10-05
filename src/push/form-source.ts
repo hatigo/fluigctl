@@ -54,10 +54,7 @@ export async function readForm(
     throw new ErroFluigctl(`não encontrei a pasta do formulário: ${pasta}`, 3);
   }
 
-  const pastaNome = basename(pasta.replace(/[/\\]+$/, ''));
-  const prefixo = PREFIXO_DOCUMENT_ID.exec(pastaNome);
-  const nome = prefixo ? prefixo[2]! : pastaNome;
-  const documentIdDaPasta = prefixo ? Number(prefixo[1]) : undefined;
+  const { nome, documentIdDaPasta } = nomeDaPasta(pasta);
 
   const caminhos = await coletaArquivos(pasta, pasta);
   const maximo = opcoes.tamanhoMaximo ?? TAMANHO_MAXIMO;
@@ -90,6 +87,18 @@ export async function readForm(
     anexos,
     eventos: await leEventos(pasta),
   };
+}
+
+/** O nome do formulário pela pasta, e o documentId quando ela tem prefixo numérico (`902 - formFoo`). */
+export function nomeDaPasta(pasta: string): { nome: string; documentIdDaPasta?: number } {
+  const pastaNome = basename(pasta.replace(/[/\\]+$/, ''));
+  const prefixo = PREFIXO_DOCUMENT_ID.exec(pastaNome);
+  return prefixo ? { nome: prefixo[2]!, documentIdDaPasta: Number(prefixo[1]) } : { nome: pastaNome };
+}
+
+/** Os anexos de uma pasta de formulário, como o push os lê: relativos, em POSIX, sem `events/`, `.metadata` e dotfiles. */
+export function arquivosDaPasta(pasta: string): Promise<string[]> {
+  return coletaArquivos(pasta, pasta);
 }
 
 /** Caminhos relativos em POSIX, ignorando `events/`, `.metadata` e dotfiles. */

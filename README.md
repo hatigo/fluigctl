@@ -2,7 +2,7 @@
 
 Publica artefatos de um repositório TOTVS Fluig — datasets, formulários,
 widgets, processos e os scripts de um processo — num servidor Fluig, pela linha de
-comando, e baixa de volta scripts de processo e datasets. Faz o que o **Exportar** do Fluig Studio e da extensão Fluiggers do VS
+comando, e baixa de volta scripts de processo, datasets e formulários. Faz o que o **Exportar** do Fluig Studio e da extensão Fluiggers do VS
 Code fazem, sem IDE e sem clique, e serve igual para você no terminal e para um
 agente (Claude Code, CI) via script.
 
@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 340 | não | não | — |
+| Testes automatizados | 343 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -66,9 +66,9 @@ e layout.
 | `push widget` | pronto (widgets sem Java) |
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
 | `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 465 de 475 diagramas reais convertem |
-| `pull process` / `pull dataset` (scripts de processo e código de dataset do servidor) | pronto |
+| `pull process` / `pull dataset` / `pull form` (scripts de processo, código de dataset, anexos e eventos de formulário) | pronto |
 
-Fora de escopo por enquanto: `pull` de formulário, widget e do `.process`, layout WCM, widget com código Java,
+Fora de escopo por enquanto: `pull` de widget e do `.process`, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
 
 ## Instalação
@@ -311,6 +311,7 @@ serem publicados aqui.
 fluigctl pull process reembolso --server cetenco-hml --dry-run
 fluigctl pull process reembolso --server cetenco-hml
 fluigctl pull dataset dsFoo --server cetenco-hml
+fluigctl pull form forms/formFoo --server cetenco-hml --dry-run
 ```
 
 O caminho inverso do push, para trazer ao repositório o que alguém publicou
@@ -324,6 +325,13 @@ direto no servidor. Só lê do servidor.
   qualquer subpasta — ou, sem nenhum, em `datasets/<nome>.js`. Dois arquivos com o
   nome são recusados (código 6), e dataset de fábrica (`BUILTIN`, que não tem
   código JavaScript) também.
+- `pull form` resolve o formulário como o `push form` (`--document-id`, prefixo da
+  pasta, `.metadata` do Studio, nome — leia os `aviso:`) e baixa a versão ativa. O
+  servidor guarda os anexos só pelo nome, então cada um vai para o arquivo local de
+  mesmo nome em qualquer subpasta (`libs/select2.min.js`) ou, se não houver, para a
+  raiz da pasta; os eventos vão para `events/<evento>.js`. Anexos são comparados
+  byte a byte (imagens vêm intactas). Arquivo que só existe no local é listado e
+  fica como está. A pasta pode não existir ainda: é criada.
 
 Arquivo novo é gravado; igual ao servidor (a comparação ignora fim de linha e
 espaço no fim, como a do push) fica como está; diferente só é trocado com
@@ -617,7 +625,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 340 testes, sem rede e sem servidor Fluig
+npm test        # 343 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { pullDataset, pullProcess } from '../src/commands/pull.js';
+import { pullDataset, pullForm, pullProcess } from '../src/commands/pull.js';
+import type { CardIndexClient } from '../src/fluig/cardindex-service.js';
 import type { WorkflowEngineClient } from '../src/fluig/workflow-service.js';
 import type { Server } from '../src/config.js';
 import { ErroFluigctl } from '../src/errors.js';
@@ -136,4 +137,79 @@ test('pull dataset de fábrica (BUILTIN) é recusado: o impl são classes Java',
     (e) => codigoDe(e) === 6,
   );
   assert.equal(existsSync(join(raiz, 'datasets')), false);
+});
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff]);
+
+/** Formulário 902 "formFoo" na versão 3000; a versão errada é recusada como no servidor. */
+function fakeCardIndex(): { cliente: CardIndexClient; versoes: number[] } {
+  const versoes: number[] = [];
+  const anexos: Record<string, Buffer> = {
+    'formFoo.html': Buffer.from('<form><input name="a"></form>\n'),
+    'select2.min.js': Buffer.from('/* lib */\n'),
+    'logo.png': PNG,
+  };
+  const nao = async () => { throw new Error('pull não pode escrever no servidor'); };
+  return {
+    versoes,
+    cliente: {
+      async listForms() { return [{ documentId: 902, documentDescription: 'formFoo', datasetName: 'dsformFoo' }]; },
+      async listAttachments() { return Object.keys(anexos); },
+      async attachmentContent(_id, versao, nome) {
+        versoes.push(versao);
+        if (versao !== 3000) throw new ErroFluigctl('a versão do documento é inválida', 7);
+        return anexos[nome]!;
+      },
+      async events() { return [{ eventId: 'validateForm', eventDescription: 'function validateForm(form) {}' }]; },
+      updateForm: nao, createForm: nao,
+    },
+  };
+}
+
+test('pull form grava anexos (binário intacto) e eventos, na versão ativa', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fluigctl-pull-form-'));
+  const pasta = join(dir, 'formFoo');
+  const f = fakeCardIndex();
+  const r = await pullForm({ server: SERVER, senha: 's', pasta, cliente: f.cliente, versao: async () => 3000 });
+
+  assert.equal(r.documentId, 902);
+  assert.equal(r.versao, 3000);
+  assert.deepEqual(new Set(f.versoes), new Set([3000]));
+  assert.ok(readFileSync(join(pasta, 'logo.png')).equals(PNG));
+  assert.equal(ler(join(pasta, 'events/validateForm.js')), 'function validateForm(form) {}\n');
+  assert.equal(r.gravados.length, 4);
+});
+
+test('pull form põe o anexo no arquivo de mesmo nome em subpasta e lista o que só existe no local', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fluigctl-pull-form-'));
+  const pasta = join(dir, 'formFoo');
+  mkdirSync(join(pasta, 'libs'), { recursive: true });
+  writeFileSync(join(pasta, 'libs/select2.min.js'), '/* lib */\n');
+  writeFileSync(join(pasta, 'formFoo.html'), '<form><input name="b"></form>\n');
+  writeFileSync(join(pasta, 'rascunho.txt'), 'local');
+  const opcoes = { server: SERVER, senha: 's', pasta, cliente: fakeCardIndex().cliente, versao: async () => 3000 };
+
+  const previa = await pullForm({ ...opcoes, dryRun: true });
+  assert.deepEqual(previa.iguais, [join(pasta, 'libs/select2.min.js')]);
+  assert.deepEqual(previa.diferentes, [join(pasta, 'formFoo.html')]);
+  assert.deepEqual(previa.soLocais, ['rascunho.txt']);
+  assert.equal(existsSync(join(pasta, 'select2.min.js')), false);
+
+  await assert.rejects(pullForm(opcoes), (e) => codigoDe(e) === 6);
+  assert.equal(existsSync(join(pasta, 'logo.png')), false);
+});
+
+test('pull form: dois arquivos locais com o nome de um anexo é ambíguo (6); formulário que não existe é 3', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fluigctl-pull-form-'));
+  const pasta = join(dir, 'formFoo');
+  mkdirSync(join(pasta, 'a'), { recursive: true });
+  mkdirSync(join(pasta, 'b'));
+  writeFileSync(join(pasta, 'a/select2.min.js'), '');
+  writeFileSync(join(pasta, 'b/select2.min.js'), '');
+  const cliente = fakeCardIndex().cliente;
+  await assert.rejects(pullForm({ server: SERVER, senha: 's', pasta, cliente, versao: async () => 3000 }), (e) => codigoDe(e) === 6);
+  await assert.rejects(
+    pullForm({ server: SERVER, senha: 's', pasta: join(dir, 'formOutro'), cliente, versao: async () => 3000 }),
+    (e) => codigoDe(e) === 3,
+  );
 });

@@ -16,7 +16,7 @@ import { pushDiagram } from './commands/push-diagram.js';
 import { pushForm } from './commands/push-form.js';
 import { pushProcess } from './commands/push-process.js';
 import { pushWidget } from './commands/push-widget.js';
-import { pullDataset, pullProcess, type ResultadoPull } from './commands/pull.js';
+import { pullDataset, pullForm, pullProcess, type ResultadoPull } from './commands/pull.js';
 import { importCandidates, scanServersJson } from './import.js';
 import { gravarNoEnv } from './env-file.js';
 import { avisoGit, garantirIgnorado } from './gitignore.js';
@@ -61,6 +61,8 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       baixa os scripts do processo publicado para workflow/scripts/ (mesmo prefixo do push process)
   fluigctl pull dataset <nome> --server <nome> [--dry-run] [--overwrite]
       baixa o código do dataset para o datasets/**/<nome>.js que já existe, ou datasets/<nome>.js
+  fluigctl pull form <pasta/> --server <nome> [--document-id N] [--dry-run] [--overwrite]
+      baixa anexos e eventos do formulário (alvo resolvido como no push form) para a pasta
       Só lê do servidor. Arquivo local diferente do servidor só é trocado com --overwrite;
       sem ele, se algum diferir, nada é gravado
 
@@ -617,8 +619,9 @@ async function comandoPull(argv: string[]): Promise<void> {
   const tipo = argv[0];
   const uso =
     'uso: fluigctl pull process <processId> --server <nome> [--workflow <pasta>] [--dry-run] [--overwrite]\n' +
-    '     fluigctl pull dataset <nome> --server <nome> [--dry-run] [--overwrite]';
-  if (tipo !== 'process' && tipo !== 'dataset') throw new ErroFluigctl(uso, 2);
+    '     fluigctl pull dataset <nome> --server <nome> [--dry-run] [--overwrite]\n' +
+    '     fluigctl pull form <pasta/> --server <nome> [--document-id N] [--dry-run] [--overwrite]';
+  if (tipo !== 'process' && tipo !== 'dataset' && tipo !== 'form') throw new ErroFluigctl(uso, 2);
 
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
@@ -628,6 +631,7 @@ async function comandoPull(argv: string[]): Promise<void> {
       workflow: { type: 'string', default: 'workflow' },
       'dry-run': { type: 'boolean', default: false },
       overwrite: { type: 'boolean', default: false },
+      'document-id': { type: 'string' },
     },
   });
   const nome = positionals[0];
@@ -645,6 +649,16 @@ async function comandoPull(argv: string[]): Promise<void> {
       console.log('  o processo publicado não tem scripts.');
       return;
     }
+  } else if (tipo === 'form') {
+    const documentId = values['document-id'] === undefined ? undefined : Number(values['document-id']);
+    if (documentId !== undefined && !(Number.isInteger(documentId) && documentId > 0)) {
+      throw new ErroFluigctl(`--document-id precisa ser um número: ${values['document-id']}`, 2);
+    }
+    const f = await pullForm({ ...comum, pasta: nome, ...(documentId === undefined ? {} : { documentId }) });
+    console.log(`  documentId ${f.documentId}, versão ${f.versao}`);
+    for (const aviso of f.avisos) console.log(`  aviso: ${aviso}`);
+    if (f.soLocais.length) console.log(`  só no local         ${f.soLocais.join(', ')} (ficam como estão)`);
+    r = f;
   } else {
     r = await pullDataset({ ...comum, nome });
   }

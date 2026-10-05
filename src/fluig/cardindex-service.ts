@@ -36,6 +36,11 @@ export interface ParametrosCreate {
 
 export interface CardIndexClient {
   listForms(): Promise<FormNoServidor[]>;
+  /** Nomes dos anexos do formulário, sem subpasta (é como o servidor os guarda). */
+  listAttachments(documentId: number): Promise<string[]>;
+  /** Bytes de um anexo, na versão pedida — a errada é recusada ("versão do documento é inválida"). */
+  attachmentContent(documentId: number, version: number, nome: string): Promise<Buffer>;
+  events(documentId: number): Promise<{ eventId: string; eventDescription: string }[]>;
   updateForm(p: ParametrosUpdate): Promise<void>;
   createForm(p: ParametrosCreate): Promise<number>;
 }
@@ -96,6 +101,37 @@ export async function cardIndexClient(
         ...(Object.prototype.hasOwnProperty.call(f, 'cardDescription')
           ? { descriptionField: f.cardDescription === null ? '' : String(f.cardDescription) }
           : {}),
+      }));
+    },
+
+    async listAttachments(documentId): Promise<string[]> {
+      const r = await invoke<{ result?: { item?: string | string[] } }>(cliente, 'getAttachmentsList', {
+        ...credencial,
+        documentId,
+      });
+      return itens<string>(r?.result).map(String);
+    },
+
+    async attachmentContent(documentId, version, nome): Promise<Buffer> {
+      const r = await invoke<{ folder?: string }>(cliente, 'getCardIndexContent', {
+        ...credencial,
+        documentId,
+        colleagueId,
+        version,
+        nomeArquivo: nome,
+      });
+      return Buffer.from(r?.folder ?? '', 'base64');
+    },
+
+    async events(documentId) {
+      type Evento = { eventId?: unknown; eventDescription?: unknown };
+      const r = await invoke<{ result?: { item?: Evento | Evento[] } }>(cliente, 'getCustomizationEvents', {
+        ...credencial,
+        documentId,
+      });
+      return itens<Evento>(r?.result).map((e) => ({
+        eventId: String(e.eventId ?? ''),
+        eventDescription: e.eventDescription == null ? '' : String(e.eventDescription),
       }));
     },
 
