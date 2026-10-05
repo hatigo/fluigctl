@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 455 | não | não | — |
+| Testes automatizados | 470 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -60,6 +60,7 @@ e layout.
 |---|---|
 | `server add` / `ls` / `rm` / `test` / `set-prod` | pronto |
 | `server ui` (tela no terminal para o cadastro) | pronto |
+| `skill install` / `uninstall` (a skill que ensina um agente a publicar) | pronto |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
 | `push dataset` | pronto |
@@ -92,6 +93,25 @@ responder "permissão negada" depois de qualquer `npm run build` ou `npm test`.
 Com o wrapper versionado, recompilar não mexe no que está no PATH.
 
 Node 22.2 ou mais novo.
+
+### Para um agente
+
+O repositório traz a skill `fluig-deploy`, que ensina um agente a publicar com o
+`fluigctl` — os comandos, os códigos de saída e as regras que ele não deve
+atravessar (produção é do humano). Uma vez:
+
+```sh
+fluigctl skill install    # põe a skill onde os agentes procuram
+fluigctl skill            # diz onde ela está, e se está atualizada
+```
+
+Ela sai como **link** para este repositório, e não como cópia: `git pull` aqui
+atualiza o que o agente lê na próxima sessão. `--copy` copia, `--force` sobrepõe
+uma skill de mesmo nome que não seja do `fluigctl`, e `--dir` escolhe o destino.
+
+Sem argumento, o `install` põe em `~/.agents/skills/` (a convenção entre agentes)
+e em `~/.claude/skills/` quando essa pasta já existe. `uninstall` só remove o que
+ele mesmo pôs.
 
 ## Como usar
 
@@ -870,7 +890,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 455 testes, sem rede e sem servidor Fluig
+npm test        # 470 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

@@ -12,6 +12,7 @@ import {
 } from './config.js';
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { serverUi } from './commands/server-ui.js';
+import { estado as estadoDaSkill, instalarSkill, origemDaSkill, removerSkill } from './commands/skill.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushDiagram } from './commands/push-diagram.js';
 import { eventIdDoArquivo, pushEvent } from './commands/push-event.js';
@@ -54,6 +55,10 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl server ui [--dir <pasta>]      (para gente: precisa de um terminal de verdade)
       tela no terminal para cadastrar, rever, testar, marcar produção e remover servidores,
       e para importar os da extensão Fluiggers
+
+  fluigctl skill [ls | install [--copy] [--force] | uninstall]
+      põe (ou tira) a skill que ensina um agente a publicar com o fluigctl;
+      sem argumento, diz onde ela está e onde daria para instalar
 
   fluigctl changed [--since <ref>] [--server <nome>]
       lista o que mudou no git como artefatos do Fluig e sugere o comando de cada um; não envia nada
@@ -928,6 +933,71 @@ function comandoChanged(argv: string[]): void {
   console.log('\nTire o --dry-run de cada um depois de conferir. Nada foi enviado.');
 }
 
+function comandoSkill(argv: string[]): void {
+  const sub = argv[0] ?? 'ls';
+  const uso =
+    'uso: fluigctl skill [ls]\n' +
+    '     fluigctl skill install [--dir <pasta>] [--copy] [--force] [--dry-run]\n' +
+    '     fluigctl skill uninstall [--dir <pasta>] [--dry-run]';
+
+  if (sub === 'ls') {
+    let origem: string;
+    try {
+      origem = origemDaSkill();
+    } catch (erro) {
+      throw new ErroFluigctl((erro as Error).message, 3);
+    }
+    console.log(`esta é a skill que vem com o fluigctl: ${origem}`);
+    for (const e of estadoDaSkill()) {
+      const situacao = !e.instalada
+        ? e.pastaExiste
+          ? 'não instalada'
+          : 'não instalada (a pasta de skills ainda não existe)'
+        : e.nossa !== true
+          ? 'ocupada por outra coisa, e o fluigctl não mexe nela'
+          : `${e.como === 'link' ? 'instalada como link para o repositório' : 'instalada como cópia'}${e.desatualizada ? ', e desatualizada' : ''}`;
+      console.log(`  ${e.destino}\n      ${situacao}`);
+    }
+    console.log('\n"fluigctl skill install" põe a skill onde os agentes procuram.');
+    return;
+  }
+
+  if (sub !== 'install' && sub !== 'uninstall') throw new ErroFluigctl(uso, 2);
+
+  const { values } = parseArgs({
+    args: argv.slice(1),
+    allowPositionals: true,
+    options: {
+      dir: { type: 'string' },
+      copy: { type: 'boolean', default: false },
+      force: { type: 'boolean', default: false },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+  const comuns = {
+    ...(values.dir === undefined ? {} : { dir: values.dir }),
+    dryRun: values['dry-run'],
+  };
+
+  if (sub === 'install') {
+    const r = instalarSkill({ ...comuns, copiar: values.copy, forcar: values.force });
+    for (const f of r.feito) {
+      console.log(`${f.acao === 'ja estava' ? 'já estava' : f.acao === 'atualizada' ? 'atualizada' : 'instalada'}: ${f.destino} (${f.como === 'link' ? 'link para o repositório' : 'cópia'})`);
+    }
+    for (const x of r.recusados) console.log(`recusado: ${x.destino} — ${x.motivo}`);
+    if (values['dry-run']) console.log('[dry-run] Nada foi escrito.');
+    else if (r.feito.length > 0) console.log('\nUm agente que leia esse diretório passa a ver a skill na próxima sessão.');
+    if (r.recusados.length > 0) throw new ErroFluigctl('havia skill ocupada; nada dela foi tocado', 6);
+    return;
+  }
+
+  const r = removerSkill(comuns);
+  for (const d of r.removidos) console.log(`removida: ${d}`);
+  for (const x of r.recusados) console.log(`recusado: ${x.destino} — ${x.motivo}`);
+  if (r.removidos.length === 0 && r.recusados.length === 0) console.log('não havia skill do fluigctl instalada.');
+  if (values['dry-run']) console.log('[dry-run] Nada foi removido.');
+}
+
 async function main(argv: string[]): Promise<void> {
   const comando = argv[0];
 
@@ -937,6 +1007,7 @@ async function main(argv: string[]): Promise<void> {
   }
 
   if (comando === 'server') return comandoServer(argv.slice(1));
+  if (comando === 'skill') return comandoSkill(argv.slice(1));
   if (comando === 'changed') return comandoChanged(argv.slice(1));
   if (comando === 'push') return comandoPush(argv.slice(1));
   if (comando === 'pull') return comandoPull(argv.slice(1));
