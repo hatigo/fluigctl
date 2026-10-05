@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 388 | não | não | — |
+| Testes automatizados | 396 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -64,6 +64,7 @@ e layout.
 | `push dataset` | pronto |
 | `push form` | pronto |
 | `push widget` | pronto (widgets sem Java) |
+| `push layout` (layout WCM) | pronto; o `application.type` da pasta é conferido contra o comando |
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
 | `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 470 de 475 diagramas reais convertem |
 | `pull process` / `pull dataset` / `pull form` (scripts de processo, código de dataset, anexos e eventos de formulário) | pronto |
@@ -72,7 +73,8 @@ e layout.
 | `push event` / `pull event` (evento global, `events/<id>.js`) | pronto |
 | `push mechanism` / `pull mechanism` (mecanismo de atribuição customizado, `mechanisms/<id>.js`) | pronto |
 
-Fora de escopo por enquanto: layout WCM e widget com código Java.
+Fora de escopo por enquanto: `pull` de layout WCM (não há rota no servidor — veja
+"Publicando um layout") e widget com código Java.
 
 ## Instalação
 
@@ -318,7 +320,7 @@ versão anterior e sugere `--new-version` quando há campo novo. Para diagrama
 alterado sugere `push diagram`, que já publica os scripts do processo — por isso
 os scripts dele não ganham um `push process` à parte, que criaria outra versão.
 Os arquivos de `workflow/.resources` (gerados pelo Studio ao exportar) aparecem só
-como informação. Layout WCM aparece com o motivo de não ser publicado aqui.
+como informação.
 
 ## Baixando do servidor
 
@@ -426,7 +428,6 @@ memória — sem Maven — e envia pelo mesmo endpoint da extensão Fluiggers,
 `/portal/api/rest/wcmservice/rest/product/uploadfile`, com a sessão do portal.
 O nome da widget é o nome da pasta. Não há `--create`: o servidor instala se a
 widget não existe e atualiza se existe.
-
 O pacote segue o mapeamento da extensão, sem compressão:
 
 | origem | no `.war` |
@@ -458,6 +459,34 @@ Rodado (só o empacotamento) contra as 160 entradas de `wcm/widget/` dos
 workspaces: 147 empacotadas, todas aprovadas por `unzip -t`; 7 recusadas por
 terem Java; 6 recusadas por não serem pasta de widget (dois `.zip`, um `.txt`,
 duas pastas só com `target/` e uma sem `WEB-INF`).
+
+## Publicando um layout
+
+```sh
+fluigctl push layout wcm/layout/layoutExterno --server cetenco-hml --dry-run
+```
+
+Para o servidor, widget e layout são a mesma coisa: uma aplicação WCM com
+estrutura Maven idêntica, o mesmo pacote e a mesma rota de upload. O
+`push layout` monta o `.war` exatamente como o `push widget` — mesmo mapeamento,
+mesmas recusas — e o que os separa é o `application.type` do
+`src/main/resources/application.info`.
+
+Esse campo não é decoração: **sem a conferência, `push widget` numa pasta de
+layout sobe o layout como se fosse widget, e o servidor aceita.** Medido no
+fluig-localdev. Por isso o `push widget` exige `application.type=widget` e o
+`push layout` exige `application.type=layout`; pasta sem o campo é recusada com
+instrução, e pasta do outro tipo recusa dizendo qual é o comando certo.
+
+A publicação foi conferida no fluig-localdev com o `layoutExterno` da Cetenco:
+antes do envio, `/layoutExterno/resources/js/layoutExterno.js` respondia `404`;
+depois, `200`.
+
+**`pull layout` não existe, e não é só falta de trabalho:** o Fluig não expõe
+rota para listar ou baixar layout. A widget auxiliar do Fluiggers, que é como o
+`pull widget` lê, consulta o banco com
+`WHERE APPLICATION_TYPE = 'widget'` e não tem controlador de layout — os layouts
+moram na mesma tabela, com outro tipo, mas fora do alcance dela.
 
 ## Publicando um diagrama
 
@@ -705,7 +734,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 388 testes, sem rede e sem servidor Fluig
+npm test        # 396 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

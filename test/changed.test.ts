@@ -146,3 +146,23 @@ test('scripts de processo renomeado: o changed sugere o id que está no .process
     rmSync(r, { recursive: true, force: true });
   }
 });
+
+test('layout WCM alterado sugere push layout, e widget continua push widget', () => {
+  const r = repo();
+  try {
+    escreve(r, 'wcm/widget/wdgA/src/main/resources/application.info', 'application.type=widget');
+    escreve(r, 'wcm/layout/layoutB/src/main/resources/application.info', 'application.type=layout');
+    commit(r);
+
+    escreve(r, 'wcm/widget/wdgA/src/main/resources/application.info', 'application.type=widget\napplication.title=A');
+    escreve(r, 'wcm/layout/layoutB/src/main/resources/application.info', 'application.type=layout\napplication.title=B');
+
+    const linhas = changedArtifacts(r).artefatos.map((a) => comandoSugerido(a, 'hml'));
+    assert.deepEqual(linhas, [
+      'fluigctl push widget wcm/widget/wdgA --server hml --dry-run',
+      'fluigctl push layout wcm/layout/layoutB --server hml --dry-run',
+    ]);
+  } finally {
+    rmSync(r, { recursive: true, force: true });
+  }
+});

@@ -20,6 +20,7 @@ export type Artefato =
   /** Gerado pelo Studio ao exportar (`workflow/.resources`): não é fonte de publicação. */
   | { tipo: 'gerado'; arquivo: string }
   | { tipo: 'widget'; pasta: string }
+  | { tipo: 'layout'; pasta: string }
   | { tipo: 'event'; eventId: string; arquivo: string }
   | { tipo: 'mechanism'; mecanismoId: string; arquivo: string }
   | { tipo: 'nao-suportado'; arquivo: string; motivo: string };
@@ -103,6 +104,7 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
   const forms = new Set<string>();
   const processos = new Map<string, Set<string>>();
   const widgets = new Set<string>();
+  const layouts = new Set<string>();
   const eventosGlobais = new Map<string, string>();
   const mecanismos = new Map<string, string>();
   /** Diagramas alterados, pelo nome do arquivo sem `.process` — o prefixo dos scripts no Studio. */
@@ -135,12 +137,10 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
       eventosGlobais.set(partes.at(-1)!.replace(/\.js$/, ''), arquivo);
     } else if (partes[0] === 'mechanisms' && arquivo.endsWith('.js')) {
       mecanismos.set(partes.at(-1)!.replace(/\.js$/, ''), arquivo);
-    } else if (partes[0] === 'wcm' && partes[1] === 'layout') {
-      outros.push({
-        tipo: 'nao-suportado',
-        arquivo,
-        motivo: 'layout WCM ainda não é publicado pelo fluigctl',
-      });
+    } else if (partes[0] === 'wcm' && partes[1] === 'widget' && partes.length >= 4) {
+      widgets.add(`wcm/widget/${partes[2]}`);
+    } else if (partes[0] === 'wcm' && partes[1] === 'layout' && partes.length >= 4) {
+      layouts.add(`wcm/layout/${partes[2]}`);
     }
   }
 
@@ -163,6 +163,7 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
       eventos: [...(processos.get(prefixo) ?? [])].sort(),
     })),
     ...[...widgets].sort().map((pasta): Artefato => ({ tipo: 'widget', pasta })),
+    ...[...layouts].sort().map((pasta): Artefato => ({ tipo: 'layout', pasta })),
     ...[...eventosGlobais].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(
       ([eventId, arquivo]): Artefato => ({ tipo: 'event', eventId, arquivo }),
     ),
@@ -192,6 +193,8 @@ export function comandoSugerido(a: Artefato, servidor: string): string {
       return `fluigctl push process ${a.processId} ${s} --dry-run`;
     case 'widget':
       return `fluigctl push widget ${a.pasta} ${s} --dry-run`;
+    case 'layout':
+      return `fluigctl push layout ${a.pasta} ${s} --dry-run`;
     case 'event':
       return `fluigctl push event ${a.arquivo} ${s} --dry-run`;
     case 'mechanism':

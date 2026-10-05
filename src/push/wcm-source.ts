@@ -6,8 +6,13 @@ import type { EntradaZip } from './war.js';
 
 export interface FonteWcm {
   nome: string;
+  /** O `application.type` do `application.info`: `widget` ou `layout`. */
+  tipo: string;
   entradas: EntradaZip[];
 }
+
+/** O que o `application.type` declara; é ele que diz se a pasta é widget ou layout. */
+export type TipoWcm = 'widget' | 'layout';
 
 /**
  * Lê a pasta de uma aplicação WCM (`wcm/widget/<nome>`) e monta as entradas do `.war`
@@ -24,23 +29,30 @@ export interface FonteWcm {
  *
  * Widget com código em `src/main/java` precisa do build do Maven, que compila
  * as classes; empacotar sem elas publicaria uma widget quebrada.
+ *
+ * `tipoEsperado` não é decoração: widget e layout são a mesma estrutura e o
+ * mesmo pacote, e o que os separa é o `application.type`. Sem a conferência,
+ * `push widget` numa pasta de layout sobe o layout como se fosse widget —
+ * medido no fluig-localdev, onde o servidor aceitou sem reclamar.
  */
-export async function lerWcm(pasta: string): Promise<FonteWcm> {
+export async function lerWcm(pasta: string, tipoEsperado: TipoWcm): Promise<FonteWcm> {
   const raiz = resolve(pasta);
   const nome = basename(raiz);
   if (nome === '' || nome.startsWith('.')) {
-    throw new ErroFluigctl(`não consigo tirar o nome da widget de ${pasta}`, 3);
+    throw new ErroFluigctl(`não consigo tirar o nome da aplicação de ${pasta}`, 3);
   }
 
   const webInf = join(raiz, 'src', 'main', 'webapp', 'WEB-INF');
   const recursos = join(raiz, 'src', 'main', 'resources');
   if (!(await ehPasta(webInf)) || !(await ehArquivo(join(recursos, 'application.info')))) {
     throw new ErroFluigctl(
-      `${pasta} não é uma pasta de widget: faltam src/main/webapp/WEB-INF ` +
+      `${pasta} não é uma pasta de ${tipoEsperado}: faltam src/main/webapp/WEB-INF ` +
         `ou src/main/resources/application.info`,
       3,
     );
   }
+
+  const tipo = await lerTipo(join(recursos, 'application.info'), pasta, tipoEsperado);
 
   const java = join(raiz, 'src', 'main', 'java');
   if ((await ehPasta(java)) && (await coletaArquivos(java, java)).length > 0) {
@@ -70,7 +82,34 @@ export async function lerWcm(pasta: string): Promise<FonteWcm> {
     }
   }
 
-  return { nome, entradas };
+  return { nome, tipo, entradas };
+}
+
+/**
+ * O `application.type` do `application.info`, conferido contra o que o comando
+ * publica. O arquivo é lido como latin1 pelo mesmo motivo do pacote: é um
+ * `.properties` do Fluig, e a extensão o estraga lendo como UTF-8.
+ */
+async function lerTipo(caminho: string, pasta: string, tipoEsperado: TipoWcm): Promise<string> {
+  const info = await readFile(caminho, 'latin1');
+  const linha = /^[ \t]*application\.type[ \t]*=[ \t]*(.*?)[ \t\r]*$/m.exec(info);
+  const tipo = linha?.[1] ?? '';
+  if (tipo === '') {
+    throw new ErroFluigctl(
+      `o application.info de ${pasta} não declara application.type, então não sei se é ` +
+        `widget ou layout; para publicar como ${tipoEsperado}, acrescente ` +
+        `"application.type=${tipoEsperado}".`,
+      3,
+    );
+  }
+  if (tipo !== tipoEsperado) {
+    throw new ErroFluigctl(
+      `${pasta} é um ${tipo} (application.type=${tipo}), não um ${tipoEsperado}. ` +
+        `Use push ${tipo}.`,
+      6,
+    );
+  }
+  return tipo;
 }
 
 async function arquivosDoTopo(dir: string, aceita: (nome: string) => boolean): Promise<string[]> {

@@ -26,7 +26,7 @@ function warDaWidget(): Buffer {
     { nome: 'META-INF/MANIFEST.MF', dados: Buffer.from('Manifest-Version: 1.0\n') },
     { nome: 'WEB-INF/web.xml', dados: Buffer.from('<web-app/>\n') },
     { nome: 'WEB-INF/jboss-web.xml', dados: Buffer.from('<jboss-web/>\n') },
-    { nome: 'WEB-INF/classes/application.info', dados: Buffer.from('application.code=wdgX\n', 'latin1') },
+    { nome: 'WEB-INF/classes/application.info', dados: Buffer.from('application.type=widget\napplication.code=wdgX\n', 'latin1') },
     { nome: 'WEB-INF/classes/view.ftl', dados: Buffer.from('<#-- view -->\n') },
     { nome: 'resources/js/wdgX.js', dados: Buffer.from('function wdgX() {}\n') },
     { nome: 'resources/css/wdgX.css', dados: Buffer.from('.wdgX {}\n') },
@@ -63,7 +63,7 @@ test('desmontarWar põe cada entrada no mesmo lugar que o push widget lê de vol
 
 test('desmontarWar guarda as classes em src/main/java e diz que o push recusa a pasta', () => {
   const war = montarZip([
-    { nome: 'WEB-INF/classes/application.info', dados: Buffer.from('a=1') },
+    { nome: 'WEB-INF/classes/application.info', dados: Buffer.from('application.type=widget\na=1') },
     { nome: 'WEB-INF/classes/com/acme/wdg/Service.class', dados: Buffer.from([0xca, 0xfe, 0xba, 0xbe]) },
     { nome: 'pom.xml', dados: Buffer.from('<project/>') },
   ]);
@@ -99,7 +99,7 @@ test('pull widget grava a árvore da widget em wcm/widget/<code>, byte a byte', 
   assert.equal(r.code, 'wdgX');
   assert.equal(
     readFileSync(join(raiz, 'wcm/widget/wdgX/src/main/resources/application.info'), 'latin1'),
-    'application.code=wdgX\n',
+    'application.type=widget\napplication.code=wdgX\n',
   );
   assert.equal(
     readFileSync(join(raiz, 'wcm/widget/wdgX/src/main/webapp/resources/js/wdgX.js'), 'utf8'),
@@ -148,7 +148,7 @@ test('pull widget lista o que só existe no local, sem apagar nada', async () =>
 test('pull widget avisa quando o pacote tem classe compilada, que o push não republica', async () => {
   const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-pull-widget-'));
   const war = montarZip([
-    { nome: 'WEB-INF/classes/application.info', dados: Buffer.from('a=1') },
+    { nome: 'WEB-INF/classes/application.info', dados: Buffer.from('application.type=widget\na=1') },
     { nome: 'WEB-INF/classes/com/acme/S.class', dados: Buffer.from([0xca]) },
   ]);
   const r = await pullWidget({ server: SERVER, senha: 's', nome: 'wdgX', raiz, cliente: fakeHelper(war) });
@@ -181,7 +181,7 @@ test('o que o pull grava volta pelo push widget: só o que o empacotamento gera 
   const original = warDaWidget();
   await pullWidget({ server: SERVER, senha: 's', nome: 'wdgX', raiz, cliente: fakeHelper(original) });
 
-  const fonte = await lerWcm(join(raiz, 'wcm/widget/wdgX'));
+  const fonte = await lerWcm(join(raiz, 'wcm/widget/wdgX'), 'widget');
   const deVolta = entradasDoZip(montarZip(fonte.entradas), 'o pacote').map((e) => e.nome);
   const deIda = entradasDoZip(original, 'o pacote').map((e) => e.nome);
 
@@ -226,5 +226,5 @@ test('entradasDoZip lê o .war gerado pelo push widget — ida e volta do mesmo 
     ['META-INF/MANIFEST.MF', 'WEB-INF/web.xml', 'WEB-INF/jboss-web.xml', 'WEB-INF/classes/application.info',
      'WEB-INF/classes/view.ftl', 'resources/js/wdgX.js', 'resources/css/wdgX.css'],
   );
-  assert.equal(entradas[3]!.dados.toString('latin1'), 'application.code=wdgX\n');
+  assert.equal(entradas[3]!.dados.toString('latin1'), 'application.type=widget\napplication.code=wdgX\n');
 });

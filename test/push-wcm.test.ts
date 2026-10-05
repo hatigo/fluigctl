@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fakeFluig, type RotaResposta } from './helpers/fake-fluig.js';
-import { pushWidget } from '../src/commands/push-widget.js';
+import { pushWcm } from '../src/commands/push-wcm.js';
 import type { Server } from '../src/config.js';
 import { ErroFluigctl } from '../src/errors.js';
 import { montarZip } from '../src/push/war.js';
@@ -79,7 +79,7 @@ async function codigoDe(promessa: Promise<unknown>): Promise<number> {
 }
 
 test('lerWcm monta exatamente as entradas da extensão, com os bytes de cada arquivo', async () => {
-  const widget = await lerWcm(FIXTURE);
+  const widget = await lerWcm(FIXTURE, 'widget');
 
   assert.equal(widget.nome, 'wdgExemplo');
   assert.deepEqual(widget.entradas.map((e) => e.nome).sort(), Object.keys(ESPERADO).sort());
@@ -91,14 +91,14 @@ test('lerWcm monta exatamente as entradas da extensão, com os bytes de cada arq
 
 test('lerWcm não converte o .properties em latin1', async () => {
   // A extensão lê src/main/resources como UTF-8 e troca o "ç" (0xE7) por U+FFFD.
-  const widget = await lerWcm(FIXTURE);
+  const widget = await lerWcm(FIXTURE, 'widget');
 
   const props = widget.entradas.find((e) => e.nome === 'WEB-INF/classes/wdgExemplo.properties')!;
   assert.ok(props.dados.includes(0xe7));
 });
 
 test('o .war gerado é lido por um unzip comum, com o conteúdo intacto', async () => {
-  const widget = await lerWcm(FIXTURE);
+  const widget = await lerWcm(FIXTURE, 'widget');
   const dir = mkdtempSync(join(tmpdir(), 'fluigctl-war-'));
   const war = join(dir, 'wdgExemplo.war');
   writeFileSync(war, montarZip(widget.entradas));
@@ -121,18 +121,18 @@ test('lerWcm recusa pasta que não é de widget, com código 3', async (t) => {
   const pasta = copiaDaFixture(t);
   rmSync(join(pasta, 'src', 'main', 'resources', 'application.info'));
 
-  assert.equal(await codigoDe(lerWcm(pasta)), 3);
+  assert.equal(await codigoDe(lerWcm(pasta, 'widget')), 3);
 });
 
 test('lerWcm tira o nome da pasta de verdade, não do texto do argumento', async () => {
-  assert.equal((await lerWcm(join(FIXTURE, '.'))).nome, 'wdgExemplo');
-  assert.equal((await lerWcm(`${FIXTURE}/.`)).nome, 'wdgExemplo');
-  assert.equal((await lerWcm(`${FIXTURE}/`)).nome, 'wdgExemplo');
-  assert.equal((await lerWcm(`${FIXTURE}/src/..`)).nome, 'wdgExemplo');
+  assert.equal((await lerWcm(join(FIXTURE, '.'), 'widget')).nome, 'wdgExemplo');
+  assert.equal((await lerWcm(`${FIXTURE}/.`, 'widget')).nome, 'wdgExemplo');
+  assert.equal((await lerWcm(`${FIXTURE}/`, 'widget')).nome, 'wdgExemplo');
+  assert.equal((await lerWcm(`${FIXTURE}/src/..`, 'widget')).nome, 'wdgExemplo');
 });
 
 test('lerWcm recusa caminho de onde não sai nome de widget, com código 3', async () => {
-  assert.equal(await codigoDe(lerWcm('/')), 3);
+  assert.equal(await codigoDe(lerWcm('/', 'widget')), 3);
 });
 
 test('lerWcm recusa link simbólico em vez de omiti-lo, com código 3', async (t) => {
@@ -140,7 +140,7 @@ test('lerWcm recusa link simbólico em vez de omiti-lo, com código 3', async (t
   const js = join(pasta, 'src', 'main', 'webapp', 'resources', 'js');
   symlinkSync(join(js, 'wdgExemplo.js'), join(js, 'atalho.js'));
 
-  const promessa = lerWcm(pasta);
+  const promessa = lerWcm(pasta, 'widget');
   await assert.rejects(promessa, /atalho\.js.*link simbólico/);
   assert.equal(await codigoDe(promessa), 3);
 });
@@ -150,14 +150,15 @@ test('lerWcm recusa link simbólico no topo de src/main/resources', async (t) =>
   const recursos = join(pasta, 'src', 'main', 'resources');
   symlinkSync(join(recursos, 'view.ftl'), join(recursos, 'edit.ftl'));
 
-  assert.equal(await codigoDe(lerWcm(pasta)), 3);
+  assert.equal(await codigoDe(lerWcm(pasta, 'widget')), 3);
 });
 
 test('push widget envia o .war com a sessão do login e os campos da extensão', async () => {
   const a = await ambiente();
 
   try {
-    const r = await pushWidget({
+    const r = await pushWcm({
+      tipo: 'widget',
       server: a.server,
       senha: 'senha',
       pasta: FIXTURE,
@@ -193,7 +194,7 @@ test('push widget com "message" na resposta falha com código 7 e a mensagem do 
   const a = await ambiente({ body: JSON.stringify({ message: { message: 'widget inválida' } }) });
 
   try {
-    const promessa = pushWidget({ server: a.server, senha: 's', pasta: FIXTURE, prompt: async () => '' });
+    const promessa = pushWcm({ tipo: 'widget', server: a.server, senha: 's', pasta: FIXTURE, prompt: async () => '' });
     await assert.rejects(promessa, /widget inválida/);
     assert.equal(await codigoDe(promessa), 7);
   } finally {
@@ -206,7 +207,7 @@ test('push widget com HTTP de erro falha com código 7', async () => {
 
   try {
     assert.equal(
-      await codigoDe(pushWidget({ server: a.server, senha: 's', pasta: FIXTURE, prompt: async () => '' })),
+      await codigoDe(pushWcm({ tipo: 'widget', server: a.server, senha: 's', pasta: FIXTURE, prompt: async () => '' })),
       7,
     );
   } finally {
@@ -221,7 +222,7 @@ test('push widget recusa widget com código Java antes de qualquer requisição'
   writeFileSync(join(pasta, 'src', 'main', 'java', 'com', 'exemplo', 'Rest.java'), 'class Rest {}\n');
 
   try {
-    const promessa = pushWidget({ server: a.server, senha: 's', pasta, prompt: async () => '' });
+    const promessa = pushWcm({ tipo: 'widget', server: a.server, senha: 's', pasta, prompt: async () => '' });
     await assert.rejects(promessa, /Maven/);
     assert.equal(await codigoDe(promessa), 6);
     assert.equal(a.fluig.requests.length, 0);
@@ -234,7 +235,8 @@ test('push widget em dry-run monta o pacote e não envia nada', async () => {
   const a = await ambiente();
 
   try {
-    const r = await pushWidget({
+    const r = await pushWcm({
+      tipo: 'widget',
       server: a.server,
       senha: 's',
       pasta: FIXTURE,
@@ -255,7 +257,8 @@ test('push widget em produção sem TTY falha com código 5 e não envia', async
 
   try {
     const codigo = await codigoDe(
-      pushWidget({
+      pushWcm({
+        tipo: 'widget',
         server: { ...a.server, prod: true },
         senha: 's',
         pasta: FIXTURE,
@@ -266,6 +269,98 @@ test('push widget em produção sem TTY falha com código 5 e não envia', async
     );
 
     assert.equal(codigo, 5);
+    assert.equal(uploads(a.fluig).length, 0);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+// --- Layout WCM: mesma estrutura, mesmo pacote, mesma rota; o que muda é o
+// application.type, e é ele que a publicação confere contra o comando pedido.
+
+const LAYOUT = fileURLToPath(new URL('./fixtures/layouts/layoutExemplo', import.meta.url));
+
+test('lerWcm recusa uma pasta de layout quando o comando é o de widget', async () => {
+  const erro = await lerWcm(LAYOUT, 'widget').then(
+    () => assert.fail('esperava recusa'),
+    (e: ErroFluigctl) => e,
+  );
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /é um layout \(application\.type=layout\), não um widget/);
+  assert.match(erro.message, /Use push layout\./);
+});
+
+test('lerWcm recusa uma pasta de widget quando o comando é o de layout', async () => {
+  const erro = await lerWcm(FIXTURE, 'layout').then(
+    () => assert.fail('esperava recusa'),
+    (e: ErroFluigctl) => e,
+  );
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /é um widget \(application\.type=widget\), não um layout/);
+  assert.match(erro.message, /Use push widget\./);
+});
+
+test('lerWcm recusa quando o application.info não declara o tipo', async (t) => {
+  const pasta = copiaDaFixture(t);
+  writeFileSync(
+    join(pasta, 'src/main/resources/application.info'),
+    'application.code=wdgExemplo\n',
+  );
+  const erro = await lerWcm(pasta, 'widget').then(
+    () => assert.fail('esperava recusa'),
+    (e: ErroFluigctl) => e,
+  );
+  assert.equal(erro.codigo, 3);
+  assert.match(erro.message, /não declara application\.type/);
+});
+
+test('lerWcm lê o application.type com CRLF e espaço em volta', async (t) => {
+  const pasta = copiaDaFixture(t);
+  writeFileSync(
+    join(pasta, 'src/main/resources/application.info'),
+    'application.type = widget \r\napplication.code=wdgExemplo\r\n',
+  );
+  assert.equal((await lerWcm(pasta, 'widget')).tipo, 'widget');
+});
+
+test('push layout monta o .war do layout e envia pela mesma rota', async () => {
+  const a = await ambiente();
+  try {
+    const r = await pushWcm({ tipo: 'layout', server: a.server, senha: 's', pasta: LAYOUT, prompt: async () => '' });
+
+    assert.equal(r.nome, 'layoutExemplo');
+    assert.equal(r.tipo, 'layout');
+    assert.equal(r.entradas, 4);
+
+    // O layout sai pela rota da widget, com o mesmo mapeamento — é o que o
+    // servidor aceita: medido no fluig-localdev, onde os recursos do layout
+    // passaram a ser servidos em /layoutExterno/ depois do envio.
+    const envios = uploads(a.fluig);
+    assert.equal(envios.length, 1);
+    assert.match(envios[0]!.corpo.toString('latin1'), /name="fileName"\r\n\r\nlayoutExemplo\.war/);
+    assert.match(envios[0]!.url, /wcmservice\/rest\/product\/uploadfile/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('lerWcm monta as entradas de um layout no mesmo mapeamento de widget', async () => {
+  const { tipo, entradas } = await lerWcm(LAYOUT, 'layout');
+  assert.equal(tipo, 'layout');
+  assert.deepEqual(
+    entradas.map((e) => e.nome),
+    ['WEB-INF/web.xml', 'WEB-INF/classes/application.info', 'WEB-INF/classes/layout.ftl', 'resources/js/layoutExemplo.js'],
+  );
+  // O application.info vai com o tipo do layout, que é o que o servidor registra.
+  const info = entradas.find((e) => e.nome === 'WEB-INF/classes/application.info')!;
+  assert.match(info.dados.toString('latin1'), /application\.type=layout/);
+});
+
+test('push layout em dry-run monta o pacote e não envia nada', async () => {
+  const a = await ambiente();
+  try {
+    const r = await pushWcm({ tipo: 'layout', server: a.server, senha: 's', pasta: LAYOUT, dryRun: true, prompt: async () => '' });
+    assert.equal(r.tipo, 'layout');
     assert.equal(uploads(a.fluig).length, 0);
   } finally {
     await a.fluig.close();
