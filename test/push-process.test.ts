@@ -189,3 +189,27 @@ test('--base publica a partir de um export salvo, mesmo sem script alterado', as
   assert.equal(r.publicado, true);
   assert.deepEqual(f.chamadas, ['list', 'createVersion', 'import', 'release']);
 });
+
+test('processo renomeado: os scripts vêm pelo nome do .process que tem o id, como no Studio', async () => {
+  const dir = workflow({ 'reembolsoAntigo.servicetask13.js': NOVO, 'reembolso.servicetask13.js': 'nao e este' });
+  mkdirSync(join(dir, 'diagrams'));
+  writeFileSync(join(dir, 'diagrams', 'reembolsoAntigo.process'), '<xmi:XMI>\n  <bpmn2:BpmnProcess id="reembolso" name="Reembolso"/>\n</xmi:XMI>\n');
+  const f = fakeWorkflow();
+  const r = await pushProcess({ server: SERVER, senha: 's', processId: 'reembolso', dryRun: true, prompt: async () => '', pastaWorkflow: dir, cliente: f.cliente });
+  assert.equal(r.prefixoDosScripts, 'reembolsoAntigo');
+  assert.deepEqual(r.alterados, ['servicetask13']);
+
+  // Sem diagrama com esse id, vale o próprio id (como antes).
+  const semDiagrama = await pushProcess({
+    server: SERVER, senha: 's', processId: 'reembolso', dryRun: true, prompt: async () => '',
+    pastaWorkflow: workflow({ 'reembolso.servicetask13.js': NOVO }), cliente: fakeWorkflow().cliente,
+  });
+  assert.equal(semDiagrama.prefixoDosScripts, undefined);
+
+  // Dois diagramas com o mesmo id: não dá para saber de qual são os scripts.
+  writeFileSync(join(dir, 'diagrams', 'reembolsoCopia.process'), '<xmi:XMI>\n  <bpmn2:BpmnProcess id="reembolso" name="Reembolso"/>\n</xmi:XMI>\n');
+  const erro = await pushProcess({ server: SERVER, senha: 's', processId: 'reembolso', dryRun: true, prompt: async () => '', pastaWorkflow: dir, cliente: f.cliente })
+    .then(() => undefined, (e: unknown) => e as { codigo?: number; message: string });
+  assert.equal(erro?.codigo, 6);
+  assert.match(erro!.message, /mais de um diagrama .* "reembolso"/);
+});

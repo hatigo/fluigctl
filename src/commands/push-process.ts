@@ -9,7 +9,7 @@ import {
   removerIdsDasEntidadesFilhas,
   semDeclaracaoXml,
 } from '../push/process-events.js';
-import { lerScriptsDoProcesso } from '../push/process-source.js';
+import { lerScriptsDoProcesso, prefixoDosScripts } from '../push/process-source.js';
 
 export interface OpcoesPushProcess {
   server: Server;
@@ -33,6 +33,8 @@ export interface OpcoesPushProcess {
 }
 
 export interface ResultadoPushProcess {
+  /** Prefixo dos scripts quando difere do id: o nome do `.process` (processo renomeado). */
+  prefixoDosScripts?: string;
   processId: string;
   alterados: string[];
   iguais: string[];
@@ -50,13 +52,15 @@ export interface ResultadoPushProcess {
  * A base é a definição que o próprio servidor devolve (exportProcessInZipFormat),
  * e não o `.ecm30.xml` local: esse só é regerado quando alguém exporta pelo
  * Studio, e reenviá-lo desfaria o que foi publicado depois. Diagrama, atividades
- * e atribuições continuam sendo publicados pelo Studio — aqui só muda o código
- * dos eventos que já existem.
+ * e atribuições vão pelo `push diagram` (ou pelo Studio) — aqui só muda o código
+ * dos eventos que já existem. Os scripts são lidos pelo nome do arquivo `.process`
+ * que tem este id, como no Studio (ver `prefixoDosScripts`).
  */
 export async function pushProcess(opcoes: OpcoesPushProcess): Promise<ResultadoPushProcess> {
   const { server, senha, processId } = opcoes;
 
-  const scripts = await lerScriptsDoProcesso(opcoes.pastaWorkflow, processId);
+  const { prefixo } = await prefixoDosScripts(opcoes.pastaWorkflow, processId);
+  const scripts = await lerScriptsDoProcesso(opcoes.pastaWorkflow, prefixo);
   const cliente =
     opcoes.cliente ??
     (await workflowEngineClient(serverUrl(server), server.companyId, server.username, senha, server.userCode));
@@ -76,6 +80,7 @@ export async function pushProcess(opcoes: OpcoesPushProcess): Promise<ResultadoP
   const eventos = aplicarScripts(exportado.toString('latin1'), scripts);
   const base = {
     processId,
+    ...(prefixo === processId ? {} : { prefixoDosScripts: prefixo }),
     alterados: eventos.alterados,
     iguais: eventos.iguais,
     semScriptLocal: eventos.semScriptLocal,
