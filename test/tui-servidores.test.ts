@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { desenhar, semCores } from '../src/tui/desenho.js';
 import {
+  atalhos,
   estadoInicial,
   formDe,
   reduzir,
@@ -18,6 +19,7 @@ const SERVIDORES: LinhaServidor[] = [
 
 const inicial = (servidores = SERVIDORES): Estado => estadoInicial(servidores, '/fluig/workspaces');
 const tecla = (valor: string): Tecla => ({ tipo: 'caractere', valor });
+const ENTER_T: Tecla = { tipo: 'enter' };
 const digitos = (texto: string): Tecla[] => [...texto].map(tecla);
 
 /** Aplica uma sequência de teclas e devolve o estado e todos os efeitos. */
@@ -116,59 +118,100 @@ test('remover pede confirmação e volta para a lista', () => {
 
 // --- formulário ---
 
-test('o formulário tabula, apaga e valida antes de tentar qualquer rede', () => {
+test('enter avança de campo e só o último conclui', () => {
   let { estado } = teclar(inicial(), tecla('a'));
-  ({ estado } = teclar(estado, { tipo: 'enter' }));
+  assert.equal(estado.tela.tipo === 'form' && estado.tela.form.foco, 'nome');
+
+  // Sete enters: os seis campos, e o sétimo no último conclui (e falha a
+  // validação, porque está tudo vazio).
+  for (const esperado of ['host', 'porta', 'ssl', 'usuario', 'senha'] as const) {
+    ({ estado } = teclar(estado, ENTER_T));
+    assert.equal(estado.tela.tipo === 'form' && estado.tela.form.foco, esperado);
+    assert.equal(estado.tela.tipo === 'form' ? estado.tela.erro : undefined, undefined, 'ainda não valida');
+  }
+
+  ({ estado } = teclar(estado, ENTER_T));
   assert.equal(estado.tela.tipo === 'form' && estado.tela.erro, 'o nome do servidor é obrigatório');
+});
 
-  // Nome com maiúscula é recusado com a regra do slug.
-  ({ estado } = teclar(estado, ...digitos('Cetenco')));
-  ({ estado } = teclar(estado, { tipo: 'enter' }));
-  assert.match(estado.tela.tipo === 'form' ? estado.tela.erro! : '', /minúsculas, números e hífen/);
+test('o formulário valida antes de tentar qualquer rede', () => {
+  const noFim = (valores: Partial<Record<string, string>>) => {
+    const form = {
+      ...formDe(SERVIDORES[0]!),
+      original: undefined,
+      novo: true,
+      foco: 'senha' as const,
+      valores: { nome: '', host: '', porta: '', ssl: 'não', usuario: '', senha: '', ...valores },
+    };
+    return { ...inicial(), tela: { tipo: 'form' as const, form } };
+  };
+  const erroDe = (valores: Partial<Record<string, string>>) => {
+    const { estado, efeitos } = teclar(noFim(valores), ENTER_T);
+    assert.deepEqual(efeitos, [], 'validação local não pode pedir rede');
+    return estado.tela.tipo === 'form' ? estado.tela.erro : undefined;
+  };
 
-  // Nome repetido também, sem tocar no disco — depois dos outros campos, que
-  // a validação reporta o primeiro campo faltante antes do nome repetido.
-  ({ estado } = teclar(inicial(), tecla('a')));
-  ({ estado } = teclar(estado, ...digitos('cetenco-hml')));
-  ({ estado } = teclar(estado, { tipo: 'tab' }, ...digitos('h')));
-  ({ estado } = teclar(estado, { tipo: 'tab' }, { tipo: 'tab' }, { tipo: 'tab' }, ...digitos('u')));
-  ({ estado } = teclar(estado, { tipo: 'enter' }));
-  assert.match(estado.tela.tipo === 'form' ? estado.tela.erro! : '', /já existe um servidor chamado/);
+  assert.equal(erroDe({}), 'o nome do servidor é obrigatório');
+  assert.match(erroDe({ nome: 'Cetenco' })!, /minúsculas, números e hífen/);
+  assert.equal(erroDe({ nome: 'ok' }), 'o host é obrigatório');
+  assert.equal(erroDe({ nome: 'ok', host: 'h' }), 'o usuário é obrigatório');
+  assert.match(erroDe({ nome: 'ok', host: 'h', usuario: 'u', porta: '70000' })!, /porta inválida/);
+  assert.match(erroDe({ nome: 'cetenco-hml', host: 'h', usuario: 'u' })!, /já existe um servidor chamado/);
+});
+
+test('espaço alterna o ssl, e digitar nele não faz nada', () => {
+  const noSsl = (valores: Partial<Record<string, string>> = {}) => ({
+    ...inicial(),
+    tela: {
+      tipo: 'form' as const,
+      form: { ...formDe(SERVIDORES[0]!), original: undefined, novo: true, foco: 'ssl' as const, valores: { nome: 'n', host: 'h', porta: '', ssl: 'não', usuario: 'u', senha: '', ...valores } },
+    },
+  });
+
+  const { estado: ligado } = teclar(noSsl(), tecla(' '));
+  assert.equal(ligado.tela.tipo === 'form' && ligado.tela.form.valores.ssl, 'sim');
+
+  const { estado: desligado } = teclar(teclar(noSsl(), tecla(' ')).estado, tecla(' '));
+  assert.equal(desligado.tela.tipo === 'form' && desligado.tela.form.valores.ssl, 'não');
+
+  // Letra no campo do ssl não vira valor: ele só tem dois estados.
+  const { estado: comLetra } = teclar(noSsl(), tecla('s'));
+  assert.equal(comLetra.tela.tipo === 'form' && comLetra.tela.form.valores.ssl, 'não');
 });
 
 test('o formulário completo devolve o efeito de salvar, com a porta padrão do esquema', () => {
-  let { estado } = teclar(inicial(), tecla('a'));
-  ({ estado } = teclar(estado, ...digitos('novo')));
-  ({ estado } = teclar(estado, { tipo: 'tab' }, ...digitos('fluig.exemplo.com.br')));
-  // Pula a porta (vazia) e o ssl (fica "não"), chegando no usuário.
-  ({ estado } = teclar(estado, { tipo: 'tab' }, { tipo: 'tab' }, { tipo: 'tab' }, ...digitos('integracao')));
-  const { estado: enviando, efeitos } = teclar(estado, { tipo: 'enter' });
+  // `enter` avança; o último conclui. A porta fica vazia e o ssl em "não".
+  const ate = teclar(
+    inicial(),
+    tecla('a'),
+    ...digitos('novo'),
+    ENTER_T,
+    ...digitos('fluig.exemplo.com.br'),
+    ENTER_T,
+    ENTER_T,
+    ENTER_T,
+    ...digitos('integracao'),
+    ENTER_T,
+    ENTER_T,
+  );
 
-  assert.equal(enviando.tela.tipo, 'form', 'fica no formulário até o servidor responder');
-  assert.deepEqual(efeitos, [
+  assert.equal(ate.estado.tela.tipo, 'form', 'fica no formulário até o servidor responder');
+  assert.deepEqual(ate.efeitos, [
     { tipo: 'salvar', nome: 'novo', original: undefined, host: 'fluig.exemplo.com.br', porta: 80, ssl: false, usuario: 'integracao', senha: undefined, prod: false },
   ]);
 });
 
 test('ssl "sim" faz a porta padrão ser 443', () => {
-  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '', ssl: 'sim', usuario: 'u', senha: '' }, original: undefined, novo: true };
+  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '', ssl: 'sim', usuario: 'u', senha: '' }, original: undefined, novo: true, foco: 'senha' as const };
   const estado: Estado = { ...inicial(), tela: { tipo: 'form', form } };
-  const { efeitos } = teclar(estado, { tipo: 'enter' });
+  const { efeitos } = teclar(estado, ENTER_T);
   assert.equal(efeitos[0]!.tipo === 'salvar' && efeitos[0]!.porta, 443);
 });
 
-test('porta fora da faixa é recusada', () => {
-  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '70000', ssl: 'não', usuario: 'u', senha: '' }, original: undefined, novo: true };
-  const estado: Estado = { ...inicial(), tela: { tipo: 'form', form } };
-  const { estado: fora, efeitos } = teclar(estado, { tipo: 'enter' });
-  assert.deepEqual(efeitos, []);
-  assert.match(fora.tela.tipo === 'form' ? fora.tela.erro! : '', /porta inválida/);
-});
-
 test('a senha digitada vai no efeito e não aparece no desenho', () => {
-  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '80', ssl: 'não', usuario: 'u', senha: 'segredo' }, original: undefined, novo: true };
+  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '80', ssl: 'não', usuario: 'u', senha: 'segredo' }, original: undefined, novo: true, foco: 'senha' as const };
   const estado: Estado = { ...inicial(), tela: { tipo: 'form', form } };
-  const { efeitos } = teclar(estado, { tipo: 'enter' });
+  const { efeitos } = teclar(estado, ENTER_T);
   assert.equal(efeitos[0]!.tipo === 'salvar' && efeitos[0]!.senha, 'segredo');
 
   const quadro = semCores(desenhar(estado, 80, 24));
@@ -259,19 +302,29 @@ test('esc na importação volta para a lista', () => {
 
 // --- desenho ---
 
-test('a lista mostra alvo, usuário e a variável de senha', () => {
+test('a lista tem cabeçalho de coluna, alvo, usuário e a variável de senha', () => {
   const quadro = semCores(desenhar(inicial(), 120, 24));
-  assert.match(quadro, /fluigctl · servidores — 2 servidores/);
-  assert.match(quadro, /cetenco-hml\s+http:\/\/hml\.exemplo\.com\.br:8021\s+integracao\s+FLUIG_CETENCO_HML_PASSWORD/);
-  assert.match(quadro, /▶ cetenco-hml/);
+  assert.match(quadro, /fluigctl · servidores/, 'título');
+  assert.match(quadro, /2 cadastrados/, 'quantos são, no canto');
+  assert.match(quadro, /NOME\s+ENDEREÇO\s+USUÁRIO\s+VARIÁVEL DE SENHA/, 'cabeçalho das colunas');
+  assert.match(quadro, /▶ cetenco-hml\s+http:\/\/hml\.exemplo\.com\.br:8021\s+integracao\s+FLUIG_CETENCO_HML_PASSWORD/);
+  assert.match(quadro, /cetenco-prod\s+PRODUÇÃO\s+http:\/\/fluig\.exemplo\.com\.br:8021/);
 });
 
-test('a marca de produção sobrevive ao corte da linha', () => {
-  // 60 colunas é apertado: o endereço e a variável somem, a marca não.
-  const quadro = semCores(desenhar(inicial(), 60, 24));
-  const linhaDoProd = quadro.split('\n').find((l) => l.includes('cetenco-prod'))!;
-  assert.match(linhaDoProd, /PRODUÇÃO/);
-  assert.ok(!linhaDoProd.includes('FLUIG_CETENCO_PROD_PASSWORD'), 'o resto é que é cortado');
+test('a marca de produção sobrevive ao corte, seja qual for a largura', () => {
+  // A marca tem coluna própria, reservada sempre: o que o corte come é o fim da
+  // linha (variável de senha, usuário, endereço), nunca ela. Avise-se: uma
+  // versão anterior deste desenho pôs a marca no fim e ela virava "P…" a 60
+  // colunas — o aviso que mais importa era o primeiro a sumir.
+  for (const largura of [40, 50, 60, 72, 80, 100, 120]) {
+    const quadro = semCores(desenhar(inicial(), largura, 24));
+    const linhaDoProd = quadro.split('\n').find((l) => l.includes('cetenco-prod'))!;
+    assert.match(linhaDoProd, /PRODUÇÃO/, `a marca sumiu a ${largura} colunas`);
+  }
+  // E numa linha apertada o que sobra para o fim é o menos importante.
+  const estreito = semCores(desenhar(inicial(), 60, 24));
+  const linha = estreito.split('\n').find((l) => l.includes('cetenco-prod'))!;
+  assert.ok(!linha.includes('FLUIG_CETENCO_PROD_PASSWORD'), 'a variável é que é cortada');
 });
 
 test('nenhuma tela deixa a senha vazar para o quadro', () => {
@@ -282,15 +335,19 @@ test('nenhuma tela deixa a senha vazar para o quadro', () => {
 
 test('tela vazia ensina o caminho em vez de ficar em branco', () => {
   const quadro = semCores(desenhar(inicial([]), 80, 24));
-  assert.match(quadro, /nenhum servidor cadastrado/);
-  assert.match(quadro, /"a" para cadastrar o primeiro/);
+  assert.match(quadro, /nenhum cadastrado/, 'o contexto diz que não há nenhum');
+  assert.match(quadro, /Nenhum servidor cadastrado\./);
+  assert.match(quadro, /Comece por a para cadastrar o primeiro/, 'e ensina a tecla');
+  assert.match(quadro, /\bi\b.*workspaces da extensão Fluiggers/s, 'e a outra porta de entrada');
 });
 
-test('a ajuda mostra todas as teclas da lista', () => {
+test('a ajuda cobre todas as teclas da lista, sem sobrar nem faltar', () => {
   const { estado } = teclar(inicial(), tecla('?'));
   const quadro = semCores(desenhar(estado, 80, 24));
-  for (const teclaEsperada of ['a', 'enter', 't', 'p', 'x', 'i']) {
-    assert.match(quadro, new RegExp(`\\s${teclaEsperada}\\s`), `a ajuda precisa citar "${teclaEsperada}"`);
+  // A lista de atalhos do rodapé e a ajuda saem do mesmo lugar, e este teste é
+  // o que impede uma tecla de existir sem estar documentada.
+  for (const { t: teclaEsperada } of atalhos({ tipo: 'lista' })) {
+    assert.match(quadro, new RegExp(`\\s${teclaEsperada.replace(/[?]/g, '\\$&')}\\s`), `a ajuda precisa citar "${teclaEsperada}"`);
   }
   assert.equal(teclar(estado, tecla('z')).estado.tela.tipo, 'lista');
 });
@@ -377,7 +434,7 @@ test('quebrar respeita a largura sem cortar palavra que cabe', () => {
 });
 
 test('formulário válido fica na tela esperando o servidor, sem perder o digitado', () => {
-  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '80', ssl: 'não', usuario: 'u', senha: '' }, original: undefined, novo: true };
+  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '80', ssl: 'não', usuario: 'u', senha: '' }, original: undefined, novo: true, foco: 'senha' as const };
   const estado: Estado = { ...inicial(), tela: { tipo: 'form', form } };
   const { estado: enviando, efeitos } = teclar(estado, { tipo: 'enter' });
 
@@ -390,7 +447,7 @@ test('formulário válido fica na tela esperando o servidor, sem perder o digita
 });
 
 test('login que falha devolve o formulário com o que foi digitado e o motivo', () => {
-  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '80', ssl: 'não', usuario: 'u', senha: 'segredo' }, original: undefined, novo: true, enviando: true };
+  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '80', ssl: 'não', usuario: 'u', senha: 'segredo' }, original: undefined, novo: true, enviando: true, foco: 'senha' as const };
   const estado: Estado = { ...inicial(), tela: { tipo: 'form', form } };
   const { estado: comErro } = reduzir(estado, { tipo: 'salvo', ok: false, texto: 'getaddrinfo ENOTFOUND h' });
 
@@ -401,7 +458,7 @@ test('login que falha devolve o formulário com o que foi digitado e o motivo', 
 });
 
 test('login que dá certo sai do formulário com o recado', () => {
-  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '80', ssl: 'não', usuario: 'u', senha: '' }, original: undefined, novo: true, enviando: true };
+  const form = { ...formDe(SERVIDORES[0]!), valores: { nome: 'novo', host: 'h', porta: '80', ssl: 'não', usuario: 'u', senha: '' }, original: undefined, novo: true, enviando: true, foco: 'senha' as const };
   const estado: Estado = { ...inicial(), tela: { tipo: 'form', form } };
   const { estado: fora } = reduzir(estado, { tipo: 'salvo', ok: true, texto: '"novo" cadastrado' });
 
@@ -459,4 +516,42 @@ test('o vigia não quebra quando a leitura do tamanho falha', () => {
     inicial: { colunas: 80, linhas: 24 },
   });
   assert.doesNotThrow(() => disparar!());
+});
+
+test('nenhuma linha passa da largura da tela, seja qual for', () => {
+  // O defeito que este teste tranca: as colunas eram calculadas com números
+  // redondos e uma URL mais longa estourava a linha, empurrando a tela.
+  const muitos: LinhaServidor[] = [
+    ...SERVIDORES,
+    { nome: 'um-nome-bem-comprido-mesmo', host: 'servidor.muito.longo.exemplo.com.br', porta: 8021, ssl: true, usuario: 'usuario.com.nome.longo', companyId: 1, userCode: 'U', senhaEnv: 'FLUIG_UM_NOME_BEM_COMPRIDO_MESMO_PASSWORD', prod: false },
+  ];
+  const telas = [
+    inicial(muitos),
+    teclar(inicial(muitos), tecla('?')).estado,
+    teclar(inicial(muitos), tecla('a')).estado,
+    teclar(inicial(muitos), tecla('p')).estado,
+    reduzir(inicial(muitos), { tipo: 'candidatos', dir: '/w', candidatos: [{ nome: 'um-nome-bem-comprido-mesmo', url: 'https://servidor.muito.longo.exemplo.com.br:8021', usuario: 'usuario.com.nome.longo', prod: true, jaExiste: false, marcado: true }] }).estado,
+  ];
+
+  for (const largura of [24, 30, 40, 60, 72, 80, 100, 120, 200]) {
+    for (const tela of telas) {
+      for (const linha of semCores(desenhar(tela, largura, 24)).split('\n')) {
+        assert.ok(linha.length <= largura, `linha de ${linha.length} numa tela de ${largura}: ${linha.slice(0, 40)}…`);
+      }
+    }
+  }
+});
+
+test('em tela estreita o rodapé perde atalhos inteiros, e nunca os rótulos de todos', () => {
+  const largo = semCores(desenhar(inicial(), 200, 24));
+  assert.match(largo, /x remover/, 'com espaço, cabe tudo');
+  assert.match(largo, /i importar/);
+
+  const estreito = semCores(desenhar(inicial(), 60, 24));
+  // O que sai, sai com o rótulo: nada de uma fila de letras soltas.
+  assert.ok(!/·\s*x remover/.test(estreito) || estreito.includes('x remover'), 'sem meia palavra');
+  // E o que fica continua explicado, incluindo a saída.
+  for (const essencial of ['↑↓ mover', '⏎ rever', 'a novo', '? ajuda', 'q sair']) {
+    assert.ok(estreito.includes(essencial), `o rodapé estreito precisa manter "${essencial}"`);
+  }
 });

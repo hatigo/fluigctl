@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 451 | não | não | — |
+| Testes automatizados | 454 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -123,17 +123,36 @@ fluigctl server ui
 ```
 
 Abre uma tela no terminal para fazer o mesmo sem decorar flags: cadastrar,
-rever, testar, marcar produção, remover e importar. As teclas estão na própria
-tela (`?`):
+rever, testar, marcar produção, remover e importar. As teclas estão no próprio
+rodapé, e a explicação de cada uma em `?`:
 
 ```
-fluigctl · servidores — 2 servidores
+ fluigctl · servidores                                           2 cadastrados
+────────────────────────────────────────────────────────────────────────────────
+   NOME                   ENDEREÇO                                    USUÁRIO
 
-▶ hml   http://homolog.exemplo.com.br:8021  integracao  FLUIG_HML_PASSWORD
-   prod PRODUÇÃO  http://fluig.exemplo.com.br:8021  integracao  FLUIG_PROD_PASSWORD
+ ▶ exemplo-hml            http://homolog.exemplo.com.br:8021          integracao
+   exemplo-prod PRODUÇÃO  http://fluig.exemplo.com.br:8021            integracao
 
-  ↑↓ mover   enter rever   a novo   t testar   p produção   x remover   i importar   ? ajuda   q sair
+────────────────────────────────────────────────────────────────────────────────
+ ↑↓ mover · ⏎ rever · a novo · t testar · p produção · ? ajuda · q sair
 ```
+
+Quatro decisões de forma, para a tela ensinar em vez de exigir manual:
+
+- **O formulário se anda com `⏎`**, e não só com `tab`: no último campo ele
+  conclui, e o rodapé diz qual dos dois vai acontecer. O `ssl` não se digita —
+  `espaço` alterna —, então não existe valor inválido nele. Os campos vazios
+  mostram `—` e a dica do que o vazio significa (`vazio usa 80`).
+- **O que é grave vem antes do que é comprido.** A marca `PRODUÇÃO` fica numa
+  coluna logo depois do nome — perto de quem ela qualifica — e o corte, quando a
+  tela é estreita, come a variável de senha primeiro, depois o usuário. O aviso
+  que muda o comportamento do push não pode ser o primeiro a sumir.
+- **Tela estreita perde coluna inteira, nunca meia palavra**, e o rodapé perde
+  atalhos inteiros antes de perder os rótulos: `a t p x i ?` sem explicação não
+  ajuda ninguém. Ele cabe a partir de 80 colunas.
+- **Erro, sucesso e espera têm símbolo além de cor** (`✓ ✗ ! ⋯`): quem não
+  distingue cor, ou está num terminal sem cor, continua entendendo.
 
 Três decisões que valem saber:
 
@@ -851,7 +870,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 451 testes, sem rede e sem servidor Fluig
+npm test        # 454 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
