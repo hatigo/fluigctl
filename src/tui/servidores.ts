@@ -210,17 +210,65 @@ export function reduzir(estado: Estado, evento: Evento): Reduzido {
 }
 
 /**
- * As teclas de cada tela, para a linha de atalhos. Fica aqui, junto do redutor,
- * porque é a mesma decisão: se uma tecla entra, ela aparece na ajuda.
+ * As teclas de cada tela, em pares tecla/rótulo, para o desenho montar a linha
+ * de atalhos (e saber o que cortar quando a tela é estreita).
+ *
+ * Fica aqui, junto do redutor, porque é a mesma decisão: se uma tecla entra no
+ * redutor, ela aparece no rodapé — e o teste confere as duas coisas juntas.
  */
-export function atalhos(tela: Tela): string[] {
+export interface Atalho {
+  t: string;
+  r: string;
+  /**
+   * Sem ele a tela fica sem saída óbvia. Quando o rodapé não cabe, os não
+   * essenciais saem inteiros — com rótulo e tudo —, em vez de sair o rótulo de
+   * todos: `a t p x i ?` sem explicação não ajuda ninguém.
+   */
+  essencial?: boolean;
+}
+
+export function atalhos(tela: Tela): Atalho[] {
   if (tela.tipo === 'lista') {
-    return ['↑↓ mover', 'enter rever', 'a novo', 't testar', 'p produção', 'x remover', 'i importar', '? ajuda', 'q sair'];
+    return [
+      { t: '↑↓', r: 'mover', essencial: true },
+      { t: '⏎', r: 'rever', essencial: true },
+      { t: 'a', r: 'novo', essencial: true },
+      { t: 't', r: 'testar' },
+      { t: 'p', r: 'produção' },
+      { t: 'x', r: 'remover' },
+      { t: 'i', r: 'importar' },
+      { t: '?', r: 'ajuda', essencial: true },
+      { t: 'q', r: 'sair', essencial: true },
+    ];
   }
-  if (tela.tipo === 'form') return ['tab próximo', 'enter concluir', 'esc cancelar'];
-  if (tela.tipo === 'confirmar') return ['s sim', 'n não', 'esc cancelar'];
-  if (tela.tipo === 'importar') return ['↑↓ mover', 'espaço marcar', 's senhas', 'enter importar', 'esc voltar'];
-  return ['qualquer tecla volta'];
+  if (tela.tipo === 'form') {
+    // O rótulo do `⏎` diz o que ele faz agora: avançar ou concluir.
+    const ultimo = CAMPOS_DO_FORM.at(-1);
+    const conclui = tela.form.foco === ultimo && !tela.form.enviando;
+    return [
+      { t: 'tab', r: 'próximo' },
+      { t: '⏎', r: conclui ? 'concluir' : 'seguir' },
+      { t: 'esc', r: 'cancelar' },
+    ];
+  }
+  if (tela.tipo === 'confirmar') {
+    return [
+      { t: 's', r: 'sim' },
+      { t: 'n', r: 'não' },
+      { t: 'esc', r: 'voltar' },
+    ];
+  }
+  if (tela.tipo === 'importar') {
+    return [
+      { t: '↑↓', r: 'mover' },
+      { t: 'espaço', r: 'marcar' },
+      { t: 'a', r: 'todos' },
+      { t: 's', r: 'senhas' },
+      { t: '⏎', r: 'importar' },
+      { t: 'esc', r: 'voltar' },
+    ];
+  }
+  return [{ t: 'qualquer tecla', r: 'volta' }];
 }
 
 function reduzirLista(estado: Estado, tecla: Tecla): Reduzido {
@@ -353,11 +401,27 @@ function reduzirForm(estado: Estado, tela: Extract<Tela, { tipo: 'form' }>, tecl
   }
 
   if (tecla.tipo === 'caractere') {
+    // No campo do ssl não se digita: espaço alterna. É menos uma coisa para
+    // lembrar ("sim"? "não"? "true"?) e não tem estado inválido.
+    if (form.foco === 'ssl' && tecla.valor === ' ') {
+      const valores = { ...form.valores, ssl: form.valores.ssl === 'sim' ? 'não' : 'sim' };
+      return { estado: { ...estado, tela: { ...semErro, form: { ...form, valores } } }, efeitos: [] };
+    }
+    if (form.foco === 'ssl' && tecla.valor !== ' ') return { estado, efeitos: [] };
     const valores = { ...form.valores, [form.foco]: form.valores[form.foco] + tecla.valor };
     return { estado: { ...estado, tela: { ...semErro, form: { ...form, valores } } }, efeitos: [] };
   }
 
   if (tecla.tipo !== 'enter') return { estado, efeitos: [] };
+
+  // `enter` no meio do formulário passa para o próximo campo; no último,
+  // conclui. É o que a mão espera de um formulário em passos, e o rodapé diz
+  // qual dos dois vai acontecer.
+  if (form.foco !== 'senha') {
+    const i = CAMPOS_DO_FORM.indexOf(form.foco);
+    const proximo = CAMPOS_DO_FORM[i + 1]!;
+    return { estado: { ...estado, tela: { tipo: 'form', form: { ...form, foco: proximo } } }, efeitos: [] };
+  }
 
   // Concluir: valida o que dá para validar sem rede, e devolve o efeito.
   const v = form.valores;

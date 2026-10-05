@@ -52,6 +52,22 @@ const digitos = (texto: string): Tecla[] => [...texto].map(t);
 const TAB: Tecla = { tipo: 'tab' };
 const ENTER: Tecla = { tipo: 'enter' };
 
+/**
+ * Preenche o formulário como uma mão de verdade: escreve e toca `enter` para
+ * seguir, deixando o último `enter` para concluir. `ssl` não se digita —
+ * espaço alterna —, e por isso ele é pulado com `enter`.
+ */
+function preencher(campos: { nome: string; host: string; porta: string; ssl?: boolean; usuario: string; senha?: string }): Tecla[] {
+  const t: Tecla[] = [...digitos(campos.nome), ENTER, ...digitos(campos.host), ENTER, ...digitos(campos.porta), ENTER];
+  if (campos.ssl) t.push(t_(' '));
+  t.push(ENTER, ...digitos(campos.usuario), ENTER);
+  if (campos.senha !== undefined) t.push(...digitos(campos.senha));
+  t.push(ENTER);
+  return t;
+}
+
+const t_ = (valor: string): Tecla => ({ tipo: 'caractere', valor });
+
 /** Roda o TUI com um config isolado e devolve o que ficou gravado. */
 async function rodar(
   config: Record<string, unknown>,
@@ -117,18 +133,7 @@ test('cadastrar prova a credencial e grava com a identidade que o servidor devol
       const porta = Number(port);
       const r = await rodar(
         {},
-        [
-          t('a'),
-          ...digitos('novo-servidor'),
-          TAB,
-          ...digitos(hostname),
-          TAB,
-          ...digitos(String(porta)),
-          TAB,
-          TAB,
-          ...digitos('integracao'),
-          ENTER,
-        ],
+        [t('a'), ...preencher({ nome: 'novo-servidor', host: hostname, porta: String(porta), usuario: 'integracao' })],
         { FLUIG_NOVO_SERVIDOR_PASSWORD: 'segredo' },
       );
 
@@ -165,7 +170,8 @@ test('rever um servidor sem trocar o nome grava (o addServer recusaria o nome re
         },
       };
       // `enter` abre o formulário preenchido; `enter` de novo conclui sem mexer em nada.
-      const r = await rodar(existente, [ENTER, ENTER], { FLUIG_ALVO_PASSWORD: 's' });
+      // Abre, atravessa os seis campos e conclui: nada muda.
+      const r = await rodar(existente, [ENTER, ENTER, ENTER, ENTER, ENTER, ENTER, ENTER], { FLUIG_ALVO_PASSWORD: 's' });
 
       assert.deepEqual(Object.keys(r.config), ['alvo'], 'continua sendo um servidor só');
       assert.equal(r.config['alvo']!['userCode'], 'admin');
@@ -188,8 +194,9 @@ test('rever trocando o nome renomeia, sem deixar o antigo para trás', async () 
       // Abre o de sempre, apaga o nome, escreve o novo, conclui.
       const r = await rodar(
         existente,
-        // "antigo" tem 6 letras: apaga tudo antes de escrever o nome novo.
-        [ENTER, ...Array.from({ length: 6 }, () => ({ tipo: 'backspace' }) as Tecla), ...digitos('novo'), ENTER],
+        // "antigo" tem 6 letras: apaga tudo antes de escrever o nome novo, e
+        // segue pelos outros cinco campos até concluir.
+        [ENTER, ...Array.from({ length: 6 }, () => ({ tipo: 'backspace' }) as Tecla), ...digitos('novo'), ENTER, ENTER, ENTER, ENTER, ENTER, ENTER],
         { FLUIG_NOVO_PASSWORD: 's' },
       );
 
@@ -208,18 +215,7 @@ test('login que falha não grava nada, e o formulário continua com os dados', a
       const { hostname, port } = new URL(url);
       const r = await rodar(
         {},
-        [
-          t('a'),
-          ...digitos('quebrado'),
-          TAB,
-          ...digitos(hostname),
-          TAB,
-          ...digitos(port),
-          TAB,
-          TAB,
-          ...digitos('naoexiste'),
-          ENTER,
-        ],
+        [t('a'), ...preencher({ nome: 'quebrado', host: hostname, porta: port, usuario: 'naoexiste' })],
         { FLUIG_QUEBRADO_PASSWORD: 's' },
       );
 
@@ -240,20 +236,7 @@ test('a senha digitada vai para o arquivo próprio, e não para o servidores.jso
       const { hostname, port } = new URL(url);
       const r = await rodar(
         {},
-        [
-          t('a'),
-          ...digitos('com-senha'),
-          TAB,
-          ...digitos(hostname),
-          TAB,
-          ...digitos(port),
-          TAB,
-          TAB,
-          ...digitos('admin'),
-          TAB,
-          ...digitos('aSenhaSecreta'),
-          ENTER,
-        ],
+        [t('a'), ...preencher({ nome: 'com-senha', host: hostname, porta: port, usuario: 'admin', senha: 'aSenhaSecreta' })],
       );
 
       assert.equal(r.config['com-senha']!['passwordEnv'], 'FLUIG_COM_SENHA_PASSWORD');
