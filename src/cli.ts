@@ -1049,6 +1049,7 @@ async function comandoDiagram(argv: string[]): Promise<void> {
       options: {
         token: { type: 'string' },
         'registry-dir': { type: 'string' },
+        'undo-dir': { type: 'string' },
       },
     });
     const arquivo = positionals[0];
@@ -1057,6 +1058,7 @@ async function comandoDiagram(argv: string[]): Promise<void> {
       arquivo,
       token: values.token,
       ...(values['registry-dir'] === undefined ? {} : { registroDir: values['registry-dir'] }),
+      ...(values['undo-dir'] === undefined ? {} : { undoDir: values['undo-dir'] }),
     });
   }
 

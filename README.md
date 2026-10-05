@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 477 | não | não | — |
+| Testes automatizados | 493 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo) e widget com código Java. Layout, evento global e mecanismo de
@@ -62,6 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (a skill que ensina um agente a publicar) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
+| `diagram open` + painel (inspeção de elementos e renomear com desfazer) | pronto, inspeção e renomear; o resto é somente leitura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
 | `push dataset` | pronto |
@@ -233,6 +234,38 @@ outras mudanças enquanto o ID existir.
 
 Para automação sem navegador use `--no-open`; para depurar o servidor no processo atual,
 `--foreground`.
+
+#### Renomear pelo painel
+
+O campo **Nome** do painel grava no `.process`. Só ele é editável; o resto é
+inspeção por enquanto. `Ctrl`+`Enter` ou **Salvar** confirma, **Cancelar** volta
+atrás, e nada é escrito enquanto você digita.
+
+A gravação troca apenas o atributo `name` daquele objeto: espaços, ordem,
+entidades e geometria ficam byte a byte iguais, e o arquivo é substituído
+atomicamente. Se o arquivo estiver num link simbólico, a escrita atravessa o
+link em vez de trocá-lo por um arquivo comum.
+
+**Conflito não é sobrescrito.** Se o agente mexeu no arquivo nesse meio-tempo, o
+visualizador não grava:
+
+- nome alterado pelo agente: o painel mostra o valor com que você começou, o que
+  está no arquivo agora e o que você digitou, e oferece só **Usar o valor do
+  arquivo**;
+- elemento removido: nada é recriado;
+- arquivo trocado durante o salvamento: o salvamento é repetido por você.
+
+Depois de salvar aparece **Desfazer**, que restaura a versão anterior. Ele só
+funciona enquanto o arquivo continuar exatamente como ficou depois da edição — se
+o agente escreveu qualquer coisa depois, o desfazer recusa, para não apagar o
+trabalho dele. A versão anterior fica no diretório de estado do `fluigctl`
+(`~/.local/state/fluigctl/edicoes/`), não no workspace: nunca aparece um `.bak`
+no projeto.
+
+A escrita é um `POST` que exige o token da própria instância e uma origem local,
+e só alcança o arquivo que foi aberto. Uma página de outro site aberta no seu
+navegador não consegue editar o diagrama: ela não tem o token e a origem dela é
+recusada.
 
 Cada instância escuta apenas em `127.0.0.1`, numa porta aleatória, e exige um
 token aleatório na URL. Um segundo `open` do mesmo arquivo reutiliza a instância.
@@ -925,7 +958,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 477 testes, sem rede e sem servidor Fluig
+npm test        # 493 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

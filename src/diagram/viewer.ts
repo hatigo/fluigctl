@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync } from 'node:fs';
-import { createServer, type Server, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { homedir, platform } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
+import { ConflitoEdicao, EdicaoInvalida, desfazerUltimaEdicao, renomearElemento } from './edit.js';
 
 export interface CampoAmigavel {
   rotulo: string;
@@ -26,6 +27,7 @@ export interface ElementoVisual {
   nome: string;
   campos: CampoAmigavel[];
   atributos: Record<string, string>;
+  podeRenomear: boolean;
   geometria: GeometriaElemento;
 }
 
@@ -167,6 +169,7 @@ export function elementosDoDiagrama(diagrama: Diagrama): ElementoVisual[] {
       // Blobs XML são implementação do Studio, não propriedade legível. Nem são
       // enviados ao navegador: esconder só no CSS ainda os exporia no endpoint.
       atributos: atributosVisiveis,
+      podeRenomear: Object.prototype.hasOwnProperty.call(objeto.attrs, 'name'),
       geometria,
     });
   }
@@ -274,6 +277,95 @@ function responder(res: ServerResponse, status: number, tipo: string, corpo: str
   res.end(corpo);
 }
 
+async function lerJson(req: IncomingMessage): Promise<unknown> {
+  const tipo = req.headers['content-type'] ?? '';
+  if (!tipo.toLowerCase().startsWith('application/json')) throw new EdicaoInvalida('a edição exige Content-Type application/json');
+  const partes: Buffer[] = [];
+  let tamanho = 0;
+  for await (const parte of req) {
+    const buffer = Buffer.isBuffer(parte) ? parte : Buffer.from(parte);
+    tamanho += buffer.length;
+    if (tamanho > 64 * 1024) throw new EdicaoInvalida('pedido de edição maior que 64 KiB');
+    partes.push(buffer);
+  }
+  try {
+    return JSON.parse(Buffer.concat(partes).toString('utf8')) as unknown;
+  } catch {
+    throw new EdicaoInvalida('pedido de edição não é JSON válido');
+  }
+}
+
+/** O token basta contra outras abas, mas escrita também confere a origem. */
+function origemLocal(req: IncomingMessage, porta: number): boolean {
+  if ((req.headers['sec-fetch-site'] ?? '') === 'cross-site') return false;
+  const origem = req.headers['origin'];
+  if (origem === undefined) return true; // fetch same-origin sem Origin em alguns navegadores
+  try {
+    const u = new URL(origem);
+    return (u.hostname === '127.0.0.1' || u.hostname === 'localhost') && u.port === String(porta) && u.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function respostaJson(res: ServerResponse, status: number, corpo: unknown): void {
+  responder(res, status, 'application/json', JSON.stringify(corpo));
+}
+
+async function tratarEdicao(
+  req: IncomingMessage,
+  res: ServerResponse,
+  rota: string,
+  arquivo: string,
+  undoDir: string,
+  porta: number,
+): Promise<void> {
+  if (!origemLocal(req, porta)) {
+    respostaJson(res, 403, { ok: false, mensagem: 'edição recusada: a origem do pedido não é esta página' });
+    return;
+  }
+  try {
+    const corpo = (await lerJson(req)) as Record<string, unknown>;
+    const texto = (chave: string): string => {
+      const valor = corpo[chave];
+      if (typeof valor !== 'string') throw new EdicaoInvalida(`o campo ${chave} é obrigatório`);
+      return valor;
+    };
+    if (rota === 'rename') {
+      const resultado = renomearElemento({
+        arquivo,
+        id: texto('id'),
+        nomeOriginal: texto('nomeOriginal'),
+        nomeNovo: texto('nomeNovo'),
+        undoDir,
+      });
+      respostaJson(res, 200, { ok: true, nome: resultado.nome });
+      return;
+    }
+    if (rota === 'undo') {
+      desfazerUltimaEdicao(arquivo, undoDir);
+      respostaJson(res, 200, { ok: true });
+      return;
+    }
+    respostaJson(res, 404, { ok: false, mensagem: 'não encontrado' });
+  } catch (erro) {
+    if (erro instanceof ConflitoEdicao) {
+      respostaJson(res, 409, {
+        ok: false,
+        motivo: erro.motivo,
+        mensagem: erro.message,
+        ...(erro.atual === undefined ? {} : { atual: erro.atual }),
+      });
+      return;
+    }
+    if (erro instanceof EdicaoInvalida) {
+      respostaJson(res, 400, { ok: false, motivo: 'invalido', mensagem: erro.message });
+      return;
+    }
+    respostaJson(res, 500, { ok: false, motivo: 'erro', mensagem: mensagem(erro) });
+  }
+}
+
 function pagina(nome: string, arquivo: string): string {
   const titulo = nome.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   const caminho = arquivo.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -291,15 +383,26 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 #workspace{height:calc(100% - 64px);display:flex;min-width:0;position:relative}#canvas{height:100%;min-width:0;flex:1;overflow:hidden;cursor:grab;background-color:#f7f9fc;background-image:radial-gradient(#cbd5e1 1px,transparent 1px);background-size:20px 20px}#canvas.drag{cursor:grabbing}#canvas svg{display:block;width:100%;height:100%;user-select:none}.empty{height:100%;display:grid;place-items:center;color:var(--muted)}
 #inspector{width:360px;flex:0 0 360px;height:100%;overflow:auto;background:var(--panel);border-left:1px solid var(--line);box-shadow:-3px 0 14px #17203312;padding:18px;display:none;z-index:4}#inspector.open{display:block}.panel-head{display:flex;align-items:flex-start;gap:12px}.panel-head>div{min-width:0;flex:1}.panel-head h2{font-size:18px;line-height:1.25;margin:7px 0 2px;overflow-wrap:anywhere}.badge{display:inline-block;color:#1e40af;background:#dbeafe;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:700}.id{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--muted);overflow-wrap:anywhere}.close{font-size:18px;line-height:1;padding:6px 9px}dl{margin:22px 0}dt{font-size:12px;color:var(--muted);margin-top:13px}dd{margin:3px 0 0;overflow-wrap:anywhere}details{border-top:1px solid var(--line);padding-top:14px}summary{cursor:pointer;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th,td{text-align:left;vertical-align:top;padding:7px 5px;border-bottom:1px solid #edf0f5;overflow-wrap:anywhere;word-break:break-word}th{width:36%;color:var(--muted);font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
 .fluig-hit{fill:transparent;stroke:transparent;pointer-events:all;cursor:pointer;vector-effect:non-scaling-stroke}.fluig-hit.flow{fill:none;stroke-width:14}.fluig-hit:focus{outline:none;stroke:#7c3aed;stroke-width:3;stroke-dasharray:5 3}.fluig-hit.selected{stroke:var(--brand);stroke-width:4;stroke-dasharray:none;fill:#2457d619}.fluig-hit.flow.selected{fill:none;stroke-width:6}
+.name-form{margin:20px 0 0;border-top:1px solid var(--line);padding-top:14px}.name-form label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+#name-input{width:100%;padding:8px 10px;border:1px solid #c3cddd;border-radius:8px;font:14px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:#fff}
+#name-input:focus{outline:3px solid #93b4ff;outline-offset:1px;border-color:var(--brand)}.name-form .row{display:flex;align-items:center;gap:8px;margin-top:9px}
+.dirty{font-size:12px;color:#b45309;font-weight:700;margin-left:auto}.hint{font-size:12px;color:var(--muted);margin:9px 0 0}
+.conflict{margin-top:12px;padding:11px 12px;border:1px solid #fca5a5;background:#fef2f2;border-radius:9px;color:#991b1b;font-size:13px}
+.conflict dl{margin:8px 0 0}.conflict dt{color:#b91c1c}.conflict .row{display:flex;gap:8px;margin-top:11px}
+#notice .row{display:flex;align-items:center;gap:10px;justify-content:space-between}#notice button{padding:4px 9px}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
 <header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
 <div id="error" class="banner" role="alert"></div><div id="notice" class="banner" role="status"></div>
-<div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div><dl id="fields"></dl><details><summary>Detalhes técnicos</summary><table><tbody id="technical"></tbody></table></details></aside></div>
+<div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div>
+<form id="name-form" class="name-form" hidden><label for="name-input">Nome</label><input id="name-input" type="text" autocomplete="off" spellcheck="false" maxlength="200"><div class="row"><button id="save-name" type="submit">Salvar</button><button id="cancel-name" type="button">Cancelar</button><span id="dirty" class="dirty" hidden>Alteração não salva</span></div><p class="hint">Vazio deixa o elemento <strong>Sem nome</strong>. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva.</p></form>
+<div id="conflict" class="conflict" role="alert" hidden></div>
+<dl id="fields"></dl><details><summary>Detalhes técnicos</summary><table><tbody id="technical"></tbody></table></details></aside></div>
 <script>
 const NS='http://www.w3.org/2000/svg';
 const canvas=document.querySelector('#canvas'), status=document.querySelector('#status'), dot=document.querySelector('#dot'), error=document.querySelector('#error'), notice=document.querySelector('#notice'), inspector=document.querySelector('#inspector');
-let svg, original, box, drag, elements=[], selectedId, noticeTimer;
+const form=document.querySelector('#name-form'), input=document.querySelector('#name-input'), dirty=document.querySelector('#dirty'), conflict=document.querySelector('#conflict');
+let svg, original, box, drag, elements=[], selectedId, editando, noticeTimer;
 function dimensions(el){const w=Number(el.getAttribute('width'))||1000,h=Number(el.getAttribute('height'))||700;return {x:0,y:0,w,h}}
 function apply(){if(svg&&box)svg.setAttribute('viewBox',box.x+' '+box.y+' '+box.w+' '+box.h)}
 function fit(){if(svg){box={...original};apply()}}
@@ -309,15 +412,23 @@ canvas.addEventListener('pointerdown',e=>{if(!svg||e.button!==0)return;const hit
 canvas.addEventListener('pointermove',e=>{if(!drag||!svg)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.hypot(dx,dy)>3)drag.moved=true;if(!drag.moved)return;const r=svg.getBoundingClientRect();box={...drag.box,x:drag.box.x-dx/r.width*drag.box.w,y:drag.box.y-dy/r.height*drag.box.h};apply()});
 canvas.addEventListener('pointerup',()=>{if(!drag)return;if(!drag.moved){if(drag.hitId)select(drag.hitId);else clearSelection()}drag=undefined;canvas.classList.remove('drag')});
 canvas.addEventListener('pointercancel',()=>{drag=undefined;canvas.classList.remove('drag')});
-function flash(text){clearTimeout(noticeTimer);notice.textContent=text;notice.classList.add('show');noticeTimer=setTimeout(()=>notice.classList.remove('show'),2800)}
-function clearSelection(){selectedId=undefined;inspector.classList.remove('open');svg?.querySelectorAll('.fluig-hit.selected').forEach(x=>x.classList.remove('selected'))}
+function flash(texto,acao){clearTimeout(noticeTimer);notice.replaceChildren();const span=document.createElement('span');span.textContent=texto;notice.append(span);if(acao){const b=document.createElement('button');b.type='button';b.textContent=acao.rotulo;b.addEventListener('click',acao.aoClicar);const linha=document.createElement('span');linha.className='row';linha.append(b);notice.append(linha)}notice.classList.add('show');noticeTimer=setTimeout(()=>notice.classList.remove('show'),acao?12000:2800)}
+function limparConflito(){conflict.hidden=true;conflict.replaceChildren()}
+function clearSelection(){selectedId=undefined;editando=undefined;inspector.classList.remove('open');svg?.querySelectorAll('.fluig-hit.selected').forEach(x=>x.classList.remove('selected'))}
 function text(el,value){el.textContent=value}
+function sujo(){return Boolean(editando)&&input.value!==editando.baseline}
+function atualizarSujo(){dirty.hidden=!sujo()}
+input.addEventListener('input',()=>{limparConflito();atualizarSujo()});
 function renderPanel(element){
   text(document.querySelector('#kind'),element.tipoAmigavel);text(document.querySelector('#element-name'),element.nome||'Sem nome');text(document.querySelector('#element-id'),element.id);
   const fields=document.querySelector('#fields');fields.replaceChildren();
   for(const field of element.campos.filter(x=>x.rotulo!=='Nome')){const dt=document.createElement('dt'),dd=document.createElement('dd');text(dt,field.rotulo);text(dd,field.valor);fields.append(dt,dd)}
   const technical=document.querySelector('#technical');technical.replaceChildren();
   for(const [key,value] of Object.entries(element.atributos).sort(([a],[b])=>a.localeCompare(b))){const tr=document.createElement('tr'),th=document.createElement('th'),td=document.createElement('td');text(th,key);text(td,value);tr.append(th,td);technical.append(tr)}
+  const mesmo=editando?.id===element.id;
+  if(!mesmo)editando=element.podeRenomear?{id:element.id,baseline:element.nome}:undefined;
+  else if(!sujo())editando.baseline=element.nome;
+  if(editando){form.hidden=false;if(!sujo())input.value=element.nome;atualizarSujo()}else{form.hidden=true;input.value='';dirty.hidden=true}
   inspector.classList.add('open');
 }
 function select(id){const element=elements.find(x=>x.id===id);if(!element)return;selectedId=id;svg.querySelectorAll('.fluig-hit').forEach(x=>x.classList.toggle('selected',x.dataset.id===id));renderPanel(element)}
@@ -335,7 +446,42 @@ function addInteractions(){
   layer.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.fluig-hit')){e.preventDefault();select(e.target.dataset.id)}});
   svg.append(layer);if(selectedId)select(selectedId);
 }
-document.querySelector('#close-panel').addEventListener('click',clearSelection);document.addEventListener('keydown',e=>{if(e.key==='Escape')clearSelection()});
+async function pedir(rota,corpo){
+  const r=await fetch(rota,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
+  const dados=await r.json().catch(()=>({ok:false,mensagem:'resposta ilegível do visualizador'}));
+  return {status:r.status,dados};
+}
+function mostrarConflito(dados,digitado){
+  conflict.replaceChildren();conflict.hidden=false;
+  const p=document.createElement('p');p.textContent=dados.mensagem;conflict.append(p);
+  if(dados.atual!==undefined){
+    const dl=document.createElement('dl');for(const [rotulo,valor] of [['Você começou com',editando.baseline],['O arquivo tem agora',dados.atual],['Você digitou',digitado]]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=rotulo;dd.textContent=valor||'(vazio)';dl.append(dt,dd)}conflict.append(dl);
+  }
+  const acoes=document.createElement('span');acoes.className='row';
+  const usar=document.createElement('button');usar.type='button';usar.textContent='Usar o valor do arquivo';usar.hidden=dados.atual===undefined;
+  usar.addEventListener('click',()=>{input.value=dados.atual;editando.baseline=dados.atual;limparConflito();atualizarSujo()});
+  const cancelar=document.createElement('button');cancelar.type='button';cancelar.textContent='Continuar editando';cancelar.addEventListener('click',limparConflito);
+  acoes.append(usar,cancelar);conflict.append(acoes);
+}
+async function salvar(){
+  if(!editando)return;
+  const digitado=input.value, alvo={...editando};
+  const {status,dados}=await pedir('rename',{id:alvo.id,nomeOriginal:alvo.baseline,nomeNovo:digitado});
+  if(dados.ok){limparConflito();const el=elements.find(x=>x.id===alvo.id);if(el)el.nome=digitado;editando.baseline=digitado;text(document.querySelector('#element-name'),digitado||'Sem nome');atualizarSujo();flash('Nome alterado.',{rotulo:'Desfazer',aoClicar:desfazer});return}
+  if(status===409&&dados.motivo!=='sem-desfazer'){mostrarConflito(dados,digitado);return}
+  flash(dados.mensagem||'não foi possível salvar.');
+}
+async function desfazer(){
+  const {dados}=await pedir('undo',{});
+  if(dados.ok){limparConflito();flash('Edição desfeita.');return}
+  flash(dados.mensagem||'não foi possível desfazer.');
+}
+form.addEventListener('submit',e=>{e.preventDefault();void salvar()});
+input.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();void salvar()}if(e.key==='Escape'){e.stopPropagation();cancelarEdicao()}});
+function cancelarEdicao(){limparConflito();if(editando)input.value=editando.baseline;atualizarSujo()}
+document.querySelector('#cancel-name').addEventListener('click',cancelarEdicao);
+document.querySelector('#close-panel').addEventListener('click',clearSelection);
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
 async function update(){try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();elements=s.elementos||[];if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
 update();const events=new EventSource('events');events.addEventListener('change',update);events.onerror=()=>{dot.classList.add('bad');status.textContent='reconectando…'};
 </script></body></html>`;
@@ -345,6 +491,8 @@ export interface OpcoesServidor {
   token?: string;
   port?: number;
   registroDir?: string;
+  /** Onde guardar a versão anterior de cada edição, para o desfazer. */
+  undoDir?: string;
   pid?: number;
 }
 
@@ -357,6 +505,7 @@ export async function servirDiagrama(opcoes: OpcoesServidor): Promise<ServidorVi
   let estado = lerEstadoInicial(arquivo);
   const token = opcoes.token ?? randomBytes(24).toString('hex');
   const clientes = new Set<ServerResponse>();
+  const undoDir = opcoes.undoDir ?? join(diretorioDeEstado(), 'edicoes');
   let ultimoTexto = readFileSync(arquivo, 'utf8');
 
   const avisar = () => {
@@ -388,11 +537,21 @@ export async function servirDiagrama(opcoes: OpcoesServidor): Promise<ServidorVi
   const prefixo = `/${token}/`;
   const server = createServer((req, res) => {
     const url = req.url ?? '/';
-    if (req.method !== 'GET' || !url.startsWith(prefixo)) {
+    const rota = url.startsWith(prefixo) ? url.slice(prefixo.length).split('?')[0] : undefined;
+    // O token vem antes de qualquer coisa: sem ele, nem 404 diferente sai.
+    if (rota === undefined) {
       responder(res, 404, 'text/plain', 'não encontrado');
       return;
     }
-    const rota = url.slice(prefixo.length).split('?')[0];
+    if (req.method === 'POST') {
+      const porta = (server.address() as { port: number } | null)?.port ?? 0;
+      void tratarEdicao(req, res, rota, arquivo, undoDir, porta);
+      return;
+    }
+    if (req.method !== 'GET') {
+      responder(res, 405, 'text/plain', 'método não permitido');
+      return;
+    }
     if (rota === '') {
       responder(res, 200, 'text/html', pagina(estado.nome, arquivo));
       return;
@@ -460,6 +619,7 @@ export interface OpcoesAbrir {
   abrirNavegador?: boolean;
   foreground?: boolean;
   registroDir?: string;
+  undoDir?: string;
   /** Entrada executável do fluigctl; injetável nos testes. */
   cli?: string;
 }
@@ -480,6 +640,7 @@ export async function abrirVisualizador(opcoes: OpcoesAbrir): Promise<InstanciaV
     const instancia = await servirDiagrama({
       arquivo,
       ...(opcoes.registroDir === undefined ? {} : { registroDir: opcoes.registroDir }),
+      ...(opcoes.undoDir === undefined ? {} : { undoDir: opcoes.undoDir }),
     });
     const encerrar = async () => {
       await instancia.fechar();
@@ -496,6 +657,7 @@ export async function abrirVisualizador(opcoes: OpcoesAbrir): Promise<InstanciaV
   if (!cli) throw new ErroFluigctl('não consegui localizar o executável do fluigctl para iniciar o visualizador', 1);
   const args = [cli, 'diagram', 'serve', arquivo, '--token', token];
   if (opcoes.registroDir) args.push('--registry-dir', opcoes.registroDir);
+  if (opcoes.undoDir) args.push('--undo-dir', opcoes.undoDir);
   const filho = spawn(process.execPath, args, { detached: true, stdio: 'ignore' });
   filho.unref();
 
