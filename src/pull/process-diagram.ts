@@ -37,7 +37,20 @@ function tagEstado(tipo: number): string {
 
 /** Converte a representação de atribuição do servidor para o blob usado pelo modelo BPMN do Studio. */
 function atribuicao(mecanismo: string, xml: string): string | undefined {
-  if (!xml) return undefined;
+  /*
+   * Mecanismo de atribuicao customizado: o servidor guarda o id e a
+   * configuracao VAZIA - medido no fluig-localdev com MEC_ALCADAS ("Aprovar",
+   * config ""). Este caso tem de vir ANTES do `if (!xml)`: com ele depois, o
+   * retorno por configuracao vazia acontecia primeiro, o ramo nunca era
+   * alcancado, e o pull devolvia a tarefa sem atribuicao nenhuma. Republicar
+   * aquele arquivo apagava o mecanismo do processo, em silencio - a aprovacao
+   * deixava de ter responsavel.
+   */
+  if (!xml) {
+    return mecanismo
+      ? `<org.eclipse.bpmn2.impl.AssignmentControllerCustom><mechanismName>${mecanismo}</mechanismName></org.eclipse.bpmn2.impl.AssignmentControllerCustom>`
+      : undefined;
+  }
   const campo = (n: string) => new RegExp(`<${n}>([\\s\\S]*?)</${n}>`).exec(xml)?.[1] ?? '';
   if (/<AssociatedController\b/.test(xml)) {
     const tipo = /ConditionAssociated="([^"]+)"/.exec(xml)?.[1];
@@ -61,8 +74,7 @@ function atribuicao(mecanismo: string, xml: string): string | undefined {
   else if (/<BaseActivity>/.test(xml)) {
     classe = 'AssignmentControllerExecutorMechanism';
     corpo = `<idNode>task${campo('BaseActivity')}</idNode><returns>${campo('Returns') === 'All' ? '0' : '1'}</returns>`;
-  } else if (xml === '' && mecanismo) { classe = 'AssignmentControllerCustom'; corpo = ''; }
-  else return undefined;
+  } else return undefined;
   return `<org.eclipse.bpmn2.impl.${classe}>${corpo}<mechanismName>${mecanismo}</mechanismName></org.eclipse.bpmn2.impl.${classe}>`;
 }
 
