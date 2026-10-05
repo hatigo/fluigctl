@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fakeFluig, type RotaResposta } from './helpers/fake-fluig.js';
@@ -20,6 +20,8 @@ import type { Server } from '../src/config.js';
 import { ErroFluigctl } from '../src/errors.js';
 import { montarZip } from '../src/push/war.js';
 import { lerWcm } from '../src/push/wcm-source.js';
+import { entradasDoZip } from '../src/push/zip.js';
+import { desmontarWar } from '../src/pull/widget-war.js';
 
 const FIXTURE = fileURLToPath(new URL('./fixtures/widgets/wdgExemplo', import.meta.url));
 const LOGIN = '/portal/api/servlet/login.do';
@@ -223,8 +225,32 @@ test('push widget recusa widget com código Java antes de qualquer requisição'
 
   try {
     const promessa = pushWcm({ tipo: 'widget', server: a.server, senha: 's', pasta, prompt: async () => '' });
-    await assert.rejects(promessa, /Maven/);
+    await assert.rejects(promessa, /não publica widget com Java/);
     assert.equal(await codigoDe(promessa), 6);
+    // A recusa é local: nem sessão o push abre.
+    assert.equal(a.fluig.requests.length, 0);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('push widget recusa também as classes já compiladas, com o motivo medido', async (t) => {
+  // A rota do WCM recusa um .war com classes ("declaração de componente
+  // repetida"), então empacotar o que o pull deixa em src/main/java produziria
+  // um pacote que o servidor rejeita — pior do que recusar aqui.
+  const a = await ambiente();
+  const pasta = copiaDaFixture(t);
+  mkdirSync(join(pasta, 'src', 'main', 'java', 'com', 'exemplo'), { recursive: true });
+  writeFileSync(join(pasta, 'src', 'main', 'java', 'com', 'exemplo', 'Rest.class'), Buffer.from([0xca, 0xfe, 0xba, 0xbe]));
+
+  try {
+    const erro = await pushWcm({ tipo: 'widget', server: a.server, senha: 's', pasta, prompt: async () => '' }).then(
+      () => assert.fail('esperava recusa'),
+      (e: ErroFluigctl) => e,
+    );
+    assert.equal(erro.codigo, 6);
+    assert.match(erro.message, /componente repetida/);
+    assert.match(erro.message, /0 deles \.java/);
     assert.equal(a.fluig.requests.length, 0);
   } finally {
     await a.fluig.close();
