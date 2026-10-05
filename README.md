@@ -515,7 +515,7 @@ fontes ficam em `~/projetos/teste-fluigctl`.
 ### O que a conversão cobre
 
 Pool, lane, início, tarefas de usuário e de serviço, subprocesso (100) com
-mapeamento de campos, gateways exclusivo/paralelo/join com condições e
+mapeamento de campos, subprocesso ad hoc (101), gateways exclusivo/paralelo/join com condições e
 atribuição por caminho, eventos intermediários (temporizador, condicional,
 sinal, erro anexado, link), fim, anotação, fluxo de sequência, bendpoints,
 campos descritores, configuração de app, regras e segurança de anexos,
