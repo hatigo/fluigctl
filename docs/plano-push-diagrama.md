@@ -712,6 +712,25 @@ como os scripts (`ProcessUtil.getFileName`), e não o id do processo.
 - As variantes de teste e o gerador ficam em `~/projetos/teste-fluigctl-variantes/`
   (o scratchpad da sessão é limpo com frequência).
 
+**Estado (05/10/2026, 21º corte).** Entram o fim com erro (63) e a quantidade de
+anexos por campo do formulário; corrigido o fim terminal (68).
+
+- Fim: o Studio escreve a instrução por tipo (`getProcessStateFromEndEvents`
+  decompilado) — 63 "Esta atividade indica que o processo foi terminado com
+  erro."; 68 o texto de "terminado e que não ocorrerá nenhum tipo de pós
+  processamento" e `notifyAuthorityDelay` false. O conversor gravava sempre
+  "Atividade final do processo": o único 68 nos ecm30 do Studio confirma a regra
+  (era erro antigo, sem gabarito que o pegasse).
+- Regra de anexo: `amount` também pode ser `@[form:campo]` (o Studio copia o
+  texto; 1 caso no corpus, `@[form:qnt_descontos]`).
+- `fluig-localdev`, versão 3 do `teste_inclusivo` (fim 63 e regra "pelo menos
+  @[form:aprovado] anexos" na tarefa Preencher): liberada; o export devolve a
+  instrução e a quantidade como enviadas. Solicitação 8 (`aprovado` = 0) passou
+  sem anexo até o fim com erro; solicitação 9 (`aprovado` = 1) foi barrada com
+  `BPMAttachmentRulesException` e a mensagem da regra — confirma que a regra vale
+  (no HML da Cetenco o bloqueio tinha vindo com erro genérico).
+- 464/475 `.process` convertem sem recusa (eram 462); gabaritos seguem 67/71.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,

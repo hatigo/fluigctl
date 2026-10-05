@@ -151,14 +151,14 @@ test('tarefa sem managerMechanism não leva os campos de atribuição', () => {
 });
 
 test('elemento não suportado é recusado com código 6, listando o tipo', () => {
-  // Fim com erro (63): nenhum par nem regra conferida — segue recusado pelo tipo.
-  const fimErro = PROCESSO.replace(
+  // Fim por mensagem (61): nenhum par nem regra conferida — segue recusado pelo tipo.
+  const fimMensagem = PROCESSO.replace(
     '<bpmn2:BpmnEndEvent',
-    '<bpmn2:BpmnEndEvent id="endevent12" name="Erro" type="63"/>\n  <bpmn2:BpmnEndEvent',
+    '<bpmn2:BpmnEndEvent id="endevent12" name="Mensagem" type="61"/>\n  <bpmn2:BpmnEndEvent',
   );
-  const erro = erroDe(() => converterDiagrama(fimErro, { companyId: 1 }));
+  const erro = erroDe(() => converterDiagrama(fimMensagem, { companyId: 1 }));
   assert.equal(erro.codigo, 6);
-  assert.match(erro.message, /BpmnEndEvent \(type 63\)/);
+  assert.match(erro.message, /BpmnEndEvent \(type 61\)/);
 });
 
 test('subprocesso (100) sem process é recusado; booleano fora de true/false também', () => {
@@ -1231,7 +1231,7 @@ test('regras de anexo: uma linha por regra, qualquer operador do combo, amount c
   ]);
   for (const [regras, motivo] of [
     [[REGRA(0, 7, '1')], /operator "7"/],
-    [[REGRA(0, 1, 'um')], /amount não numérico/],
+    [[REGRA(0, 1, 'um')], /amount fora da forma vista/],
     [[], /attachmentRules vazio/],
   ] as [string[], RegExp][]) {
     const erro = erroDe(() => converterDiagrama(comRegras(...regras), { companyId: 1 }));
@@ -1543,4 +1543,21 @@ test('evento condicional: o nome do script segue o nome do arquivo .process, com
       .find((g) => texto(g, 'processStateTriggerPK', 'stateSequence') === '14')!, 'value');
   assert.equal(valor(), 'processoFase1.intermediatetimer14.js');
   assert.equal(valor('nomeAntigo'), 'nomeAntigo.intermediatetimer14.js');
+});
+
+test('fim com erro (63) e terminal (68) levam a instrução do Studio; quantidade de anexos por campo do formulário', () => {
+  const fins = (tipo: string) => {
+    const d = PROCESSO.replace(/(<bpmn2:BpmnEndEvent id="endevent6"[^\n]*?)type="60"/, `$1type="${tipo}"`);
+    if (tipo !== '60') assert.notEqual(d, PROCESSO);
+    return filhosDaRaiz(converterDiagrama(d, { companyId: 1 }).xml)[2]!.filhos.find((e) => texto(e, 'processStatePK', 'sequence') === '6')!;
+  };
+  assert.equal(texto(fins('60'), 'instruction'), 'Atividade final do processo');
+  assert.equal(texto(fins('63'), 'instruction'), 'Esta atividade indica que o processo foi terminado com erro.');
+  assert.equal(texto(fins('63'), 'notifyAuthorityDelay'), 'true');
+  assert.equal(texto(fins('68'), 'instruction'), 'Esta atividade indica que o processo terminado e que não ocorrerá nenhum tipo de pós processamento.');
+  assert.equal(texto(fins('68'), 'notifyAuthorityDelay'), 'false');
+
+  const linhas = filhosDaRaiz(converterDiagrama(comRegras(REGRA(1, 2, '@[form:qnt_descontos]')), { companyId: 1 }).xml)[18]!.filhos;
+  assert.equal(texto(linhas[0]!, 'amount'), '@[form:qnt_descontos]');
+  assert.match(erroDe(() => converterDiagrama(comRegras(REGRA(1, 2, '@[dataset:x]')), { companyId: 1 })).message, /amount fora da forma vista/);
 });
