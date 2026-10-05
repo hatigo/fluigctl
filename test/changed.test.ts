@@ -129,3 +129,18 @@ test('diagrama alterado sugere push diagram, que leva os scripts dele; .resource
     rmSync(r, { recursive: true, force: true });
   }
 });
+
+test('scripts de processo renomeado: o changed sugere o id que está no .process', () => {
+  const r = repo();
+  try {
+    escreve(r, 'workflow/diagrams/AdiantamentoRessarcimento.process', '<xmi:XMI>\n  <bpmn2:BpmnProcess id="Ressarcimento_v2" name="R"/>\n</xmi:XMI>\n');
+    escreve(r, 'workflow/scripts/AdiantamentoRessarcimento.servicetask115.js', '// a');
+    commit(r);
+    escreve(r, 'workflow/scripts/AdiantamentoRessarcimento.servicetask115.js', '// b');
+    assert.deepEqual(changedArtifacts(r).artefatos.map((a) => comandoSugerido(a, 'hml')), [
+      'fluigctl push process Ressarcimento_v2 --server hml --dry-run',
+    ]);
+  } finally {
+    rmSync(r, { recursive: true, force: true });
+  }
+});

@@ -85,6 +85,17 @@ function camposNovos(raiz: string, pasta: string, base: string): { campos: strin
   return { campos: [...agora].filter((c) => !antes.has(c)).sort(), htmlNovo: false };
 }
 
+/**
+ * O id do processo dos scripts `<prefixo>.*.js`. O prefixo é o nome do `.process`
+ * (como no Studio); o `push process` recebe o id, que difere quando o processo foi
+ * renomeado. Sem o `.process` ao lado, vale o próprio prefixo.
+ */
+function idDoProcesso(raiz: string, prefixo: string): string {
+  const diagrama = join(raiz, 'workflow', 'diagrams', `${prefixo}.process`);
+  if (!existsSync(diagrama)) return prefixo;
+  return /<bpmn2:BpmnProcess id="([^"]*)"/.exec(readFileSync(diagrama, 'latin1'))?.[1] || prefixo;
+}
+
 export function classificar(raiz: string, arquivos: readonly string[], base: string): Artefato[] {
   const datasets = new Map<string, Artefato>();
   const forms = new Set<string>();
@@ -132,9 +143,9 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
     }),
     // Scripts de um processo cujo diagrama também mudou vão no push diagram: um push
     // process à parte criaria outra versão por cima.
-    ...[...processos].filter(([prefixo]) => !diagramas.has(prefixo)).map(([processId, eventos]): Artefato => ({
+    ...[...processos].filter(([prefixo]) => !diagramas.has(prefixo)).map(([prefixo, eventos]): Artefato => ({
       tipo: 'process',
-      processId,
+      processId: idDoProcesso(raiz, prefixo),
       eventos: [...eventos].sort(),
     })),
     ...[...diagramas].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([prefixo, arquivo]): Artefato => ({

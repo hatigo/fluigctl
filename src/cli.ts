@@ -47,8 +47,8 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e scripts de proc
                               [--create --parent-id N --dataset-name D --persistence-type form|list]
   fluigctl push process <processId> --server <nome> [--workflow <pasta>] [--dry-run]
                               [--no-release] [--save-export <arquivo.xml>] [--base <export.xml>]
-      publica os scripts de workflow/scripts/<processId>.*.js num processo que já existe;
-      diagrama e atividades continuam sendo publicados pelo Fluig Studio
+      publica os scripts de workflow/scripts/ num processo que já existe — pelo nome do
+      .process que tem este id, como o Studio, ou pelo próprio id; o diagrama vai pelo push diagram
   fluigctl push widget <wcm/widget/nome> --server <nome> [--dry-run]
       empacota a widget num .war e envia; o servidor instala ou atualiza em segundo plano
   fluigctl push diagram <arquivo.process> --server <nome> [--dry-run] [--save-xml <arquivo>]
@@ -488,11 +488,12 @@ async function pushProcessCli(argv: string[]): Promise<void> {
   const alvo = `${values.server} (${serverUrl(servidor)})`;
   const lista = (ids: string[]) => (ids.length ? ids.join(', ') : '-');
   console.log(`${processId} em ${alvo}`);
+  if (r.prefixoDosScripts) console.log(`  scripts              workflow/scripts/${r.prefixoDosScripts}.*.js (nome do .process deste id)`);
   console.log(`  alterados            ${lista(r.alterados)}`);
   console.log(`  iguais               ${lista(r.iguais)}`);
   if (r.semScriptLocal.length) console.log(`  sem script local     ${lista(r.semScriptLocal)} (ficam como estão)`);
   if (r.semEventoNoServidor.length) {
-    console.log(`  sem evento no servidor ${lista(r.semEventoNoServidor)} (evento novo: exporte pelo Studio)`);
+    console.log(`  sem evento no servidor ${lista(r.semEventoNoServidor)} (evento novo: publique o diagrama com push diagram)`);
   }
 
   if (values['dry-run']) {
