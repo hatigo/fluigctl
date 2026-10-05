@@ -16,7 +16,7 @@ import { pushDiagram } from './commands/push-diagram.js';
 import { pushForm } from './commands/push-form.js';
 import { pushProcess } from './commands/push-process.js';
 import { pushWidget } from './commands/push-widget.js';
-import { pullDataset, pullDiagram, pullForm, pullProcess, type ResultadoPull } from './commands/pull.js';
+import { pullDataset, pullDiagram, pullForm, pullProcess, pullWidget, listarWidgets, type ResultadoPull } from './commands/pull.js';
 import { importCandidates, scanServersJson } from './import.js';
 import { gravarNoEnv } from './env-file.js';
 import { avisoGit, garantirIgnorado } from './gitignore.js';
@@ -65,6 +65,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       baixa anexos e eventos do formulário (alvo resolvido como no push form) para a pasta
   fluigctl pull diagram <processId> --server <nome> [--workflow <pasta>] [--name <nome>] [--dry-run] [--overwrite]
       converte a definição publicada em workflow/diagrams/<nome>.process
+  fluigctl pull widget [<code>] --server <nome> [--dry-run] [--overwrite] [--instalar-helper]
+      baixa a widget instalada para wcm/widget/<code>; sem o código, lista as instaladas
+      a leitura passa pela widget auxiliar do Fluiggers — --instalar-helper a publica no servidor
       Só lê do servidor. Arquivo local diferente do servidor só é trocado com --overwrite;
       sem ele, se algum diferir, nada é gravado
 
@@ -617,14 +620,20 @@ async function pushDiagramCli(argv: string[]): Promise<void> {
   );
 }
 
+const TIPOS_PULL = ['process', 'dataset', 'form', 'diagram', 'widget'] as const;
+type TipoPull = (typeof TIPOS_PULL)[number];
+const ehTipoPull = (t: string | undefined): t is TipoPull =>
+  t !== undefined && (TIPOS_PULL as readonly string[]).includes(t);
+
 async function comandoPull(argv: string[]): Promise<void> {
   const tipo = argv[0];
   const uso =
     'uso: fluigctl pull process <processId> --server <nome> [--workflow <pasta>] [--dry-run] [--overwrite]\n' +
     '     fluigctl pull dataset <nome> --server <nome> [--dry-run] [--overwrite]\n' +
     '     fluigctl pull form <pasta/> --server <nome> [--document-id N] [--dry-run] [--overwrite]\n' +
-    '     fluigctl pull diagram <processId> --server <nome> [--workflow <pasta>] [--name <nome>] [--dry-run] [--overwrite]';
-  if (tipo !== 'process' && tipo !== 'dataset' && tipo !== 'form' && tipo !== 'diagram') throw new ErroFluigctl(uso, 2);
+    '     fluigctl pull diagram <processId> --server <nome> [--workflow <pasta>] [--name <nome>] [--dry-run] [--overwrite]\n' +
+    '     fluigctl pull widget [<code>] --server <nome> [--dry-run] [--overwrite] [--instalar-helper]';
+  if (!ehTipoPull(tipo)) throw new ErroFluigctl(uso, 2);
 
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
@@ -636,26 +645,49 @@ async function comandoPull(argv: string[]): Promise<void> {
       overwrite: { type: 'boolean', default: false },
       'document-id': { type: 'string' },
       name: { type: 'string' },
+      'instalar-helper': { type: 'boolean', default: false },
     },
   });
   const nome = positionals[0];
-  if (!nome || !values.server) throw new ErroFluigctl(uso, 2);
+  if (!values.server || (!nome && tipo !== 'widget')) throw new ErroFluigctl(uso, 2);
 
   const servidor = resolveServer(loadConfig(), values.server);
   const senha = resolvePassword(servidor);
   const comum = { server: servidor, senha, dryRun: values['dry-run'], sobrescrever: values.overwrite };
 
   let r: ResultadoPull;
-  console.log(`${nome} de ${values.server} (${serverUrl(servidor)})`);
-  if (tipo === 'process') {
-    r = await pullProcess({ ...comum, processId: nome, pastaWorkflow: values.workflow });
+  console.log(`${nome ?? 'widgets'} de ${values.server} (${serverUrl(servidor)})`);
+  if (tipo === 'widget') {
+    // Sem código é só listagem: o equivalente CLI do seletor da extensão.
+    if (!nome) {
+      for (const w of await listarWidgets({ server: servidor, senha })) {
+        console.log(`  ${w.code.padEnd(32)} ${w.title}${w.description ? ` — ${w.description}` : ''}`);
+      }
+      return;
+    }
+    const w = await pullWidget({
+      ...comum,
+      nome,
+      instalarHelper: values['instalar-helper'],
+      prompt: promptPassword,
+    });
+    console.log(`  code ${w.code}`);
+    if (w.helperInstalado) console.log('  a widget auxiliar do Fluiggers foi publicada neste servidor agora');
+    for (const aviso of w.avisos) console.log(`  aviso: ${aviso}`);
+    if (w.ignorados.length) {
+      console.log(`  no .war, sem lugar na pasta (ficam de fora)  ${w.ignorados.join(', ')}`);
+    }
+    if (w.soLocais.length) console.log(`  só no local         ${w.soLocais.join(', ')} (ficam como estão)`);
+    r = w;
+  } else if (tipo === 'process') {
+    r = await pullProcess({ ...comum, processId: nome!, pastaWorkflow: values.workflow });
     if (r.novos.length + r.iguais.length + r.diferentes.length === 0) {
       console.log('  o processo publicado não tem scripts.');
       return;
     }
   } else if (tipo === 'diagram') {
     r = await pullDiagram({
-      ...comum, processId: nome, pastaWorkflow: values.workflow,
+      ...comum, processId: nome!, pastaWorkflow: values.workflow,
       ...(values.name ? { nomeDoArquivo: values.name } : {}),
     });
   } else if (tipo === 'form') {
@@ -663,13 +695,13 @@ async function comandoPull(argv: string[]): Promise<void> {
     if (documentId !== undefined && !(Number.isInteger(documentId) && documentId > 0)) {
       throw new ErroFluigctl(`--document-id precisa ser um número: ${values['document-id']}`, 2);
     }
-    const f = await pullForm({ ...comum, pasta: nome, ...(documentId === undefined ? {} : { documentId }) });
+    const f = await pullForm({ ...comum, pasta: nome!, ...(documentId === undefined ? {} : { documentId }) });
     console.log(`  documentId ${f.documentId}, versão ${f.versao}`);
     for (const aviso of f.avisos) console.log(`  aviso: ${aviso}`);
     if (f.soLocais.length) console.log(`  só no local         ${f.soLocais.join(', ')} (ficam como estão)`);
     r = f;
   } else {
-    r = await pullDataset({ ...comum, nome });
+    r = await pullDataset({ ...comum, nome: nome! });
   }
 
   const lista = (arquivos: string[]) => (arquivos.length ? arquivos.join(', ') : '-');
