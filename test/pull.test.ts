@@ -128,6 +128,33 @@ test('conversão inversa recompõe condições e regras do gateway no blob XStre
   assert.match(gateway.attrs.condition!, /<field>valor<\/field>/);
 });
 
+test('conversão inversa preserva o mecanismo customizado, cuja configuração vem vazia do servidor', () => {
+  /*
+   * O servidor guarda o id do mecanismo e a configuração VAZIA — medido no
+   * fluig-localdev com MEC_ALCADAS na atividade "Aprovar". O `if (!xml)` no topo
+   * do conversor de atribuição acontecia antes do caso custom, que exige
+   * exatamente a configuração vazia: o ramo era inalcançável e o pull devolvia a
+   * tarefa sem atribuição. Republicar aquele arquivo apagava o mecanismo do
+   * processo, e a aprovação deixava de ter responsável — sem erro nenhum.
+   */
+  const estado = (alocacao: string) =>
+    lerDiagrama(gerarProcess(definicao({
+      estados:
+        '<ProcessState><processStatePK><sequence>5</sequence></processStatePK><stateName>Aprovar</stateName>' +
+        '<positionX>10</positionX><positionY>10</positionY><bpmnType>80</bpmnType>' +
+        `<engineAllocationId>${alocacao}</engineAllocationId><engineAllocationConfiguration></engineAllocationConfiguration>` +
+        '</ProcessState>',
+    })).process).objetos.find((o) => o.attrs['id'] === 'task5')!;
+
+  const custom = estado('MEC_ALCADAS');
+  assert.equal(custom.attrs['managerMechanism'], 'MEC_ALCADAS');
+  assert.match(custom.attrs['managerAssignmentControllerString']!, /AssignmentControllerCustom/);
+  assert.match(custom.attrs['managerAssignmentControllerString']!, /<mechanismName>MEC_ALCADAS<\/mechanismName>/);
+
+  // Sem mecanismo nenhum o servidor devolve id vazio: nada deve ser inventado.
+  assert.equal(estado('').attrs['managerMechanism'], undefined);
+});
+
 /** Definição ECM 3.0 mínima, com os filhos na ordem que o Studio usa. */
 function definicao(filhos: Record<string, string>): string {
   const corpo = (nome: string) => `<list>${filhos[nome] ?? ''}</list>`;
