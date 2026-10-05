@@ -67,8 +67,9 @@ e layout.
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
 | `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 465 de 475 diagramas reais convertem |
 | `pull process` / `pull dataset` / `pull form` (scripts de processo, código de dataset, anexos e eventos de formulário) | pronto |
+| `pull diagram` (definição publicada → `.process`) | inicial: estados, atribuições simples, gateways e condições, temporizadores, raias, fluxos e bendpoints; recusa estruturas ainda não cobertas |
 
-Fora de escopo por enquanto: `pull` de widget e do `.process`, layout WCM, widget com código Java,
+Fora de escopo por enquanto: `pull` de widget, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
 
 ## Instalação
@@ -123,7 +124,16 @@ fluigctl push form forms/formReembolso/ --server cetenco-hml --keep-version
 
 fluigctl push process reembolso --server cetenco-hml --dry-run
 fluigctl push widget wcm/widget/wdgAniversariantes --server cetenco-hml --dry-run
+
+# trazer um diagrama simples publicado de volta para um arquivo do Studio
+fluigctl pull diagram reembolso --server cetenco-hml --dry-run
+fluigctl pull diagram reembolso --server cetenco-hml
 ```
+
+O `pull diagram` nunca gera um arquivo parcial: condições de gateway e gatilhos
+de temporizador/condicional já são reconstruídos; se a definição tiver
+subprocessos, segurança de anexos ou outras estruturas cuja conversão inversa
+ainda não foi validada, ele recusa antes de gravar e orienta usar o Studio.
 
 Formulário exige escolher a versão: `--keep-version` sobrescreve a ativa (só
 mudou JS, CSS, texto), `--new-version` cria a próxima (ganhou campo — o servidor
