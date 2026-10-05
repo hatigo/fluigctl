@@ -48,11 +48,11 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 470 | não | não | — |
+| Testes automatizados | 477 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
-lista o motivo), widget com código Java, evento global, mecanismo de atribuição
-e layout.
+lista o motivo) e widget com código Java. Layout, evento global e mecanismo de
+atribuição já são publicados pelo `fluigctl`.
 
 ## Estado
 
@@ -61,6 +61,7 @@ e layout.
 | `server add` / `ls` / `rm` / `test` / `set-prod` | pronto |
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (a skill que ensina um agente a publicar) | pronto |
+| `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
 | `push dataset` | pronto |
@@ -207,7 +208,33 @@ troca de nome —, porque `addServer` recusa nome repetido de propósito: gravar
 cima do registro que está lá não passaria por essa checagem. O nome pode mudar,
 e o antigo não fica para trás.
 
-### 2. No dia a dia: ver o que mudou, simular, publicar
+### 2. Acompanhar um diagrama enquanto ele muda
+
+```sh
+fluigctl diagram open workflow/diagrams/reembolso.process
+```
+
+Abre no navegador um visualizador local do `.process`. O servidor fica em
+segundo plano e o comando devolve o terminal imediatamente, então um agente pode
+abri-lo e continuar trabalhando. Quando o arquivo muda, o desenho muda sozinho.
+Se uma gravação ficar temporariamente inválida ou o arquivo sumir, o último
+desenho válido permanece e uma faixa explica o erro.
+
+O desenho vem sempre do `.process`, nunca do `.processimage.svg` do Studio, que
+pode estar velho. A interface enquadra o processo ao abrir, aceita zoom pela
+roda, pan arrastando o fundo e tem o botão **Ajustar**. Para automação sem
+navegador use `--no-open`; para depurar o servidor no processo atual,
+`--foreground`.
+
+Cada instância escuta apenas em `127.0.0.1`, numa porta aleatória, e exige um
+token aleatório na URL. Um segundo `open` do mesmo arquivo reutiliza a instância.
+Para encerrá-la:
+
+```sh
+fluigctl diagram close workflow/diagrams/reembolso.process
+```
+
+### 3. No dia a dia: ver o que mudou, simular, publicar
 
 Rode na raiz do repositório Fluig:
 
@@ -890,7 +917,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 470 testes, sem rede e sem servidor Fluig
+npm test        # 477 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

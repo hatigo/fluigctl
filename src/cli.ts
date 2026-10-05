@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import {
@@ -41,6 +42,7 @@ import { promptPassword } from './prompt.js';
 import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
 import { ErroFluigctl } from './errors.js';
+import { abrirVisualizador, executarServidor, fecharVisualizador } from './diagram/viewer.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -59,6 +61,11 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl skill [ls | install [--copy] [--force] | uninstall]
       põe (ou tira) a skill que ensina um agente a publicar com o fluigctl;
       sem argumento, diz onde ela está e onde daria para instalar
+
+  fluigctl diagram open <arquivo.process> [--no-open] [--foreground]
+      abre no navegador um visualizador local que acompanha mudanças no arquivo
+  fluigctl diagram close <arquivo.process>
+      encerra o visualizador desse arquivo
 
   fluigctl changed [--since <ref>] [--server <nome>]
       lista o que mudou no git como artefatos do Fluig e sugere o comando de cada um; não envia nada
@@ -998,6 +1005,64 @@ function comandoSkill(argv: string[]): void {
   if (values['dry-run']) console.log('[dry-run] Nada foi removido.');
 }
 
+async function comandoDiagram(argv: string[]): Promise<void> {
+  const sub = argv[0];
+  const uso =
+    'uso: fluigctl diagram open <arquivo.process> [--no-open] [--foreground]\n' +
+    '     fluigctl diagram close <arquivo.process>';
+
+  if (sub === 'open') {
+    const { values, positionals } = parseArgs({
+      args: argv.slice(1),
+      allowPositionals: true,
+      options: {
+        'no-open': { type: 'boolean', default: false },
+        foreground: { type: 'boolean', default: false },
+      },
+    });
+    const arquivo = positionals[0];
+    if (!arquivo || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+    const instancia = await abrirVisualizador({
+      arquivo,
+      abrirNavegador: !values['no-open'],
+      foreground: values.foreground,
+    });
+    console.log(`${instancia.reutilizada ? 'visualizador já aberto' : 'visualizador aberto'}: ${instancia.url}`);
+    console.log(`pid: ${instancia.registro.pid}`);
+    return;
+  }
+
+  if (sub === 'close') {
+    const arquivo = argv[1];
+    if (!arquivo || argv.length !== 2) throw new ErroFluigctl(uso, 2);
+    const fechado = await fecharVisualizador(arquivo);
+    console.log(fechado ? `visualizador encerrado: ${fechado.arquivo}` : `não havia visualizador aberto para ${resolve(arquivo)}`);
+    return;
+  }
+
+  // É a entrada privada do processo em segundo plano. Não aparece no help para
+  // que ninguém precise conhecer token nem diretório de registro.
+  if (sub === 'serve') {
+    const { values, positionals } = parseArgs({
+      args: argv.slice(1),
+      allowPositionals: true,
+      options: {
+        token: { type: 'string' },
+        'registry-dir': { type: 'string' },
+      },
+    });
+    const arquivo = positionals[0];
+    if (!arquivo || !values.token || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+    await executarServidor({
+      arquivo,
+      token: values.token,
+      ...(values['registry-dir'] === undefined ? {} : { registroDir: values['registry-dir'] }),
+    });
+  }
+
+  throw new ErroFluigctl(uso, 2);
+}
+
 async function main(argv: string[]): Promise<void> {
   const comando = argv[0];
 
@@ -1008,6 +1073,7 @@ async function main(argv: string[]): Promise<void> {
 
   if (comando === 'server') return comandoServer(argv.slice(1));
   if (comando === 'skill') return comandoSkill(argv.slice(1));
+  if (comando === 'diagram') return comandoDiagram(argv.slice(1));
   if (comando === 'changed') return comandoChanged(argv.slice(1));
   if (comando === 'push') return comandoPush(argv.slice(1));
   if (comando === 'pull') return comandoPull(argv.slice(1));
