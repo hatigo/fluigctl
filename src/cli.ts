@@ -16,6 +16,7 @@ import { pushDiagram } from './commands/push-diagram.js';
 import { pushForm } from './commands/push-form.js';
 import { pushProcess } from './commands/push-process.js';
 import { pushWidget } from './commands/push-widget.js';
+import { pullDataset, pullProcess, type ResultadoPull } from './commands/pull.js';
 import { importCandidates, scanServersJson } from './import.js';
 import { gravarNoEnv } from './env-file.js';
 import { avisoGit, garantirIgnorado } from './gitignore.js';
@@ -27,7 +28,7 @@ import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
 import { ErroFluigctl } from './errors.js';
 
-const USO = `fluigctl — sobe datasets, formulários, widgets e scripts de processo para o TOTVS Fluig
+const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa scripts e datasets
 
   fluigctl server ls
   fluigctl server add <nome> --host H [--port P] [--ssl] --user U [--prod]
@@ -55,6 +56,13 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e scripts de proc
                               [--create] [--no-release]
       converte o diagrama no XML que o servidor importa e publica: nova versão, import e liberação;
       --create cria o processo que não existe no destino. O --dry-run converte sem rede e sem senha
+
+  fluigctl pull process <processId> --server <nome> [--workflow <pasta>] [--dry-run] [--overwrite]
+      baixa os scripts do processo publicado para workflow/scripts/ (mesmo prefixo do push process)
+  fluigctl pull dataset <nome> --server <nome> [--dry-run] [--overwrite]
+      baixa o código do dataset para o datasets/**/<nome>.js que já existe, ou datasets/<nome>.js
+      Só lê do servidor. Arquivo local diferente do servidor só é trocado com --overwrite;
+      sem ele, se algum diferir, nada é gravado
 
 A senha de cada servidor vem, nesta ordem: da variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD),
 do arquivo de senhas do fluigctl (~/.config/fluigctl/env, permissão 600) ou do .vscode/servers.json
@@ -605,6 +613,57 @@ async function pushDiagramCli(argv: string[]): Promise<void> {
   );
 }
 
+async function comandoPull(argv: string[]): Promise<void> {
+  const tipo = argv[0];
+  const uso =
+    'uso: fluigctl pull process <processId> --server <nome> [--workflow <pasta>] [--dry-run] [--overwrite]\n' +
+    '     fluigctl pull dataset <nome> --server <nome> [--dry-run] [--overwrite]';
+  if (tipo !== 'process' && tipo !== 'dataset') throw new ErroFluigctl(uso, 2);
+
+  const { values, positionals } = parseArgs({
+    args: argv.slice(1),
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      workflow: { type: 'string', default: 'workflow' },
+      'dry-run': { type: 'boolean', default: false },
+      overwrite: { type: 'boolean', default: false },
+    },
+  });
+  const nome = positionals[0];
+  if (!nome || !values.server) throw new ErroFluigctl(uso, 2);
+
+  const servidor = resolveServer(loadConfig(), values.server);
+  const senha = resolvePassword(servidor);
+  const comum = { server: servidor, senha, dryRun: values['dry-run'], sobrescrever: values.overwrite };
+
+  let r: ResultadoPull;
+  console.log(`${nome} de ${values.server} (${serverUrl(servidor)})`);
+  if (tipo === 'process') {
+    r = await pullProcess({ ...comum, processId: nome, pastaWorkflow: values.workflow });
+    if (r.novos.length + r.iguais.length + r.diferentes.length === 0) {
+      console.log('  o processo publicado não tem scripts.');
+      return;
+    }
+  } else {
+    r = await pullDataset({ ...comum, nome });
+  }
+
+  const lista = (arquivos: string[]) => (arquivos.length ? arquivos.join(', ') : '-');
+  console.log(`  novos                ${lista(r.novos)}`);
+  console.log(`  iguais               ${lista(r.iguais)}`);
+  console.log(`  diferentes           ${lista(r.diferentes)}`);
+  if (values['dry-run']) {
+    console.log(
+      r.diferentes.length && !values.overwrite
+        ? '[dry-run] Nada foi gravado. Os diferentes só são trocados com --overwrite.'
+        : '[dry-run] Nada foi gravado.',
+    );
+    return;
+  }
+  console.log(r.gravados.length ? `Gravados: ${r.gravados.join(', ')}` : 'Nada a gravar: o repositório já tem o que está no servidor.');
+}
+
 function comandoChanged(argv: string[]): void {
   const { values } = parseArgs({
     args: argv,
@@ -644,6 +703,7 @@ async function main(argv: string[]): Promise<void> {
   if (comando === 'server') return comandoServer(argv.slice(1));
   if (comando === 'changed') return comandoChanged(argv.slice(1));
   if (comando === 'push') return comandoPush(argv.slice(1));
+  if (comando === 'pull') return comandoPull(argv.slice(1));
 
   throw new ErroFluigctl(`comando desconhecido: ${comando}\n\n${USO}`, 2);
 }
