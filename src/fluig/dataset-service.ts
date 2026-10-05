@@ -58,6 +58,8 @@ export async function datasetClient(
 export interface DatasetNoServidor {
   description?: string;
   impl?: string;
+  /** `CUSTOM` (o código JavaScript); os de fábrica são `BUILTIN` e o `impl` é uma lista de classes Java. */
+  tipo?: string;
 }
 
 /**
@@ -82,12 +84,14 @@ export async function loadDataset(
     const lido = JSON.parse(texto) as {
       datasetDescription?: string;
       datasetImpl?: string;
-      content?: { datasetDescription?: string; datasetImpl?: string } | null;
+      type?: string;
+      content?: { datasetDescription?: string; datasetImpl?: string; type?: string } | null;
     };
     const d = lido.datasetImpl !== undefined || lido.datasetDescription !== undefined ? lido : lido.content ?? {};
     return {
       ...(d.datasetDescription === undefined ? {} : { description: d.datasetDescription }),
       ...(d.datasetImpl === undefined ? {} : { impl: d.datasetImpl }),
+      ...(d.type === undefined ? {} : { tipo: d.type }),
     };
   } catch {
     return {};

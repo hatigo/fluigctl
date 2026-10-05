@@ -1,8 +1,8 @@
 # fluigctl
 
 Publica artefatos de um repositório TOTVS Fluig — datasets, formulários,
-widgets e os scripts de um processo — num servidor Fluig, pela linha de
-comando. Faz o que o **Exportar** do Fluig Studio e da extensão Fluiggers do VS
+widgets, processos e os scripts de um processo — num servidor Fluig, pela linha de
+comando, e baixa de volta scripts de processo e datasets. Faz o que o **Exportar** do Fluig Studio e da extensão Fluiggers do VS
 Code fazem, sem IDE e sem clique, e serve igual para você no terminal e para um
 agente (Claude Code, CI) via script.
 
@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 332 | não | não | — |
+| Testes automatizados | 340 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -66,8 +66,9 @@ e layout.
 | `push widget` | pronto (widgets sem Java) |
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
 | `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 465 de 475 diagramas reais convertem |
+| `pull process` / `pull dataset` (scripts de processo e código de dataset do servidor) | pronto |
 
-Fora de escopo por enquanto: `pull`, layout WCM, widget com código Java,
+Fora de escopo por enquanto: `pull` de formulário, widget e do `.process`, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
 
 ## Instalação
@@ -303,6 +304,32 @@ os scripts dele não ganham um `push process` à parte, que criaria outra versã
 Os arquivos de `workflow/.resources` (gerados pelo Studio ao exportar) aparecem só
 como informação. Evento global, mecanismo e layout aparecem com o motivo de não
 serem publicados aqui.
+
+## Baixando do servidor
+
+```sh
+fluigctl pull process reembolso --server cetenco-hml --dry-run
+fluigctl pull process reembolso --server cetenco-hml
+fluigctl pull dataset dsFoo --server cetenco-hml
+```
+
+O caminho inverso do push, para trazer ao repositório o que alguém publicou
+direto no servidor. Só lê do servidor.
+
+- `pull process` grava cada evento da definição publicada em
+  `workflow/scripts/<prefixo>.<evento>.js`, com o mesmo prefixo do `push process`
+  (o nome do `.process` com este id, ou o próprio id). Diagrama e atividades ficam
+  de fora.
+- `pull dataset` grava no `datasets/**/<nome>.js` que o repositório já tem — em
+  qualquer subpasta — ou, sem nenhum, em `datasets/<nome>.js`. Dois arquivos com o
+  nome são recusados (código 6), e dataset de fábrica (`BUILTIN`, que não tem
+  código JavaScript) também.
+
+Arquivo novo é gravado; igual ao servidor (a comparação ignora fim de linha e
+espaço no fim, como a do push) fica como está; diferente só é trocado com
+`--overwrite`. Sem ele, se algum diferir, **nada** é gravado e a saída é 6,
+listando os arquivos — para não deixar a pasta metade do servidor e metade local.
+O `--dry-run` lista novos, iguais e diferentes sem gravar.
 
 ## Publicando um widget
 
@@ -590,7 +617,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 332 testes, sem rede e sem servidor Fluig
+npm test        # 340 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
