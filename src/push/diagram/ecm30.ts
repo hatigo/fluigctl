@@ -88,7 +88,16 @@ type Campo = [string, Valor];
 
 const TAREFAS = new Set(['80', '81', '82', '84', '87']);
 const SERVICO = '82';
-const FINS = new Set(['60', '64', '65', '68']);
+const FINS = new Set(['60', '63', '64', '65', '68']);
+/**
+ * Instrução do estado final por tipo (`getProcessStateFromEndEvents`, decompilado):
+ * o fim com erro (63) e o terminal (68) têm texto próprio; o 68 também leva
+ * `notifyAuthorityDelay` false (o único 68 nos ecm30 do Studio grava assim).
+ */
+const INSTRUCAO_DO_FIM: Record<string, string> = {
+  '63': 'Esta atividade indica que o processo foi terminado com erro.',
+  '68': 'Esta atividade indica que o processo terminado e que não ocorrerá nenhum tipo de pós processamento.',
+};
 /**
  * `stateType` de cada gateway. O inclusivo (121) é montado como o paralelo
  * (`getProcessStatesFromGateways` decompilado: só o exclusivo é automático e de
@@ -446,7 +455,8 @@ function lerRegrasDeAnexo(blob: string): Lido<RegraDeAnexo[]> {
     const operador = f.get('operator')!;
     if (!/^\d+$/.test(f.get('id')!)) return { erro: `attachmentRules com id "${f.get('id')}"` };
     if (!REGRA_OPERADORES.includes(operador)) return { erro: `attachmentRules com operator "${operador}"` };
-    if (!/^\d*$/.test(f.get('amount')!)) return { erro: 'attachmentRules com amount não numérico' };
+    // Número, vazio, ou um campo do formulário (`@[form:qnt_descontos]`): o Studio copia o texto.
+    if (!/^(\d*|@\[form:[A-Za-z_]\w*\])$/.test(f.get('amount')!)) return { erro: 'attachmentRules com amount fora da forma vista' };
     regras.push({ operador, quantidade: f.get('amount')!, nome: f.get('name')!, mensagem: f.get('message')! });
   }
   return { valor: regras };
@@ -835,7 +845,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['processStatePK', pk([['sequence', sufixo(a['id'])]])],
       ['stateName', a['name'] ?? ''],
       ['stateDescription', a['name'] ?? ''],
-      ['instruction', fim ? 'Atividade final do processo' : (a['instrucoes'] ?? '')],
+      ['instruction', fim ? (INSTRUCAO_DO_FIM[tipo] ?? 'Atividade final do processo') : (a['instrucoes'] ?? '')],
       ['deadlineTime', segundos(a['prazoConclusao'], 0)],
     ];
     if (tarefa) campos.push(['deadlineFieldName', a['deadlineFieldName'] ?? '']);
@@ -848,7 +858,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     campos.push(
       ['selectColleague', fim ? 0 : (a['selecionaColaboradores'] ?? 1)],
       ['initialState', inicio],
-      ['notifyAuthorityDelay', booleano(a['emAtrasoNotificarResponsavel'], true)],
+      ['notifyAuthorityDelay', fim && tipo === '68' ? false : booleano(a['emAtrasoNotificarResponsavel'], true)],
       ['notifyRequisitionerDelay', booleano(a['emAtrasoNotificarRequisitante'], false)],
       ['allowanceAuthorityTime', fim ? 0 : segundos(a['emAtrasoNotificarResponsavelTolerancia'], 3600)],
       ['frequenceAuthorityTime', fim ? 1 : segundos(a['emAtrasoNotificarResponsavelFrequencia'], 3600)],
