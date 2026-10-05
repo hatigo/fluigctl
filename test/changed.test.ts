@@ -103,3 +103,29 @@ test('--since compara com um commit anterior', () => {
     rmSync(r, { recursive: true, force: true });
   }
 });
+
+test('diagrama alterado sugere push diagram, que leva os scripts dele; .resources é só informativo', () => {
+  const r = repo();
+  try {
+    escreve(r, 'workflow/diagrams/reembolso.process', '<xmi/>');
+    escreve(r, 'workflow/scripts/reembolso.servicetask20.js', '// a');
+    escreve(r, 'workflow/scripts/compras.beforeStateEntry.js', '// a');
+    commit(r);
+
+    escreve(r, 'workflow/diagrams/reembolso.process', '<xmi>novo</xmi>');
+    escreve(r, 'workflow/scripts/reembolso.servicetask20.js', '// b');
+    escreve(r, 'workflow/scripts/compras.beforeStateEntry.js', '// b');
+    escreve(r, 'workflow/.resources/reembolso.ecm30.xml', '<list/>');
+
+    const linhas = changedArtifacts(r).artefatos.map((a) => comandoSugerido(a, 'hml'));
+    assert.deepEqual(linhas, [
+      // Os scripts do compras mudaram sem o diagrama: push process, como antes.
+      'fluigctl push process compras --server hml --dry-run',
+      // Os do reembolso vão no push diagram (um push process à parte criaria outra versão).
+      'fluigctl push diagram workflow/diagrams/reembolso.process --server hml --dry-run   # inclui os scripts servicetask20',
+      '# workflow/.resources/reembolso.ecm30.xml: gerado pelo Studio ao exportar — o push diagram publica a partir do .process',
+    ]);
+  } finally {
+    rmSync(r, { recursive: true, force: true });
+  }
+});

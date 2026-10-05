@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 329 | não | não | — |
+| Testes automatizados | 330 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -297,8 +297,12 @@ Traduz os arquivos alterados em artefatos (dataset, formulário, scripts de
 processo, widget) e imprime o comando de **cada um**, com `--dry-run`. Não envia
 nada: publicar em lote é como se sobrescreve, sem querer, o que outra pessoa
 mudou no servidor. Para formulário, compara os `name="..."` do HTML com a
-versão anterior e sugere `--new-version` quando há campo novo. Diagrama, evento
-global, mecanismo e layout aparecem com o motivo de não serem publicados aqui.
+versão anterior e sugere `--new-version` quando há campo novo. Para diagrama
+alterado sugere `push diagram`, que já publica os scripts do processo — por isso
+os scripts dele não ganham um `push process` à parte, que criaria outra versão.
+Os arquivos de `workflow/.resources` (gerados pelo Studio ao exportar) aparecem só
+como informação. Evento global, mecanismo e layout aparecem com o motivo de não
+serem publicados aqui.
 
 ## Publicando um widget
 
@@ -586,7 +590,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 329 testes, sem rede e sem servidor Fluig
+npm test        # 330 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
