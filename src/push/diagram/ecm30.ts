@@ -189,7 +189,7 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     'managerAssignmentControllerString', 'loopType', 'authNotify', 'expediente', 'atividadeConjunta',
     'consenso', 'selecionaColaboradores', 'esforcoCalculo', 'esforcoPrevisto', 'executionAttempts', 'frequency', 'instrucoes',
     'prazoConclusao', 'deadlineFieldName', 'notificaRequisitante', 'notificaGestor', 'inibeOpcaoTransferir',
-    'confirmarSenha', 'appsConfiguration', 'attachmentRules', ...EM_ATRASO, ...EXPIRACAO,
+    'confirmarSenha', 'appsConfiguration', 'attachmentRules', 'messageData', ...EM_ATRASO, ...EXPIRACAO,
   ],
   BpmnSubProcess: [
     'id', 'name', 'incoming', 'outgoing', 'type', 'process', 'loopType', 'selectColleague', 'transferAttachments',
@@ -1332,7 +1332,8 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     const t = arvore?.nome === 'org.eclipse.bpmn2.documentacional.BpmnTriggerData' ? folhas(arvore) : undefined;
     const conhecidos = ['runType', 'timeTrigger', 'frequencia', 'isCondition', ...(tipo === '35' ? ['scriptCondition'] : [])];
     const runType = RUN_TYPE[t?.get('runType') ?? ''];
-    const scriptCondicional = `${processId}.${id}.js`;
+    // Como os scripts: o Studio monta o nome com o nome do arquivo (ProcessUtil.getFileName), não com o id.
+    const scriptCondicional = `${opcoes.nomeDoArquivo ?? processId}.${id}.js`;
     if (!t || [...t.keys()].some((k) => !conhecidos.includes(k)) || runType === undefined ||
       t.get('isCondition') !== 'false' || !/^\d+$/.test(t.get('frequencia') ?? '') ||
       (t.has('scriptCondition') && t.get('scriptCondition') !== scriptCondicional)) {
@@ -1354,6 +1355,51 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     if (t.has('timeTrigger')) gatilho.push(['timeTrigger', t.get('timeTrigger')!]);
     gatilho.push(['frequencia', t.get('frequencia')!]);
     gatilhos.push(gatilho);
+  }
+
+  /*
+   * Tarefa de e-mail (84): o `messageData` vira um gatilho depois dos de
+   * temporizador e condicional, continuando a numeração
+   * (`getTriggersFromMessageSenders`, decompilado). É um BpmnTriggerData novo —
+   * runType HOUR (1) e frequência "01" por padrão, sem timeTrigger nem diaSemana —
+   * com `type` 0 (não definido) e o `value` montado por `getBpmnMessageData`:
+   * `<BpmnMessageData><Type/><Receiver/><Subject/><Content/></BpmnMessageData>`,
+   * texto inserido sem escapar (por isso `<` e `&` no texto são recusados).
+   */
+  for (const o of tarefas) {
+    const a = o.attrs;
+    if (a['messageData'] === undefined) continue;
+    const id = a['id'] ?? '';
+    if (a['type'] !== '84') {
+      recusar(`messageData em ${id} (type ${a['type']}), só visto na tarefa de e-mail (84)`);
+      continue;
+    }
+    const raiz = arvoreDoBlob(a['messageData']);
+    const m = raiz?.nome === 'org.eclipse.bpmn2.documentacional.BpmnMessageData' && Object.keys(raiz.attrs).length === 0 ? folhas(raiz) : undefined;
+    const extra = m ? [...m.keys()].find((k) => !['type', 'receiver', 'subject', 'content'].includes(k)) : undefined;
+    if (!m || extra !== undefined || !/^\d+$/.test(m.get('type') ?? '')) {
+      recusar(`messageData fora da forma vista em ${id}${extra ? ` (campo ${extra})` : ''}`);
+      continue;
+    }
+    const texto = ['receiver', 'subject', 'content'].map((k) => m.get(k) ?? '');
+    if (texto.some((t) => /[<&]/.test(t))) {
+      recusar(`messageData com "<" ou "&" em ${id} (o Studio não escapa o texto da mensagem)`);
+      continue;
+    }
+    const [destinatario, assunto, corpo] = texto;
+    gatilhos.push([
+      ['processStateTriggerPK', [
+        ['companyId', companyId],
+        ['processId', processId],
+        ['version', versao],
+        ['stateSequence', sufixo(id)],
+        ['triggerSequence', gatilhos.length],
+      ]],
+      ['runType', 1],
+      ['type', 0],
+      ['value', `<BpmnMessageData><Type>${m.get('type')}</Type><Receiver>${destinatario}</Receiver><Subject>${assunto}</Subject><Content>${corpo}</Content></BpmnMessageData>`],
+      ['frequencia', '01'],
+    ]);
   }
 
   /*

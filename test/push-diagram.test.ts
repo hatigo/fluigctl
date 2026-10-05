@@ -1512,3 +1512,35 @@ test('gateway inclusivo (121): estado como o paralelo (tipo 3, não automático)
   const svg = gerarSvg(lerDiagrama(inclusivo));
   assert.match(svg, /rx="12" ry="12" style="fill:none; stroke:#000000; stroke-width:3"/);
 });
+
+/** A task5 do processoTeste como tarefa de e-mail, com a mensagem dada. */
+const comEmail = (corpo = 'Sua solicitação foi aprovada.', tipo = '84') => {
+  const blob = '<org.eclipse.bpmn2.documentacional.BpmnMessageData>\n  <type>1</type>\n  <receiver>fulano@exemplo.com</receiver>\n' +
+    `  <subject>Aviso</subject>\n  <content>${corpo}</content>\n</org.eclipse.bpmn2.documentacional.BpmnMessageData>`;
+  return PROCESSO.replace(/(<bpmn2:BpmnTask id="task5"[^\n]*?)type="80"/, `$1type="${tipo}" messageData="${comoAtributo(blob).replace(/[^\x00-\x7f]/g, (c) => `&#x${c.charCodeAt(0).toString(16)};`)}"`);
+};
+
+test('tarefa de e-mail: messageData vira gatilho tipo 0 com a mensagem, depois dos outros gatilhos', () => {
+  const diagrama = comEmail();
+  assert.notEqual(diagrama, PROCESSO);
+  const gatilhos = filhosDaRaiz(converterDiagrama(diagrama, { companyId: 1 }).xml)[12]!.filhos;
+  assert.equal(gatilhos.length, 1);
+  const g = gatilhos[0]!;
+  assert.deepEqual(g.filhos.map((f) => f.nome), ['processStateTriggerPK', 'runType', 'type', 'value', 'frequencia']);
+  assert.deepEqual([texto(g, 'processStateTriggerPK', 'stateSequence'), texto(g, 'runType'), texto(g, 'type'), texto(g, 'frequencia')], ['5', '1', '0', '01']);
+  assert.equal(texto(g, 'value'),
+    '<BpmnMessageData><Type>1</Type><Receiver>fulano@exemplo.com</Receiver><Subject>Aviso</Subject><Content>Sua solicitação foi aprovada.</Content></BpmnMessageData>');
+
+  assert.match(erroDe(() => converterDiagrama(comEmail('a &lt; b'), { companyId: 1 })).message, /messageData com "<" ou "&" em task5/);
+  assert.match(erroDe(() => converterDiagrama(comEmail(undefined, '80'), { companyId: 1 })).message, /messageData em task5 \(type 80\)/);
+});
+
+test('evento condicional: o nome do script segue o nome do arquivo .process, como o Studio', () => {
+  const condicional = FASE1.replace(/(<bpmn2:BpmnIntermediateEvent id="intermediatetimer14"[^\n]*?)type="32"/, '$1type="35"');
+  assert.notEqual(condicional, FASE1);
+  const valor = (nomeDoArquivo?: string) => texto(
+    filhosDaRaiz(converterDiagrama(condicional, { companyId: 1, ...(nomeDoArquivo ? { nomeDoArquivo } : {}) }).xml)[12]!.filhos
+      .find((g) => texto(g, 'processStateTriggerPK', 'stateSequence') === '14')!, 'value');
+  assert.equal(valor(), 'processoFase1.intermediatetimer14.js');
+  assert.equal(valor('nomeAntigo'), 'nomeAntigo.intermediatetimer14.js');
+});
