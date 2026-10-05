@@ -116,14 +116,22 @@ const CONFIGURACAO_DO_CAMINHO = 'mecanismoAtribuicaoConfiguracao';
  * O ad hoc (101) não aparece em nenhum ecm30, então segue recusado.
  */
 const SUBPROCESSO = '100';
+/** Subprocesso ad hoc: o usuário cria as tarefas durante a execução. */
+const SUBPROCESSO_ADHOC = '101';
+/** Atributos que o Studio só lê no ad hoc (`getProcessStatesFromSubProcess`, decompilado). */
+const SO_DO_ADHOC = ['managerMechanism', 'managerAssignmentController', 'instructions', 'initialTask'];
 const MAPEAMENTO_CAMPOS = ['processField', 'subProcessField', 'mapFlow'];
 /** Tipos que carregam `attachmentRules` nos pares: início (10) e tarefa de usuário (80). */
 const REGRA_DE_ANEXO_EM = new Set(['BpmnStartEvent:10', 'BpmnTask:80']);
 const REGRA_CAMPOS = ['id', 'message', 'operator', 'amount', 'name'];
 /** Índices do combo de operadores do Studio (`PropertyBpmnAttachmentRulesSection`). */
 const REGRA_OPERADORES = ['0', '1', '2', '3', '4', '5', '6'];
-/** Única tarefa com `appsConfiguration` conferida contra o Studio: a de usuário (80). */
-const TAREFA_COM_APP = '80';
+/**
+ * Tarefas com `appsConfiguration`: a comum (80, conferida nos pares) e a de
+ * usuário (81) — o `getProcessAppConfiguration` do Studio lê de qualquer tarefa
+ * (conferido no fluig-localdev).
+ */
+const TAREFAS_COM_APP = new Set(['80', '81']);
 /** `appKey` e `appField` que aparecem nos pares; `approve` e `reject` guardam um número (vazio ou sequence). */
 const APP_CHAVE = 'approval';
 const APP_CAMPOS = ['title', 'description', 'highlight', 'approve', 'reject'];
@@ -159,7 +167,7 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
     // Prazo do processo em minutos, como o das tarefas: vira segundos (1 par: 2160 → 129600, 1440 → 86400).
     'deadlineTime', 'warningTime',
     // Conferidos no HML (03/10/2026), sem par: ver lerSegurancaDeAnexos.
-    'notifyManagerComplements', 'controlsAttachmentsSecurity', 'processAttachmentSecurity',
+    'notifyManagerComplements', 'controlsAttachmentsSecurity', 'processAttachmentSecurity', 'activeProcess',
     // Só do Studio: o ecm30 não tem onde guardar, e keyWord sai sempre vazio (118/118).
     'serverId', 'author', 'formSource', 'formType', 'keyWord',
   ],
@@ -180,6 +188,8 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
   BpmnSubProcess: [
     'id', 'name', 'incoming', 'outgoing', 'type', 'process', 'loopType', 'selectColleague', 'transferAttachments',
     'cancelSubProcess', 'sendToNextTaskInSubProcess', 'formMaps',
+    // Só do ad hoc (101); no 100 são recusados (ver SO_DO_ADHOC).
+    'managerMechanism', 'managerAssignmentController', 'instructions', 'initialTask',
   ],
   BpmnEndEvent: ['id', 'name', 'incoming', 'type', 'extendedFields', 'signalId', 'notificaRequisitante'],
   BpmnGateway: ['id', 'name', 'incoming', 'outgoing', 'type', 'extendedFields', 'condition'],
@@ -190,7 +200,7 @@ const ATRIBUTOS_CONHECIDOS: Record<string, string[]> = {
   BpmnAnnotation: ['id', 'name', 'outgoing', 'type'],
   SequenceFlow: [
     'id', 'name', 'sourceRef', 'targetRef', 'atividadeFluxo', 'atividadeRetorno', 'extendedFields',
-    'fluxoAutomatico', 'permiteRetorno', 'defaultLink', ...MOVIMENTO,
+    'fluxoAutomatico', 'permiteRetorno', 'defaultLink', 'expression', ...MOVIMENTO,
   ],
   BpmnPool: ['id', 'name', 'cores'],
   BpmnSwimLane: ['id', 'name', 'cores'],
@@ -558,6 +568,15 @@ function atribuicaoAssociada(mecanismo: string, blob: string, idsPorSufixo: (id:
   if (!raiz || raiz.nome !== `${PREFIXO_ATRIBUICAO}AssignmentControllerAssociated` || Object.keys(raiz.attrs).length > 0) {
     return undefined;
   }
+  return associadaDoNo(mecanismo, raiz, idsPorSufixo);
+}
+
+/**
+ * O "Associado" a partir do nó já lido: o blob da tarefa (raiz com o nome da
+ * classe) ou a `mecanismoAtribuicaoConfiguracao` do caminho de gateway (com
+ * `class`). O Studio monta os dois com o mesmo `getEngineAllocationConfiguration`.
+ */
+function associadaDoNo(mecanismo: string, raiz: No, idsPorSufixo: (id: string) => number): Atribuicao | undefined {
   const nomes = raiz.filhos.map((f) => f.nome).sort().join(',');
   if (nomes !== 'controllers,mechanismName,type') return undefined;
   const tipo = raiz.filhos.find((f) => f.nome === 'type')!;
@@ -707,7 +726,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     else if (o.tipo === 'BpmnStartEvent' && tipo === '10') inicios.push(o);
     else if (o.tipo === 'BpmnTask' && TAREFAS.has(tipo)) tarefas.push(o);
     else if (o.tipo === 'BpmnIntermediateEvent' && INTERMEDIARIOS.has(tipo)) intermediarios.push(o);
-    else if (o.tipo === 'BpmnSubProcess' && tipo === SUBPROCESSO) subprocessos.push(o);
+    else if (o.tipo === 'BpmnSubProcess' && (tipo === SUBPROCESSO || tipo === SUBPROCESSO_ADHOC)) subprocessos.push(o);
     else if (o.tipo === 'BpmnGateway' && GATEWAYS[tipo] !== undefined) gateways.push(o);
     else if (o.tipo === 'BpmnEndEvent' && FINS.has(tipo)) fins.push(o);
     else if (o.tipo === 'BpmnAnnotation' && tipo === '0') {
@@ -744,13 +763,17 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
         recusar(`${attr}="${valor}" em ${o.attrs['id'] ?? o.tipo}`);
       }
     }
-    // No processo vira os filhos 7 e 13 (abaixo); em outro objeto nunca foi conferido.
+    /*
+     * No processo vira os filhos 7 e 13; no gateway, só linhas do 13 com o sequence
+     * dele (o Studio não aplica nele os nomes especiais de setProcessStateExtendedProperties).
+     * Em tarefa e evento esses nomes mudariam o estado: segue recusado.
+     */
     const ext = o.attrs['extendedFields'];
-    if (o.tipo !== 'BpmnProcess' && ext && !/^<list\s*\/>$/.test(ext.trim())) {
+    if (o.tipo !== 'BpmnProcess' && o.tipo !== 'BpmnGateway' && ext && !/^<list\s*\/>$/.test(ext.trim())) {
       recusar(`propriedades estendidas (extendedFields) em ${o.attrs['id'] ?? o.tipo}`);
     }
-    if (o.attrs['appsConfiguration'] && (o.tipo !== 'BpmnTask' || o.attrs['type'] !== TAREFA_COM_APP)) {
-      recusar(`appsConfiguration em ${o.attrs['id'] ?? o.tipo} (type ${o.attrs['type'] ?? '?'}), só conferido na tarefa 80`);
+    if (o.attrs['appsConfiguration'] && (o.tipo !== 'BpmnTask' || !TAREFAS_COM_APP.has(o.attrs['type'] ?? ''))) {
+      recusar(`appsConfiguration em ${o.attrs['id'] ?? o.tipo} (type ${o.attrs['type'] ?? '?'}), só conferido nas tarefas 80 e 81`);
     }
     if (o.attrs['attachmentRules'] && !REGRA_DE_ANEXO_EM.has(`${o.tipo}:${o.attrs['type']}`)) {
       recusar(`attachmentRules em ${o.attrs['id'] ?? o.tipo} (type ${o.attrs['type'] ?? '?'}), só conferido no início e na tarefa 80`);
@@ -947,20 +970,36 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
    * precisam vir no `.process` (nenhum par mostra o que o Studio grava sem
    * eles); `cancelSubProcess` ausente sai false (3 estados em pares).
    */
+  /*
+   * Ad hoc (101): o Studio parte do subprocesso comum e troca `stateType` (0),
+   * `instruction` (instructions), `initialState` (initialTask), `selectColleague`
+   * e a atribuição (managerMechanism + configuração, nula sem blob); não tem
+   * processo-alvo, então `subProcessId` some. O export do FLUIGADHOC instalado no
+   * fluig-localdev confirma a forma (stateType 0, sem subProcessId, atribuição no
+   * estado).
+   */
   const estadoSubprocesso = (o: ObjetoBpmn): Campo[] => {
     const a = o.attrs;
     const pos = caixa(a['id'] ?? '');
+    const adhoc = a['type'] === SUBPROCESSO_ADHOC;
+    const at = adhoc ? atribuicaoDe(o, a['managerMechanism'], a['managerAssignmentController']) : undefined;
+    const atribuicaoAdhoc: Campo[] = adhoc
+      ? [
+          ['engineAllocationId', at?.id ?? ''],
+          ...(at?.configuracao === undefined ? [] : [['engineAllocationConfiguration', at.configuracao] as Campo]),
+          ['selectColleague', a['selectColleague'] ?? 1],
+          ['initialState', booleano(a['initialTask'], false)],
+        ]
+      : [['engineAllocationId', ''], ['engineAllocationConfiguration', ''], ['initialState', false]];
     return [
       ['processStatePK', pk([['sequence', sufixo(a['id'])]])],
       ['stateName', a['name'] ?? ''],
       ['stateDescription', a['name'] ?? ''],
-      ['instruction', ''],
+      ['instruction', adhoc ? (a['instructions'] ?? '') : ''],
       ['deadlineTime', 0],
       ['joint', false],
       ['agreementPercentage', 0],
-      ['engineAllocationId', ''],
-      ['engineAllocationConfiguration', ''],
-      ['initialState', false],
+      ...atribuicaoAdhoc,
       ['notifyAuthorityDelay', false],
       ['notifyRequisitionerDelay', false],
       ['allowanceAuthorityTime', 0],
@@ -968,7 +1007,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['allowanceRequisitionerTime', 0],
       ['frequenceRequisitionerTime', 0],
       ['transferAttachments', a['transferAttachments'] === 'true'],
-      ['subProcessId', a['process'] ?? ''],
+      ...(adhoc ? [] : [['subProcessId', a['process'] ?? ''] as Campo]),
       ['formFolder', 0],
       ['notifyAuthorityFollowUp', false],
       ['notifyRequisitionerFollowUp', false],
@@ -982,7 +1021,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['allowanceManagerTime', 0],
       ['frequenceManagerTime', 0],
       ['inhibitTransfer', false],
-      ['stateType', 2],
+      ['stateType', adhoc ? 0 : 2],
       ['bpmnType', a['type'] ?? ''],
       ['signalId', 0],
       ['counterSign', false],
@@ -1016,6 +1055,15 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   for (const o of subprocessos) {
     const a = o.attrs;
     const id = a['id'] ?? '';
+    if (a['type'] === SUBPROCESSO_ADHOC) {
+      // O ad hoc não chama outro processo: o que é do subprocesso comum nunca apareceu nele.
+      for (const attr of ['process', 'formMaps', 'transferAttachments', 'cancelSubProcess', 'sendToNextTaskInSubProcess']) {
+        if (a[attr] !== undefined) recusar(`${attr} no subprocesso ad hoc ${id}`);
+      }
+      if (a['initialTask'] !== undefined && a['initialTask'] !== 'true' && a['initialTask'] !== 'false') recusar(`initialTask="${a['initialTask']}" em ${id}`);
+      continue;
+    }
+    for (const attr of SO_DO_ADHOC) if (a[attr] !== undefined) recusar(`${attr} no subprocesso ${id} (só visto no ad hoc)`);
     if (!a['process']) recusar(`subprocesso ${id} sem process`);
     /*
      * O modelo do Studio (BpmnSubProcess.eIsSet, decompilado) só grava os três
@@ -1188,23 +1236,37 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
        * viram os campos de atribuição da condição, no formato do estado (6/6 nos pares).
        */
       const configuracao = filhos(c, CONFIGURACAO_DO_CAMINHO);
-      if (campos.get('mechanism') === '' && configuracao.length === 0) {
+      if (campos.has('mechanism') && configuracao.length === 0) {
         /*
-         * Caminho sem atribuição: o Studio copia o `mechanism` vazio e a
-         * configuração nula some, como na tarefa com mecanismo vazio (87
-         * condições nos `.process`, nenhuma em par; conferido no HML).
+         * Caminho com `mechanism` e sem configuração: o Studio copia o nome e a
+         * configuração nula some. Vazio (87 condições) o servidor libera (HML). Com
+         * nome, não: "Usuário" sem configuração não foi liberado no fluig-localdev
+         * ("possui um mecanismo que não foi configurado") — o diagrama está
+         * incompleto também para o Studio. Recusa antes de criar a versão.
          */
-        condicao.push(['engineAllocationId', '']);
+        const mecanismo = campos.get('mechanism')!;
+        if (mecanismo) {
+          recusar(`mecanismo "${mecanismo}" sem configuração na condição ${ordem} de ${id} (o servidor não libera — configure no Studio)`);
+        } else {
+          condicao.push(['engineAllocationId', '']);
+        }
       } else if (campos.has('mechanism') || configuracao.length > 0) {
         const mecanismo = campos.get('mechanism') ?? '';
-        const cf = configuracao.length === 1 ? folhas(configuracao[0]!) : undefined;
-        const classe = (configuracao[0]?.attrs['class'] ?? '').replace(/^.*\./, '');
-        const at = cf && mecanismo
-          ? atribuicaoLida(mecanismo, { classe, campos: Object.fromEntries(cf) }, sufixo)
-          : undefined;
+        const no = configuracao.length === 1 ? configuracao[0]! : undefined;
+        const classe = (no?.attrs['class'] ?? '').replace(/^.*\./, '');
+        const associado = no && classe === 'AssignmentControllerAssociated' && Object.keys(no.attrs).length === 1;
+        const cf = no && !associado ? folhas(no) : undefined;
+        const at = !mecanismo
+          ? undefined
+          : associado
+            ? associadaDoNo(mecanismo, no, sufixo)
+            : cf
+              ? atribuicaoLida(mecanismo, { classe, campos: Object.fromEntries(cf) }, sufixo)
+              : undefined;
         if (!at || at.configuracao === undefined) {
           recusar(`atribuição ${classe || mecanismo} na condição ${ordem} de ${id}`);
         } else {
+          if (at.aviso) avisos.push(`${at.aviso} (condição ${ordem} de ${id})`);
           condicao.push(['engineAllocationConfiguration', at.configuracao], ['engineAllocationId', at.id ?? '']);
         }
       }
@@ -1322,6 +1384,8 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['defaultLink', booleano(a['defaultLink'], false)],
       ['type', 0],
     ];
+    // Na ordem da classe ProcessLink do Studio: expression vem depois de type e antes dos movement*.
+    if (a['expression'] !== undefined) campos.push(['expression', a['expression']]);
     const movimento = MOVIMENTO.filter((m) => a[m] !== undefined);
     if (movimento.length === MOVIMENTO.length) for (const m of MOVIMENTO) campos.push([m, a[m] ?? '']);
     else if (movimento.length > 0) recusar(`fluxo ${a['id']} com só parte de ${MOVIMENTO.join('/')}`);
@@ -1519,10 +1583,30 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       }
     }
   }
+  for (const o of gateways) {
+    const blob = o.attrs['extendedFields'];
+    if (!blob || /^<list\s*\/>$/.test(blob.trim())) continue;
+    const lido = lerPropriedadesEstendidas(blob);
+    if ('erro' in lido) {
+      recusar(`${lido.erro} em ${o.attrs['id']}`);
+      continue;
+    }
+    for (const e of lido.valor) {
+      propriedadesEstendidas.push([
+        ['extendedPropertyFieldPK', [
+          ['companyId', companyId], ['processId', processId], ['version', versao], ['stateSequence', sufixo(o.attrs['id'])], ['propertyName', e.nome],
+        ]],
+        ['propertyType', e.tipo],
+        ['propertyDescription', e.descricao],
+        ['propertyValue', e.valor],
+        ['isDefaultProperty', e.padrao],
+      ]);
+    }
+  }
   const configuracoesDeApp: Campo[][] = [];
   for (const o of tarefas) {
     const blob = o.attrs['appsConfiguration'];
-    if (!blob || o.attrs['type'] !== TAREFA_COM_APP) continue;
+    if (!blob || !TAREFAS_COM_APP.has(o.attrs['type'] ?? '')) continue;
     const lido = lerAppsConfiguracao(blob, sequenciasDeEstado);
     if ('erro' in lido) {
       recusar(`${lido.erro} em ${o.attrs['id']}`);
@@ -1640,7 +1724,8 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ['processDefinitionPK', [['companyId', companyId], ['processId', processId]]],
     ['processDescription', descricao],
     ['instruction', p['instruction'] ?? ''],
-    ['active', true],
+    // activeProcess: padrão true no modelo do Studio; "false" publica o processo inativo.
+    ['active', booleano(p['activeProcess'], true)],
     ['publicProcess', booleano(p['publicProcess'], false)],
     ['volumeId', p['volume'] ?? ''],
     ['categoryId', p['category'] ?? ''],
@@ -1669,7 +1754,7 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
     ['editionMode', true],
     ['updateAttachmentsVersion', booleano(p['updateAttachment'], false)],
     ['controlsAttachmentsSecurity', booleano(p['controlsAttachmentsSecurity'], false)],
-    ['active', true],
+    ['active', booleano(p['activeProcess'], true)],
     ['blockedVersion', false],
     ['counterSign', false],
     ['openInstances', 0],

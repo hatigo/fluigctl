@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 320 | não | não | — |
+| Testes automatizados | 324 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -65,7 +65,7 @@ e layout.
 | `push form` | pronto |
 | `push widget` | pronto (widgets sem Java) |
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
-| `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 444 de 475 diagramas reais convertem |
+| `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 456 de 475 diagramas reais convertem |
 
 Fora de escopo por enquanto: `pull`, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
@@ -264,7 +264,9 @@ conteúdo antigo continua acessível por `getCardIndexContent`, então
 
 Vão como anexo todos os arquivos da pasta, com o caminho relativo preservado,
 **exceto** `events/` (que vira `customEvents`, em texto puro), o `.metadata` do
-Eclipse e dotfiles. O arquivo principal é o `.html` único da raiz, ou o que
+Eclipse e dotfiles. Anexo com nome fora do ASCII gera aviso: há servidor que
+recusa o formulário inteiro por isso (o Fluig local recusou um `.md` com acento
+no nome), e então o erro diz qual arquivo renomear. O arquivo principal é o `.html` único da raiz, ou o que
 tiver o nome da pasta, ou o que você indicar em `--principal`.
 
 Rodado contra as 657 pastas de formulário reais dos 12 workspaces: 646 lidas
@@ -520,8 +522,7 @@ campos descritores, configuração de app, regras e segurança de anexos,
 propriedades estendidas do processo, esforço previsto, os artefatos de
 documentação (grupo, banco de dados e documento) e as atribuições Grupo,
 Papel, Usuário, Campo, Executor, Grupos Colaborador, Custom e Associado. O que
-não foi conferido — subprocesso ad hoc (101), tarefa de e-mail, banco de dados,
-`BpmnGroup`, entre outros — é recusado com código 6, listando o que falta; nunca
+não foi conferido — gateway inclusivo, tarefa de e-mail, entre outros — é recusado com código 6, listando o que falta; nunca
 sai XML parcial. Os scripts entram no XML quando há
 `workflow/scripts/<arquivo>.*.js` ao lado de `workflow/diagrams/` — `<arquivo>`
 é o nome do `.process` sem a extensão, como no Studio, e não o id do processo
@@ -585,7 +586,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 320 testes, sem rede e sem servidor Fluig
+npm test        # 324 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

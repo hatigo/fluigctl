@@ -604,6 +604,76 @@ nenhum dos 7 `.process` que os usam tem par.
   (41) é recusado com `BPMProcessStateNotFoundException` e a solicitação fica
   intacta: o link existe na definição, mas não é caminho.
 
+**Processo real no Fluig local (03/10/2026).** Primeiro processo de cliente
+publicado só pelo fluigctl: `validacao_minutas` da Cetenco (45 estados — 16
+tarefas de usuário, 9 de serviço com erro anexado, 6 gateways —, 47 links, 30
+bendpoints, 10 scripts), num `fluig-localdev` vazio. Sem mecanismo de atribuição
+nas tarefas; os outros processos da Cetenco dependem do mecanismo customizado
+`MEC_STG_ALCADAS`, que o fluigctl não publica.
+
+- Formulário `formValidacaoMinutas` criado com `push form --create` (documentId
+  10). A primeira tentativa foi recusada pelo servidor: a pasta tinha um `.md` de
+  requisitos com acento no nome, e o servidor local não aceita nome de anexo fora
+  do ASCII ("Malformed input or input contains unmappable characters"). Nada foi
+  criado; sem o `.md`, criou. Depois disso o `push form` passou a avisar de
+  anexo com nome fora do ASCII e a dizer qual arquivo renomear quando o servidor
+  recusa (PR #7).
+- `cardIndex` trocado pelo nome do formulário na cópia de trabalho; o push
+  resolveu pelo nome (formId 10). Versão 1 importada e liberada sem erro.
+- Solicitações 4 e 5: Tipo Contratação (gateway) → Notifica Solicitante (serviço,
+  rodou sem cair no erro) → Aceite da Solicitação (usuário, admin) → Aceite?
+  (gateway) → Notifica Cancelamento (serviço) → Fim, finalizadas. Os gateways do
+  processo têm só uma regra provisória (campo `anexo`, operador 0), que vale com
+  qualquer valor: os outros caminhos não são alcançáveis por dados — é o desenho
+  em desenvolvimento, não a conversão.
+
+**Estado (04/10/2026, 17º corte).** Detalhes pequenos, pela regra do Studio
+decompilado e conferidos no `fluig-localdev` (versões 3 a 6 do `teste_fluigctl`):
+
+- `appsConfiguration` na tarefa 81: o `getProcessAppConfiguration` lê de qualquer
+  tarefa. Aceito em 80 e 81.
+- Propriedades estendidas no gateway: só linhas do filho 13, com o sequence do
+  gateway (o Studio não aplica nele os nomes especiais de
+  `setProcessStateExtendedProperties`, que mudariam o estado). Em tarefa e evento
+  segue recusado.
+- "Associado" em caminho de gateway: mesma montagem da tarefa (o Studio usa o
+  mesmo `getEngineAllocationConfiguration`); OR vai com aviso.
+- `expression` no fluxo → `ProcessLink.expression`, depois de `type` e antes
+  dos `movement*` (ordem da classe).
+- `activeProcess="false"` → `active` false na definição e na versão. O servidor
+  guarda a definição inativa (a versão volta `true`) e recusa abrir solicitação
+  ("O processo … não está ativo!"); republicado ativo, abre de novo.
+- Mecanismo com nome e sem configuração no caminho de gateway: o Studio copia o
+  nome, mas o servidor não libera ("possui um mecanismo que não foi configurado",
+  versão 3). Recusado com código 6 antes de enviar; vazio segue aceito (HML).
+- Solicitação 6 (versão 4): Conferência como tarefa 81 aberta para o admin,
+  gateway nos dois sentidos — no "nao", o "Associado" (Executor Atividade, All)
+  devolveu a Aprovação ao admin —, finalizada.
+- 449/475 `.process` convertem sem recusa (eram 444); gabaritos seguem 67/71. O
+  `helpdesk` segue recusado pelo mecanismo sem configuração.
+
+**Estado (05/10/2026, 18º corte).** Entra o subprocesso ad hoc (101), pela regra
+do `getProcessStatesFromSubProcess` decompilado: parte do subprocesso comum e
+troca `stateType` (0), `instruction` (instructions), `initialState`
+(initialTask), `selectColleague` e a atribuição (managerMechanism + configuração,
+nula sem blob); sem processo-alvo, `subProcessId` some. Atributos do ad hoc no
+subprocesso comum, e do comum no ad hoc, seguem recusados.
+
+- A forma bate com o export do `FLUIGADHOC` de fábrica do `fluig-localdev`
+  (stateType 0, sem subProcessId, "Executor Atividade" com BaseActivity 3 e First
+  no estado). O `transferAttachments` do de fábrica vem `true`, mas ele não foi
+  instalado a partir destes `.process` — vale a regra do Studio (ausente é false).
+- `fluig-localdev` reconfigurado: cópia do `FLUIGADHOC.process` do corpus como
+  `teste_adhoc`, ligada ao formulário `FLUIGADHOC` (3) pelo nome, com o script
+  `afterStateEntry`. Importada e liberada sem erro. Solicitação 1: gateway →
+  Aplicar a Solução → Fim. Solicitação 3, com uma atividade na tabela do
+  formulário (`nomeativ___1`, `hdnrespativ___1`, `dtprazoativ___1`): gateway → ad
+  hoc "Criar Tarefas" (admin, Executor Atividade do início) → o script criou a
+  atividade (solicitação 4, no `FLUIGADHOCPROCESS`), executada e finalizada → ad
+  hoc concluído para Aplicar a Solução → Fim. O servidor só aceita sair do ad hoc
+  pela seta dele (para o fim direto: "Tarefa informada 11 não é válida").
+- 456/475 `.process` convertem sem recusa (eram 449); gabaritos seguem 67/71.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
