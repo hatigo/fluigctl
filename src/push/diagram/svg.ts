@@ -250,7 +250,10 @@ export function gerarSvg(diagrama: Diagrama): string {
       const pontos = `${x} ${m.y} ${m.x} ${y} ${x + w} ${m.y} ${m.x} ${y + h} ${x} ${m.y}`;
       partes.push(`<g sequence="${seq}"><polygon points=" ${pontos}" ${preenchimento} stroke="#${CONTORNO['gateway']}" /></g>`);
       // Paralelo e join: o "+" grosso, fora do <g sequence>, como no Studio; o exclusivo não tem marca.
-      if (o.attrs['type'] !== '120') {
+      // Inclusivo: o círculo do BPMN (desenho próprio, sem SVG do Studio para comparar).
+      if (o.attrs['type'] === '121') {
+        partes.push(`<ellipse cx="${m.x}" cy="${m.y}" rx="12" ry="12" style="fill:none; stroke:#000000; stroke-width:3" />`);
+      } else if (o.attrs['type'] !== '120') {
         partes.push(`<path style="fill:none; stroke-width:6; stroke:#000000;" d="M${m.x - 10}.0 ${m.y}.0 L${m.x + 10}.0 ${m.y}.0" />` +
           `<path style="fill:none; stroke-width:6; stroke:#000000;" d="M${m.x}.0 ${m.y - 10}.0 L${m.x}.0 ${m.y + 10}.0" />`);
       }
