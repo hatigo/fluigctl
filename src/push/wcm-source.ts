@@ -27,8 +27,12 @@ export type TipoWcm = 'widget' | 'layout';
  * `.metadata` e dotfiles ficam de fora, como no push form. Link simbólico
  * recusa o pacote em vez de ser seguido ou omitido em silêncio.
  *
- * Widget com código em `src/main/java` precisa do build do Maven, que compila
- * as classes; empacotar sem elas publicaria uma widget quebrada.
+ * Widget com código Java precisa do build do Maven, que compila as classes — e
+ * nem assim o fluigctl publica: a rota de upload do WCM **recusa** um `.war` com
+ * classes, com "Existe uma declaração de componente repetida na lista de recursos
+ * da widget" (medido no fluig-localdev; o mesmo pacote sem as classes sobe com
+ * 200). Vale para classe solta em `WEB-INF/classes`, para pacote renomeado e
+ * para `.jar` em `WEB-INF/lib`. Java só pelo Fluig Studio.
  *
  * `tipoEsperado` não é decoração: widget e layout são a mesma estrutura e o
  * mesmo pacote, e o que os separa é o `application.type`. Sem a conferência,
@@ -53,16 +57,6 @@ export async function lerWcm(pasta: string, tipoEsperado: TipoWcm): Promise<Font
   }
 
   const tipo = await lerTipo(join(recursos, 'application.info'), pasta, tipoEsperado);
-
-  const java = join(raiz, 'src', 'main', 'java');
-  if ((await ehPasta(java)) && (await coletaArquivos(java, java)).length > 0) {
-    throw new ErroFluigctl(
-      `a widget "${nome}" tem código Java em src/main/java, que precisa do build ` +
-        `do Maven — o fluigctl não compila Java. Publique esta pelo Fluig Studio ou Maven.`,
-      6,
-    );
-  }
-
   const entradas: EntradaZip[] = [];
 
   for (const arquivo of await arquivosDoTopo(webInf, (n) => n.endsWith('.xml'))) {
@@ -73,6 +67,30 @@ export async function lerWcm(pasta: string, tipoEsperado: TipoWcm): Promise<Font
       nome: `WEB-INF/classes/${arquivo}`,
       dados: await readFile(join(recursos, arquivo)),
     });
+  }
+
+  /*
+   * Qualquer arquivo em `src/main/java` recusa o pacote, compilado ou não: a
+   * rota do WCM não aceita widget com Java. Recusar aqui, antes da rede, é
+   * melhor do que deixar o servidor responder "declaração de componente
+   * repetida" — e muito melhor do que empacotar sem as classes, que é o que a
+   * extensão Fluiggers faz (ela mapeia `WEB-INF/classes/<dir>/…` para
+   * `src/main/java` no import e não empacota `src/main/java` no export).
+   */
+  const java = join(raiz, 'src', 'main', 'java');
+  if (await ehPasta(java)) {
+    const arquivos = await coletaArquivos(java, java);
+    if (arquivos.length > 0) {
+      const fontes = arquivos.filter((a) => a.endsWith('.java')).length;
+      throw new ErroFluigctl(
+        `a ${tipoEsperado} "${nome}" tem ${arquivos.length} arquivo(s) Java em ` +
+          `src/main/java (${fontes} deles .java), e o fluigctl não publica ${tipoEsperado} com ` +
+          'Java: a rota de upload do WCM recusa o pacote ("Existe uma declaração de ' +
+          'componente repetida na lista de recursos da widget"). Publique esta pelo ' +
+          'Fluig Studio, ou tire o Java dela.',
+        6,
+      );
+    }
   }
 
   const estaticos = join(raiz, 'src', 'main', 'webapp', 'resources');

@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 396 | não | não | — |
+| Testes automatizados | 397 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -74,7 +74,8 @@ e layout.
 | `push mechanism` / `pull mechanism` (mecanismo de atribuição customizado, `mechanisms/<id>.js`) | pronto |
 
 Fora de escopo por enquanto: `pull` de layout WCM (não há rota no servidor — veja
-"Publicando um layout") e widget com código Java.
+"Publicando um layout") e `push` de widget com código Java (a rota do WCM recusa —
+veja "Widget com Java").
 
 ## Instalação
 
@@ -444,8 +445,8 @@ Diferenças de propósito em relação à extensão:
 - pasta sem `src/main/webapp/WEB-INF` ou sem
   `src/main/resources/application.info` é recusada com código 3;
 - widget com arquivo em `src/main/java` é recusada com código 6, antes de
-  qualquer chamada de rede: as classes precisam do build do Maven, e o
-  `fluigctl` não compila Java. Publique essas pelo Fluig Studio ou Maven.
+  qualquer chamada de rede. Compilado ou não: **a rota de upload do WCM recusa
+  um `.war` com classes** (veja "Widget com Java" abaixo).
 
 `--dry-run` monta o pacote e mostra nome, número de arquivos, tamanho e a URL
 de destino, sem abrir sessão nem enviar nada.
@@ -459,6 +460,41 @@ Rodado (só o empacotamento) contra as 160 entradas de `wcm/widget/` dos
 workspaces: 147 empacotadas, todas aprovadas por `unzip -t`; 7 recusadas por
 terem Java; 6 recusadas por não serem pasta de widget (dois `.zip`, um `.txt`,
 duas pastas só com `target/` e uma sem `WEB-INF`).
+
+## Widget com Java
+
+Não é possível publicar pelo `fluigctl`, e isso foi medido, não suposto.
+
+O `push widget` sempre recusou `src/main/java`, e a primeira versão deste texto
+dizia que era só porque o `fluigctl` não compila Java. Não é só isso: depois de
+compilar, **a rota de upload recusa o pacote**. Testado no fluig-localdev com o
+`DSA_001_java_gestao_contrato` da Doisa, cujas 6 classes estão em
+`src/main/java`:
+
+| pacote enviado | resposta |
+|---|---|
+| o mesmo `.war` **sem** as classes | `200 {"content":"OK"}` |
+| com as classes em `WEB-INF/classes/com/fluig/**` | `500 Existe uma declaração de componente repetida na lista de recursos da widget` |
+| com **uma só** classe | mesmo erro |
+| com o pacote renomeado para `com/exemplo/**` | mesmo erro |
+| com as classes num `.jar` em `WEB-INF/lib` | mesmo erro |
+| com a classe na raiz do `.war` | mesmo erro |
+| com `META-INF/MANIFEST.MF` declarando `Dependencies: org.slf4j, com.fluig.api, com.fluig.api.common` (o que o `pom.xml` do widget declara) | mesmo erro |
+
+Ou seja: a rota não aceita artefato Java em lugar nenhum do pacote. Widget com
+Java é pelo Fluig Studio.
+
+**E não vale empacotar sem as classes para “funcionar”.** É o que a extensão
+Fluiggers faz, e é um defeito dela: no import ela escreve as classes em
+`src/main/java` (`WEB-INF/classes/<pacote>/…` → `src/main/java/<pacote>/…`), e no
+export ela empacota só `WEB-INF/*.xml`, `src/main/resources/*.*` e
+`src/main/webapp/resources/**` — **as classes ficam de fora**. Republicar uma
+widget com Java por ela sobe uma versão sem o Java, em silêncio. O `fluigctl`
+recusa em vez disso.
+
+O `pull widget` continua funcionando para uma widget com Java: o `.war` é baixado
+e desmontado, com as classes em `src/main/java` (e o `pom.xml`, que vem do
+pacote). O que não dá é republicar por aqui.
 
 ## Publicando um layout
 
@@ -734,7 +770,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 396 testes, sem rede e sem servidor Fluig
+npm test        # 397 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
@@ -757,6 +793,8 @@ CETENCO (Fluig 1.8, `4.201.225.233:8021`), criando artefatos descartáveis:
 | O `ping` devolve texto? | Neste servidor devolve `{"response":"pong"}` em JSON. Os dois formatos são aceitos. |
 | O HTML principal precisa de algo? | Sim, uma tag `<form>`. Sem ela o servidor recusa. O push checa antes. |
 | `saveEventList` grava um evento ou a lista? | **A lista inteira.** Mandar um evento apagou o outro que existia. Toda publicação lê, troca a entrada e manda tudo de volta; uma leitura que falha recusa. |
+| A rota do WCM aceita widget com Java? | **Não.** Qualquer `.war` com `.class` (solto, renomeado, ou em `.jar`) volta `500 Existe uma declaração de componente repetida na lista de recursos da widget`. O mesmo pacote sem as classes sobe com `200`. Widget com Java é pelo Studio. |
+| A rota do WCM aceita layout? | **Sim**, o mesmo endpoint da widget, o mesmo pacote. O `layoutExterno` da Cetenco passou a responder `200` em `/layoutExterno/resources/…` (era `404`). |
 | O servidor compila o evento global? | **Sim, na gravação.** Um `.js` com erro de sintaxe volta `500` com `Não foi possível compilar o evento <id> [Erro na linha N]`, e a lista fica intacta. |
 | `createAttributionMechanism` num id que já existe | Recusa com `Código do mecanismo de atribuição já cadastrado`. É por isso que criar é `--create`, e não um upsert silencioso. |
 
