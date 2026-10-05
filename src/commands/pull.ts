@@ -6,6 +6,8 @@ import { ErroFluigctl } from '../errors.js';
 import { cardIndexClient, type CardIndexClient } from '../fluig/cardindex-service.js';
 import { loadDataset, type DatasetNoServidor } from '../fluig/dataset-service.js';
 import { versaoAtiva } from '../fluig/document-service.js';
+import { globalEventClient, type GlobalEventClient } from '../fluig/global-event-service.js';
+import { mechanismClient, type MechanismClient } from '../fluig/mechanism-service.js';
 import { login } from '../fluig/session.js';
 import {
   instalarWidgetHelper,
@@ -144,6 +146,119 @@ export async function pullDiagram(opcoes: OpcoesPullDiagram): Promise<ResultadoP
   const arquivo = join(opcoes.pastaWorkflow, 'diagrams', `${nome}.process`);
   const convertido = gerarProcess(exportado, nome);
   return { ...aplicarPull('.', [{ caminho: arquivo, conteudo: convertido.process }], opcoes), arquivo };
+}
+
+export interface OpcoesPullEvento {
+  server: Server;
+  senha: string;
+  /** `eventId`; sem ele, baixa todos os eventos globais do servidor. */
+  eventId?: string;
+  /** Raiz do repositório (padrão: a pasta atual). */
+  raiz?: string;
+  dryRun?: boolean;
+  sobrescrever?: boolean;
+  /** Para testes. */
+  cliente?: GlobalEventClient;
+}
+
+export interface ResultadoPullEvento extends ResultadoPull {
+  /** Os eventos baixados, com o arquivo de cada um. */
+  eventos: { eventId: string; arquivo: string }[];
+}
+
+/**
+ * Eventos globais do servidor para `events/<eventId>.js` — o mesmo arquivo que o
+ * `push event` lê. Sem `eventId`, traz todos: o servidor não tem paginação nem
+ * filtro, e a lista costuma ser curta.
+ */
+export async function pullEvent(opcoes: OpcoesPullEvento): Promise<ResultadoPullEvento> {
+  const raiz = opcoes.raiz ?? '.';
+  const cliente =
+    opcoes.cliente ??
+    (await globalEventClient(
+      serverUrl(opcoes.server),
+      opcoes.server.companyId,
+      opcoes.server.username,
+      opcoes.senha,
+    ));
+
+  const disponiveis = await cliente.listar();
+  const escolhidos =
+    opcoes.eventId === undefined ? disponiveis : disponiveis.filter((e) => e.eventId === opcoes.eventId);
+  if (escolhidos.length === 0) {
+    throw new ErroFluigctl(
+      `não existe evento global "${opcoes.eventId}" em ${serverUrl(opcoes.server)}. ` +
+        (disponiveis.length
+          ? `Os que existem: ${disponiveis.map((e) => e.eventId).sort().join(', ')}.`
+          : 'O servidor não tem nenhum evento global.'),
+      3,
+    );
+  }
+
+  const eventos = escolhidos.map((e) => ({ eventId: e.eventId, arquivo: join('events', `${e.eventId}.js`) }));
+  const arquivos: ArquivoBaixado[] = escolhidos.map((e, i) => ({
+    caminho: eventos[i]!.arquivo,
+    conteudo: e.codigo,
+  }));
+  return { ...aplicarPull(raiz, arquivos, opcoes), eventos };
+}
+
+export interface OpcoesPullMecanismo {
+  server: Server;
+  senha: string;
+  /** `attributionMecanismId`; sem ele, baixa todos os customizados do servidor. */
+  mecanismoId?: string;
+  raiz?: string;
+  dryRun?: boolean;
+  sobrescrever?: boolean;
+  /** Para testes. */
+  cliente?: MechanismClient;
+}
+
+export interface ResultadoPullMecanismo extends ResultadoPull {
+  mecanismos: { mecanismoId: string; arquivo: string }[];
+}
+
+/**
+ * Mecanismos de atribuição customizados para `mechanisms/<id>.js`. O nome e a
+ * descrição de cada um ficam no servidor e não têm onde ir no repositório; vão
+ * como aviso, para não sumirem sem ninguém ver.
+ */
+export async function pullMechanism(opcoes: OpcoesPullMecanismo): Promise<ResultadoPullMecanismo> {
+  const raiz = opcoes.raiz ?? '.';
+  const cliente =
+    opcoes.cliente ??
+    (await mechanismClient(
+      serverUrl(opcoes.server),
+      opcoes.server.companyId,
+      opcoes.server.username,
+      opcoes.senha,
+    ));
+
+  const disponiveis = await cliente.listar();
+  const escolhidos =
+    opcoes.mecanismoId === undefined
+      ? disponiveis
+      : disponiveis.filter((m) => m.mecanismoId === opcoes.mecanismoId);
+  if (escolhidos.length === 0) {
+    throw new ErroFluigctl(
+      `não existe mecanismo de atribuição customizado "${opcoes.mecanismoId}" em ${serverUrl(opcoes.server)}. ` +
+        (disponiveis.length
+          ? `Os que existem: ${disponiveis.map((m) => m.mecanismoId).sort().join(', ')}.`
+          : 'O servidor não tem nenhum mecanismo customizado.'),
+      3,
+    );
+  }
+
+  const mecanismos = escolhidos.map((m) => ({
+    mecanismoId: m.mecanismoId,
+    arquivo: join('mechanisms', `${m.mecanismoId}.js`),
+  }));
+  const arquivos: ArquivoBaixado[] = escolhidos.map((m, i) => ({
+    caminho: mecanismos[i]!.arquivo,
+    conteudo: m.codigo,
+  }));
+  return { ...aplicarPull(raiz, arquivos, opcoes), mecanismos };
 }
 
 export interface OpcoesPullWidget {

@@ -44,6 +44,7 @@ test('traduz o working tree em artefatos e comandos, um por artefato', () => {
     escreve(r, 'workflow/scripts/reembolso.servicetask20.js', '// b');
     escreve(r, 'workflow/scripts/reembolso.beforeStateEntry.js', '// novo');
     escreve(r, 'events/afterProcessCreate.js', '// global');
+    escreve(r, 'mechanisms/MEC_ALCADAS.js', 'function resolve() {}');
 
     const { artefatos } = changedArtifacts(r);
     const linhas = artefatos.map((a) => comandoSugerido(a, 'hml'));
@@ -52,7 +53,8 @@ test('traduz o working tree em artefatos e comandos, um por artefato', () => {
       'fluigctl push dataset datasets/reembolso/dsFoo.js --server hml --dry-run',
       'fluigctl push form forms/formBar/ --server hml --new-version --dry-run',
       'fluigctl push process reembolso --server hml --dry-run',
-      '# events/afterProcessCreate.js: evento global, mecanismo e layout ainda não são publicados pelo fluigctl',
+      'fluigctl push event events/afterProcessCreate.js --server hml --dry-run',
+      'fluigctl push mechanism mechanisms/MEC_ALCADAS.js --server hml --dry-run',
     ]);
 
     const form = artefatos.find((a) => a.tipo === 'form');

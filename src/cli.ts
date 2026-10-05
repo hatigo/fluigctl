@@ -13,10 +13,22 @@ import {
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushDiagram } from './commands/push-diagram.js';
+import { eventIdDoArquivo, pushEvent } from './commands/push-event.js';
 import { pushForm } from './commands/push-form.js';
+import { mecanismoIdDoArquivo, pushMechanism } from './commands/push-mechanism.js';
 import { pushProcess } from './commands/push-process.js';
 import { pushWidget } from './commands/push-widget.js';
-import { pullDataset, pullDiagram, pullForm, pullProcess, pullWidget, listarWidgets, type ResultadoPull } from './commands/pull.js';
+import {
+  pullDataset,
+  pullDiagram,
+  pullEvent,
+  pullForm,
+  pullMechanism,
+  pullProcess,
+  pullWidget,
+  listarWidgets,
+  type ResultadoPull,
+} from './commands/pull.js';
 import { importCandidates, scanServersJson } from './import.js';
 import { gravarNoEnv } from './env-file.js';
 import { avisoGit, garantirIgnorado } from './gitignore.js';
@@ -56,6 +68,10 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
                               [--create] [--no-release]
       converte o diagrama no XML que o servidor importa e publica: nova versão, import e liberação;
       --create cria o processo que não existe no destino. O --dry-run converte sem rede e sem senha
+  fluigctl push event <events/<id>.js> --server <nome> [--dry-run]
+      publica o evento global; o id sai do nome do arquivo
+  fluigctl push mechanism <mechanisms/<id>.js> --server <nome> [--create] [--name N] [--description D] [--dry-run]
+      publica o mecanismo de atribuição customizado; --create cria o que não existe no destino
 
   fluigctl pull process <processId> --server <nome> [--workflow <pasta>] [--dry-run] [--overwrite]
       baixa os scripts do processo publicado para workflow/scripts/ (mesmo prefixo do push process)
@@ -68,6 +84,10 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl pull widget [<code>] --server <nome> [--dry-run] [--overwrite] [--instalar-helper]
       baixa a widget instalada para wcm/widget/<code>; sem o código, lista as instaladas
       a leitura passa pela widget auxiliar do Fluiggers — --instalar-helper a publica no servidor
+  fluigctl pull event [<eventId>] --server <nome> [--dry-run] [--overwrite]
+      baixa os eventos globais para events/<eventId>.js; sem o id, traz todos os do servidor
+  fluigctl pull mechanism [<id>] --server <nome> [--dry-run] [--overwrite]
+      baixa os mecanismos customizados para mechanisms/<id>.js; sem o id, traz todos
       Só lê do servidor. Arquivo local diferente do servidor só é trocado com --overwrite;
       sem ele, se algum diferir, nada é gravado
 
@@ -291,15 +311,17 @@ async function comandoServer(argv: string[]): Promise<void> {
 
 async function comandoPush(argv: string[]): Promise<void> {
   const tipo = argv[0];
-  if (tipo !== 'dataset' && tipo !== 'form' && tipo !== 'process' && tipo !== 'widget' && tipo !== 'diagram') {
+  if (!ehTipoPush(tipo)) {
     throw new ErroFluigctl(
-      `push aceita "dataset", "form", "process", "widget" ou "diagram" — recebi "${tipo ?? ''}"`,
+      `push aceita "dataset", "form", "process", "widget", "diagram", "event" ou "mechanism" — recebi "${tipo ?? ''}"`,
       2,
     );
   }
   if (tipo === 'process') return pushProcessCli(argv.slice(1));
   if (tipo === 'widget') return pushWidgetCli(argv.slice(1));
   if (tipo === 'diagram') return pushDiagramCli(argv.slice(1));
+  if (tipo === 'event') return pushEventCli(argv.slice(1));
+  if (tipo === 'mechanism') return pushMechanismCli(argv.slice(1));
 
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
@@ -526,6 +548,106 @@ async function pushProcessCli(argv: string[]): Promise<void> {
   );
 }
 
+const TIPOS_PUSH = ['dataset', 'form', 'process', 'widget', 'diagram', 'event', 'mechanism'] as const;
+type TipoPush = (typeof TIPOS_PUSH)[number];
+const ehTipoPush = (t: string | undefined): t is TipoPush =>
+  t !== undefined && (TIPOS_PUSH as readonly string[]).includes(t);
+
+async function pushEventCli(argv: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+
+  const arquivo = positionals[0];
+  if (!arquivo || !values.server) {
+    throw new ErroFluigctl('uso: fluigctl push event <events/<id>.js> --server <nome> [--dry-run]', 2);
+  }
+
+  const servidor = resolveServer(loadConfig(), values.server);
+  const senha = resolvePassword(servidor);
+
+  const r = await pushEvent({
+    server: servidor,
+    senha,
+    arquivo,
+    dryRun: values['dry-run'],
+    prompt: promptPassword,
+  });
+
+  const alvo = `${values.server} (${serverUrl(servidor)})`;
+  const acao = r.novo ? 'criado' : 'atualizado';
+  if (values['dry-run']) {
+    console.log(
+      `[dry-run] evento global ${r.eventId} seria ${acao} em ${alvo} — ${r.bytes} bytes` +
+        (r.novo ? '' : r.jaIgual ? ' (o servidor já tem este código)' : ' (código diferente do servidor)') +
+        `. O servidor ficaria com ${r.eventos} evento(s). Nada foi enviado.`,
+    );
+    return;
+  }
+  console.log(`evento global ${r.eventId} ${acao} em ${alvo} — ${r.bytes} bytes; o servidor tem ${r.eventos}.`);
+  if (r.conferido === true) console.log('  conferido: o servidor devolve o código local.');
+  if (r.conferido === false) {
+    throw new ErroFluigctl(`o servidor aceitou, mas o código que ele devolve NÃO é o local.`, 7);
+  }
+}
+
+async function pushMechanismCli(argv: string[]): Promise<void> {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      create: { type: 'boolean', default: false },
+      name: { type: 'string' },
+      description: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+
+  const arquivo = positionals[0];
+  if (!arquivo || !values.server) {
+    throw new ErroFluigctl(
+      'uso: fluigctl push mechanism <mechanisms/<id>.js> --server <nome> [--create] [--name N] [--description D] [--dry-run]',
+      2,
+    );
+  }
+
+  const servidor = resolveServer(loadConfig(), values.server);
+  const senha = resolvePassword(servidor);
+
+  const r = await pushMechanism({
+    server: servidor,
+    senha,
+    arquivo,
+    criar: values.create,
+    ...(values.name === undefined ? {} : { nome: values.name }),
+    ...(values.description === undefined ? {} : { descricao: values.description }),
+    dryRun: values['dry-run'],
+    prompt: promptPassword,
+  });
+
+  const alvo = `${values.server} (${serverUrl(servidor)})`;
+  const acao = r.acao === 'create' ? 'criado' : 'atualizado';
+  if (values['dry-run']) {
+    console.log(
+      `[dry-run] mecanismo ${r.mecanismoId} seria ${acao} em ${alvo} — ${r.bytes} bytes` +
+        (r.jaIgual === undefined ? '' : r.jaIgual ? ' (o servidor já tem este código)' : ' (código diferente do servidor)') +
+        `. nome "${r.nome}", descrição "${r.descricao}". Nada foi enviado.`,
+    );
+    return;
+  }
+  console.log(`mecanismo ${r.mecanismoId} ${acao} em ${alvo} — ${r.bytes} bytes.`);
+  if (r.conferido === true) console.log('  conferido: o servidor devolve o código local.');
+  if (r.conferido === false) {
+    throw new ErroFluigctl(`o servidor aceitou, mas o código que ele devolve NÃO é o local.`, 7);
+  }
+}
+
 async function pushWidgetCli(argv: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
     args: argv,
@@ -620,7 +742,7 @@ async function pushDiagramCli(argv: string[]): Promise<void> {
   );
 }
 
-const TIPOS_PULL = ['process', 'dataset', 'form', 'diagram', 'widget'] as const;
+const TIPOS_PULL = ['process', 'dataset', 'form', 'diagram', 'widget', 'event', 'mechanism'] as const;
 type TipoPull = (typeof TIPOS_PULL)[number];
 const ehTipoPull = (t: string | undefined): t is TipoPull =>
   t !== undefined && (TIPOS_PULL as readonly string[]).includes(t);
@@ -632,7 +754,9 @@ async function comandoPull(argv: string[]): Promise<void> {
     '     fluigctl pull dataset <nome> --server <nome> [--dry-run] [--overwrite]\n' +
     '     fluigctl pull form <pasta/> --server <nome> [--document-id N] [--dry-run] [--overwrite]\n' +
     '     fluigctl pull diagram <processId> --server <nome> [--workflow <pasta>] [--name <nome>] [--dry-run] [--overwrite]\n' +
-    '     fluigctl pull widget [<code>] --server <nome> [--dry-run] [--overwrite] [--instalar-helper]';
+    '     fluigctl pull widget [<code>] --server <nome> [--dry-run] [--overwrite] [--instalar-helper]\n' +
+    '     fluigctl pull event [<eventId>] --server <nome> [--dry-run] [--overwrite]\n' +
+    '     fluigctl pull mechanism [<id>] --server <nome> [--dry-run] [--overwrite]';
   if (!ehTipoPull(tipo)) throw new ErroFluigctl(uso, 2);
 
   const { values, positionals } = parseArgs({
@@ -649,14 +773,23 @@ async function comandoPull(argv: string[]): Promise<void> {
     },
   });
   const nome = positionals[0];
-  if (!values.server || (!nome && tipo !== 'widget')) throw new ErroFluigctl(uso, 2);
+  if (!values.server || (!nome && !['widget', 'event', 'mechanism'].includes(tipo))) throw new ErroFluigctl(uso, 2);
 
   const servidor = resolveServer(loadConfig(), values.server);
   const senha = resolvePassword(servidor);
   const comum = { server: servidor, senha, dryRun: values['dry-run'], sobrescrever: values.overwrite };
 
   let r: ResultadoPull;
-  console.log(`${nome ?? 'widgets'} de ${values.server} (${serverUrl(servidor)})`);
+  const plural: Record<TipoPull, string> = {
+    process: 'processos',
+    dataset: 'datasets',
+    form: 'formulários',
+    diagram: 'diagramas',
+    widget: 'widgets',
+    event: 'eventos globais',
+    mechanism: 'mecanismos de atribuição',
+  };
+  console.log(`${nome ?? plural[tipo]} de ${values.server} (${serverUrl(servidor)})`);
   if (tipo === 'widget') {
     // Sem código é só listagem: o equivalente CLI do seletor da extensão.
     if (!nome) {
@@ -685,6 +818,22 @@ async function comandoPull(argv: string[]): Promise<void> {
       console.log('  o processo publicado não tem scripts.');
       return;
     }
+  } else if (tipo === 'event') {
+    const e = await pullEvent({
+      ...comum,
+      raiz: '.',
+      ...(nome === undefined ? {} : { eventId: nome }),
+    });
+    console.log(`  evento(s)  ${e.eventos.map((x) => x.eventId).join(', ')}`);
+    r = e;
+  } else if (tipo === 'mechanism') {
+    const m = await pullMechanism({
+      ...comum,
+      raiz: '.',
+      ...(nome === undefined ? {} : { mecanismoId: nome }),
+    });
+    console.log(`  mecanismo(s)  ${m.mecanismos.map((x) => x.mecanismoId).join(', ')}`);
+    r = m;
   } else if (tipo === 'diagram') {
     r = await pullDiagram({
       ...comum, processId: nome!, pastaWorkflow: values.workflow,

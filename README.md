@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 343 | não | não | — |
+| Testes automatizados | 388 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -69,9 +69,10 @@ e layout.
 | `pull process` / `pull dataset` / `pull form` (scripts de processo, código de dataset, anexos e eventos de formulário) | pronto |
 | `pull diagram` (definição publicada → `.process`) | pronto: estados, atribuições, gateways, eventos, subprocessos, propriedades/configurações avançadas, componentes gráficos, raias, fluxos e bendpoints |
 | `pull widget` (widget instalada → `wcm/widget/<code>`) | pronto; lê pela widget auxiliar do Fluiggers, que o `--instalar-helper` publica |
+| `push event` / `pull event` (evento global, `events/<id>.js`) | pronto |
+| `push mechanism` / `pull mechanism` (mecanismo de atribuição customizado, `mechanisms/<id>.js`) | pronto |
 
-Fora de escopo por enquanto: layout WCM, widget com código Java,
-evento global e mecanismo de atribuição.
+Fora de escopo por enquanto: layout WCM e widget com código Java.
 
 ## Instalação
 
@@ -125,6 +126,9 @@ fluigctl push form forms/formReembolso/ --server cetenco-hml --keep-version
 
 fluigctl push process reembolso --server cetenco-hml --dry-run
 fluigctl push widget wcm/widget/wdgAniversariantes --server cetenco-hml --dry-run
+
+fluigctl push event events/afterProcessCreate.js --server cetenco-hml --dry-run
+fluigctl push mechanism mechanisms/MEC_ALCADAS.js --server cetenco-hml --dry-run
 
 # trazer um diagrama simples publicado de volta para um arquivo do Studio
 fluigctl pull diagram reembolso --server cetenco-hml --dry-run
@@ -314,8 +318,7 @@ versão anterior e sugere `--new-version` quando há campo novo. Para diagrama
 alterado sugere `push diagram`, que já publica os scripts do processo — por isso
 os scripts dele não ganham um `push process` à parte, que criaria outra versão.
 Os arquivos de `workflow/.resources` (gerados pelo Studio ao exportar) aparecem só
-como informação. Evento global, mecanismo e layout aparecem com o motivo de não
-serem publicados aqui.
+como informação. Layout WCM aparece com o motivo de não ser publicado aqui.
 
 ## Baixando do servidor
 
@@ -326,6 +329,8 @@ fluigctl pull dataset dsFoo --server cetenco-hml
 fluigctl pull form forms/formFoo --server cetenco-hml --dry-run
 fluigctl pull widget --server cetenco-hml                       # lista as instaladas
 fluigctl pull widget wdgAniversariantes --server cetenco-hml --dry-run
+fluigctl pull event --server cetenco-hml                        # todos os eventos globais
+fluigctl pull mechanism MEC_ALCADAS --server cetenco-hml --dry-run
 ```
 
 O caminho inverso do push, para trazer ao repositório o que alguém publicou
@@ -352,6 +357,40 @@ direto no servidor. Só lê do servidor.
   código, o comando só lista as widgets instaladas. As entradas do `.war` que não
   têm lugar na pasta (o `META-INF/MANIFEST.MF`, que o empacotamento refaz) são
   listadas na saída, nunca descartadas em silêncio.
+- `pull event` e `pull mechanism` trazem os eventos globais para
+  `events/<eventId>.js` e os mecanismos customizados para `mechanisms/<id>.js` —
+  os mesmos arquivos que o `push` lê. Sem o id, trazem todos. O nome e a
+  descrição de um mecanismo ficam no servidor e não têm onde ir no repositório,
+  então o `push` os preserva de lá.
+
+### Publicando evento global e mecanismo de atribuição
+
+Duas famílias que não vêm do Studio: o evento global é um `.js` solto em
+`events/`, e o mecanismo customizado é um `.js` com `resolve(process, colleague)`
+em `mechanisms/`. As duas publicam por REST, como o dataset:
+
+```sh
+fluigctl push event events/afterProcessCreate.js --server cetenco-hml --dry-run
+fluigctl push mechanism mechanisms/MEC_ALCADAS.js --server cetenco-hml --dry-run
+```
+
+**O `saveEventList` do Fluig substitui a lista inteira de eventos globais.** Não
+existe rota para gravar um evento só: mandar um apagou o outro, medido no
+fluig-localdev. Por isso toda publicação lê a lista, troca a entrada e manda a
+lista de volta — e uma leitura que falha **recusa** em vez de virar lista vazia,
+que apagaria todos os eventos do cliente. A extensão Fluiggers, que faz o mesmo
+caminho, devolve lista vazia quando a leitura falha: é por aí que ela perde os
+eventos dos outros.
+
+Um mecanismo tem campos que não vêm de arquivo nenhum — `name`, `description`,
+`controlClass`, `assignmentType`, `configurationClass`. No update o corpo é o
+objeto que o servidor devolveu, com só o código trocado; `--name` e
+`--description` são a exceção explícita. Criar é `--create`, e sem `--name` o nome
+fica sendo o id.
+
+Depois de enviar, os dois conferem: releem e comparam com o arquivo local, como o
+`push dataset` faz. O evento global é **compilado pelo servidor** na gravação, e o
+erro de sintaxe volta com o nome do evento e a linha.
 
 ### Lendo widget: a widget auxiliar do Fluiggers
 
@@ -666,7 +705,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 343 testes, sem rede e sem servidor Fluig
+npm test        # 388 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
@@ -688,6 +727,9 @@ CETENCO (Fluig 1.8, `4.201.225.233:8021`), criando artefatos descartáveis:
 | `versionOption` "0" e "2" | "0" mantém a versão, "2" cria a próxima. A numeração anda de mil em mil (1000 → 2000), não de um em um. |
 | O `ping` devolve texto? | Neste servidor devolve `{"response":"pong"}` em JSON. Os dois formatos são aceitos. |
 | O HTML principal precisa de algo? | Sim, uma tag `<form>`. Sem ela o servidor recusa. O push checa antes. |
+| `saveEventList` grava um evento ou a lista? | **A lista inteira.** Mandar um evento apagou o outro que existia. Toda publicação lê, troca a entrada e manda tudo de volta; uma leitura que falha recusa. |
+| O servidor compila o evento global? | **Sim, na gravação.** Um `.js` com erro de sintaxe volta `500` com `Não foi possível compilar o evento <id> [Erro na linha N]`, e a lista fica intacta. |
+| `createAttributionMechanism` num id que já existe | Recusa com `Código do mecanismo de atribuição já cadastrado`. É por isso que criar é `--create`, e não um upsert silencioso. |
 
 **Continua sem cobertura:** a mudança de autenticação do Fluig 1.8.2 em
 servidores que a tenham, e o comportamento em versões diferentes de 1.8.

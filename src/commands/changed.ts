@@ -20,6 +20,8 @@ export type Artefato =
   /** Gerado pelo Studio ao exportar (`workflow/.resources`): não é fonte de publicação. */
   | { tipo: 'gerado'; arquivo: string }
   | { tipo: 'widget'; pasta: string }
+  | { tipo: 'event'; eventId: string; arquivo: string }
+  | { tipo: 'mechanism'; mecanismoId: string; arquivo: string }
   | { tipo: 'nao-suportado'; arquivo: string; motivo: string };
 
 function git(raiz: string, args: string[]): string {
@@ -101,6 +103,8 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
   const forms = new Set<string>();
   const processos = new Map<string, Set<string>>();
   const widgets = new Set<string>();
+  const eventosGlobais = new Map<string, string>();
+  const mecanismos = new Map<string, string>();
   /** Diagramas alterados, pelo nome do arquivo sem `.process` — o prefixo dos scripts no Studio. */
   const diagramas = new Map<string, string>();
   const outros: Artefato[] = [];
@@ -126,11 +130,16 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
       outros.push({ tipo: 'gerado', arquivo });
     } else if (partes[0] === 'wcm' && partes[1] === 'widget' && partes.length >= 4) {
       widgets.add(`wcm/widget/${partes[2]}`);
-    } else if (['events', 'mechanisms'].includes(partes[0]!) || (partes[0] === 'wcm' && partes[1] === 'layout')) {
+    } else if (partes[0] === 'events' && arquivo.endsWith('.js')) {
+      // O id vem do nome do arquivo, como no `mechanisms/`; o Studio grava raso, mas subpasta também vale.
+      eventosGlobais.set(partes.at(-1)!.replace(/\.js$/, ''), arquivo);
+    } else if (partes[0] === 'mechanisms' && arquivo.endsWith('.js')) {
+      mecanismos.set(partes.at(-1)!.replace(/\.js$/, ''), arquivo);
+    } else if (partes[0] === 'wcm' && partes[1] === 'layout') {
       outros.push({
         tipo: 'nao-suportado',
         arquivo,
-        motivo: 'evento global, mecanismo e layout ainda não são publicados pelo fluigctl',
+        motivo: 'layout WCM ainda não é publicado pelo fluigctl',
       });
     }
   }
@@ -154,6 +163,12 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
       eventos: [...(processos.get(prefixo) ?? [])].sort(),
     })),
     ...[...widgets].sort().map((pasta): Artefato => ({ tipo: 'widget', pasta })),
+    ...[...eventosGlobais].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(
+      ([eventId, arquivo]): Artefato => ({ tipo: 'event', eventId, arquivo }),
+    ),
+    ...[...mecanismos].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(
+      ([mecanismoId, arquivo]): Artefato => ({ tipo: 'mechanism', mecanismoId, arquivo }),
+    ),
     ...outros,
   ];
 }
@@ -177,6 +192,10 @@ export function comandoSugerido(a: Artefato, servidor: string): string {
       return `fluigctl push process ${a.processId} ${s} --dry-run`;
     case 'widget':
       return `fluigctl push widget ${a.pasta} ${s} --dry-run`;
+    case 'event':
+      return `fluigctl push event ${a.arquivo} ${s} --dry-run`;
+    case 'mechanism':
+      return `fluigctl push mechanism ${a.arquivo} ${s} --dry-run`;
     case 'diagram':
       return `fluigctl push diagram ${a.arquivo} ${s} --dry-run` + (a.eventos.length > 0 ? `   # inclui os scripts ${a.eventos.join(', ')}` : '');
     case 'gerado':
