@@ -128,6 +128,122 @@ test('conversão inversa recompõe condições e regras do gateway no blob XStre
   assert.match(gateway.attrs.condition!, /<field>valor<\/field>/);
 });
 
+/** Definição ECM 3.0 mínima, com os filhos na ordem que o Studio usa. */
+function definicao(filhos: Record<string, string>): string {
+  const corpo = (nome: string) => `<list>${filhos[nome] ?? ''}</list>`;
+  return `<list>
+    <ProcessDefinition><processDefinitionPK><companyId>1</companyId><processId>p</processId></processDefinitionPK><processDescription>P</processDescription></ProcessDefinition>
+    <ProcessDefinitionVersion><processDefinitionVersionPK><version>2</version></processDefinitionVersionPK></ProcessDefinitionVersion>
+    ${corpo('estados')}
+    ${corpo('condicoes')}
+    ${corpo('links')}
+    ${corpo('seguranca')}
+    ${corpo('eventos')}
+    ${corpo('avancadas')}
+    ${corpo('raias')}
+    ${corpo('graficos')}
+    ${corpo('associacoes')}
+    ${corpo('bends')}
+    ${corpo('gatilhos')}
+    ${corpo('estendidas')}
+    ${corpo('descritores')}
+    ${corpo('servicos')}
+    ${corpo('relacoes')}
+    ${corpo('apps')}
+    ${corpo('regrasAnexo')}
+    ${corpo('regrasCondicao')}
+  </list>`;
+}
+
+const estado = (seq: number, tipo: number, extra = '') =>
+  `<ProcessState><processStatePK><sequence>${seq}</sequence></processStatePK><stateName>E${seq}</stateName><positionX>${10 * seq}</positionX><positionY>20</positionY><bpmnType>${tipo}</bpmnType>${extra}</ProcessState>`;
+const link = (seq: number, de: number, para: number, extra = '') =>
+  `<ProcessLink><processLinkPK><linkSequence>${seq}</linkSequence></processLinkPK><initialStateSequence>${de}</initialStateSequence><finalStateSequence>${para}</finalStateSequence>${extra}</ProcessLink>`;
+
+/** Devolve o objeto do `.process` com o id dado. */
+function objeto(texto: string, id: string) {
+  const achado = lerDiagrama(texto).objetos.find((o) => o.attrs['id'] === id);
+  assert.ok(achado, `esperava ${id} no .process gerado`);
+  return achado;
+}
+
+test('subprocesso volta com process, os booleanos e o formMaps do relacionamento', () => {
+  const xml = definicao({
+    estados: estado(1, 100, '<transferAttachments>true</transferAttachments><subProcessId>outro</subProcessId><sendToNextTaskInSubProcess>true</sendToNextTaskInSubProcess>'),
+    relacoes: '<SubProcessFieldRelationship><processCode>p</processCode><stateSequence>1</stateSequence><processField>a</processField><subProcessField>b</subProcessField><mapFlow>1</mapFlow></SubProcessFieldRelationship>',
+  });
+  const sub = objeto(gerarProcess(xml).process, 'subprocess1');
+  assert.equal(sub.attrs['process'], 'outro');
+  assert.equal(sub.attrs['transferAttachments'], 'true');
+  assert.equal(sub.attrs['sendToNextTaskInSubProcess'], 'true');
+  assert.match(sub.attrs['formMaps']!, /<processField>a<\/processField>/);
+  assert.match(sub.attrs['formMaps']!, /<mapFlow>1<\/mapFlow>/);
+});
+
+test('segurança de anexos volta como o blob ECMProcessAttachmentSecurityImpl', () => {
+  const xml = definicao({
+    estados: estado(1, 80),
+    seguranca: '<ProcessAttachmentSecurity><processAttachmentSecurityPK><sequence>1</sequence></processAttachmentSecurityPK>' +
+      '<engineAllocationId>Grupo</engineAllocationId><engineAllocationConfiguration>&lt;AssignmentController&gt;&lt;Group&gt;G&lt;/Group&gt;&lt;/AssignmentController&gt;</engineAllocationConfiguration>' +
+      '<accessLevel>PR</accessLevel><editionMode>false</editionMode></ProcessAttachmentSecurity>',
+  });
+  const proc = objeto(gerarProcess(xml).process, 'p');
+  assert.match(proc.attrs['processAttachmentSecurity']!, /<sequence>1<\/sequence>/);
+  assert.match(proc.attrs['processAttachmentSecurity']!, /<accessLevel>PR<\/accessLevel>/);
+  assert.match(proc.attrs['processAttachmentSecurity']!, /<groupId>G<\/groupId>/);
+});
+
+test('campos descritores voltam na ordem do slotId e o texto vira id e label', () => {
+  const xml = definicao({
+    estados: estado(1, 80),
+    descritores: '<ProcessFormField><processFormFieldPK><fieldId>nome</fieldId></processFormFieldPK><fieldDescription>Nome</fieldDescription><slotId>1</slotId></ProcessFormField>' +
+      '<ProcessFormField><processFormFieldPK><fieldId>cpf</fieldId></processFormFieldPK><fieldDescription>CPF</fieldDescription><slotId>2</slotId></ProcessFormField>',
+  });
+  const campos = objeto(gerarProcess(xml).process, 'p').attrs['descriptorFields']!;
+  assert.match(campos, /<id>nome<\/id><label>Nome<\/label>/);
+  assert.ok(campos.indexOf('<id>nome') < campos.indexOf('<id>cpf'));
+});
+
+test('evento de link: o 36 aponta para o 42 pelo linkId e o ProcessLink sintético não vira fluxo', () => {
+  const xml = definicao({
+    estados: estado(1, 80) + estado(2, 36) + estado(3, 42) + estado(4, 60),
+    links: link(5, 1, 2) + link(6, 2, 3) + link(7, 3, 4),
+  });
+  const gerado = gerarProcess(xml).process;
+  assert.equal(objeto(gerado, 'intermediatelink2').attrs['linkId'], 'intermediatelinkcatch3');
+  // O link 6 é o sintético do evento: só os fluxos reais viram SequenceFlow.
+  assert.deepEqual(lerDiagrama(gerado).objetos.filter((o) => o.tipo === 'SequenceFlow').map((o) => o.attrs['id']), ['flow5', 'flow7']);
+});
+
+test('anotação volta como BpmnAnnotation e o fluxo dela como SequenceFlow comum', () => {
+  const xml = definicao({
+    estados: estado(1, 80),
+    graficos: '<ProcessComponGraf><componType>1</componType><positionX>5</positionX><positionY>6</positionY><processComponGrafPK><componGrafSequence>9</componGrafSequence></processComponGrafPK><stateName>nota</stateName></ProcessComponGraf>',
+    associacoes: '<ProcessLinkAssoc><processLinkAssocPK><linkSequence>10</linkSequence></processLinkAssocPK><initialStateSequence>9</initialStateSequence><finalStateSequence>1</finalStateSequence></ProcessLinkAssoc>',
+  });
+  const diagrama = lerDiagrama(gerarProcess(xml).process);
+  assert.equal(diagrama.objetos.find((o) => o.tipo === 'BpmnAnnotation')!.attrs['name'], 'nota');
+  assert.equal(diagrama.objetos.find((o) => o.attrs['id'] === 'flow10')!.attrs['targetRef'], 'task1');
+  assert.equal(diagrama.caixas.size, 2);
+});
+
+test('tarefa de e-mail volta com o messageData montado do gatilho tipo 0', () => {
+  const valor = '&lt;BpmnMessageData&gt;&lt;Type&gt;1&lt;/Type&gt;&lt;Receiver&gt;a@b&lt;/Receiver&gt;&lt;Subject&gt;Oi&lt;/Subject&gt;&lt;Content&gt;Corpo&lt;/Content&gt;&lt;/BpmnMessageData&gt;';
+  const xml = definicao({
+    estados: estado(1, 84),
+    gatilhos: `<ProcessStateTrigger><processStateTriggerPK><stateSequence>1</stateSequence><triggerSequence>0</triggerSequence></processStateTriggerPK><runType>1</runType><type>0</type><value>${valor}</value><frequencia>01</frequencia></ProcessStateTrigger>`,
+  });
+  const dados = objeto(gerarProcess(xml).process, 'task1').attrs['messageData']!;
+  assert.match(dados, /<receiver>a@b<\/receiver>/);
+  assert.match(dados, /<subject>Oi<\/subject>/);
+  assert.match(dados, /<content>Corpo<\/content>/);
+});
+
+test('o mesmo export sempre gera o mesmo .process', () => {
+  const xml = readFileSync(join(import.meta.dirname, 'fixtures/diagrams/processoTeste.ecm30.xml'), 'utf8');
+  assert.equal(gerarProcess(xml).process, gerarProcess(xml).process);
+});
+
 test('pull diagram baixa somente a definição e grava workflow/diagrams/<id>.process', async () => {
   const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-pull-diagram-'));
   const workflow = join(raiz, 'workflow');
