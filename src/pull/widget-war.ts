@@ -31,7 +31,7 @@ const partes = (caminho: string) => caminho.split('/').filter((p) => p !== '');
 
 /**
  * Desmonta o `.war` de uma widget na árvore de arquivos que o `push widget` sabe
- * empacotar de volta — o inverso exato de `readWidget`, e o mesmo mapeamento da
+ * empacotar de volta — o inverso exato de `lerWcm`, e o mesmo mapeamento da
  * extensão Fluiggers:
  *
  *   WEB-INF/<arq>.xml        → src/main/webapp/WEB-INF/<arq>.xml

@@ -19,7 +19,7 @@ import { pushWidget } from '../src/commands/push-widget.js';
 import type { Server } from '../src/config.js';
 import { ErroFluigctl } from '../src/errors.js';
 import { montarZip } from '../src/push/war.js';
-import { readWidget } from '../src/push/widget-source.js';
+import { lerWcm } from '../src/push/wcm-source.js';
 
 const FIXTURE = fileURLToPath(new URL('./fixtures/widgets/wdgExemplo', import.meta.url));
 const LOGIN = '/portal/api/servlet/login.do';
@@ -78,8 +78,8 @@ async function codigoDe(promessa: Promise<unknown>): Promise<number> {
   assert.fail('deveria ter falhado');
 }
 
-test('readWidget monta exatamente as entradas da extensão, com os bytes de cada arquivo', async () => {
-  const widget = await readWidget(FIXTURE);
+test('lerWcm monta exatamente as entradas da extensão, com os bytes de cada arquivo', async () => {
+  const widget = await lerWcm(FIXTURE);
 
   assert.equal(widget.nome, 'wdgExemplo');
   assert.deepEqual(widget.entradas.map((e) => e.nome).sort(), Object.keys(ESPERADO).sort());
@@ -89,16 +89,16 @@ test('readWidget monta exatamente as entradas da extensão, com os bytes de cada
   }
 });
 
-test('readWidget não converte o .properties em latin1', async () => {
+test('lerWcm não converte o .properties em latin1', async () => {
   // A extensão lê src/main/resources como UTF-8 e troca o "ç" (0xE7) por U+FFFD.
-  const widget = await readWidget(FIXTURE);
+  const widget = await lerWcm(FIXTURE);
 
   const props = widget.entradas.find((e) => e.nome === 'WEB-INF/classes/wdgExemplo.properties')!;
   assert.ok(props.dados.includes(0xe7));
 });
 
 test('o .war gerado é lido por um unzip comum, com o conteúdo intacto', async () => {
-  const widget = await readWidget(FIXTURE);
+  const widget = await lerWcm(FIXTURE);
   const dir = mkdtempSync(join(tmpdir(), 'fluigctl-war-'));
   const war = join(dir, 'wdgExemplo.war');
   writeFileSync(war, montarZip(widget.entradas));
@@ -117,40 +117,40 @@ test('o .war gerado é lido por um unzip comum, com o conteúdo intacto', async 
   }
 });
 
-test('readWidget recusa pasta que não é de widget, com código 3', async (t) => {
+test('lerWcm recusa pasta que não é de widget, com código 3', async (t) => {
   const pasta = copiaDaFixture(t);
   rmSync(join(pasta, 'src', 'main', 'resources', 'application.info'));
 
-  assert.equal(await codigoDe(readWidget(pasta)), 3);
+  assert.equal(await codigoDe(lerWcm(pasta)), 3);
 });
 
-test('readWidget tira o nome da pasta de verdade, não do texto do argumento', async () => {
-  assert.equal((await readWidget(join(FIXTURE, '.'))).nome, 'wdgExemplo');
-  assert.equal((await readWidget(`${FIXTURE}/.`)).nome, 'wdgExemplo');
-  assert.equal((await readWidget(`${FIXTURE}/`)).nome, 'wdgExemplo');
-  assert.equal((await readWidget(`${FIXTURE}/src/..`)).nome, 'wdgExemplo');
+test('lerWcm tira o nome da pasta de verdade, não do texto do argumento', async () => {
+  assert.equal((await lerWcm(join(FIXTURE, '.'))).nome, 'wdgExemplo');
+  assert.equal((await lerWcm(`${FIXTURE}/.`)).nome, 'wdgExemplo');
+  assert.equal((await lerWcm(`${FIXTURE}/`)).nome, 'wdgExemplo');
+  assert.equal((await lerWcm(`${FIXTURE}/src/..`)).nome, 'wdgExemplo');
 });
 
-test('readWidget recusa caminho de onde não sai nome de widget, com código 3', async () => {
-  assert.equal(await codigoDe(readWidget('/')), 3);
+test('lerWcm recusa caminho de onde não sai nome de widget, com código 3', async () => {
+  assert.equal(await codigoDe(lerWcm('/')), 3);
 });
 
-test('readWidget recusa link simbólico em vez de omiti-lo, com código 3', async (t) => {
+test('lerWcm recusa link simbólico em vez de omiti-lo, com código 3', async (t) => {
   const pasta = copiaDaFixture(t);
   const js = join(pasta, 'src', 'main', 'webapp', 'resources', 'js');
   symlinkSync(join(js, 'wdgExemplo.js'), join(js, 'atalho.js'));
 
-  const promessa = readWidget(pasta);
+  const promessa = lerWcm(pasta);
   await assert.rejects(promessa, /atalho\.js.*link simbólico/);
   assert.equal(await codigoDe(promessa), 3);
 });
 
-test('readWidget recusa link simbólico no topo de src/main/resources', async (t) => {
+test('lerWcm recusa link simbólico no topo de src/main/resources', async (t) => {
   const pasta = copiaDaFixture(t);
   const recursos = join(pasta, 'src', 'main', 'resources');
   symlinkSync(join(recursos, 'view.ftl'), join(recursos, 'edit.ftl'));
 
-  assert.equal(await codigoDe(readWidget(pasta)), 3);
+  assert.equal(await codigoDe(lerWcm(pasta)), 3);
 });
 
 test('push widget envia o .war com a sessão do login e os campos da extensão', async () => {

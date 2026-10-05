@@ -3,7 +3,7 @@ import { ErroFluigctl } from '../errors.js';
 import { confirmProduction, type PromptSenha } from '../guard.js';
 import { login } from '../fluig/session.js';
 import { montarZip } from '../push/war.js';
-import { readWidget } from '../push/widget-source.js';
+import { lerWcm } from '../push/wcm-source.js';
 
 export interface OpcoesPushWidget {
   server: Server;
@@ -35,7 +35,7 @@ const CAMINHO_UPLOAD = '/portal/api/rest/wcmservice/rest/product/uploadfile';
 export async function pushWidget(opcoes: OpcoesPushWidget): Promise<ResultadoPushWidget> {
   const { server, senha } = opcoes;
 
-  const { nome, entradas } = await readWidget(opcoes.pasta);
+  const { nome, entradas } = await lerWcm(opcoes.pasta);
   const war = montarZip(entradas);
   const base = serverUrl(server);
   const resultado = { nome, entradas: entradas.length, bytes: war.length, url: base + CAMINHO_UPLOAD };

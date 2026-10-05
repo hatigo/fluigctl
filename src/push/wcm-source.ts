@@ -4,13 +4,13 @@ import { basename, join, posix, relative, resolve, sep } from 'node:path';
 import { ErroFluigctl } from '../errors.js';
 import type { EntradaZip } from './war.js';
 
-export interface FonteWidget {
+export interface FonteWcm {
   nome: string;
   entradas: EntradaZip[];
 }
 
 /**
- * Lê a pasta de uma widget (`wcm/widget/<nome>`) e monta as entradas do `.war`
+ * Lê a pasta de uma aplicação WCM (`wcm/widget/<nome>`) e monta as entradas do `.war`
  * no mesmo mapeamento da extensão Fluiggers:
  *
  *   src/main/webapp/WEB-INF/*.xml    → WEB-INF/<arquivo>
@@ -25,7 +25,7 @@ export interface FonteWidget {
  * Widget com código em `src/main/java` precisa do build do Maven, que compila
  * as classes; empacotar sem elas publicaria uma widget quebrada.
  */
-export async function readWidget(pasta: string): Promise<FonteWidget> {
+export async function lerWcm(pasta: string): Promise<FonteWcm> {
   const raiz = resolve(pasta);
   const nome = basename(raiz);
   if (nome === '' || nome.startsWith('.')) {

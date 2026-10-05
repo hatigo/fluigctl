@@ -9,7 +9,7 @@ import type { WidgetHelperClient } from '../src/fluig/widget-helper.js';
 import { ErroFluigctl } from '../src/errors.js';
 import { entradasDoZip } from '../src/push/zip.js';
 import { montarZip } from '../src/push/war.js';
-import { readWidget } from '../src/push/widget-source.js';
+import { lerWcm } from '../src/push/wcm-source.js';
 import { desmontarWar } from '../src/pull/widget-war.js';
 import type { Server } from '../src/config.js';
 
@@ -181,11 +181,11 @@ test('o que o pull grava volta pelo push widget: só o que o empacotamento gera 
   const original = warDaWidget();
   await pullWidget({ server: SERVER, senha: 's', nome: 'wdgX', raiz, cliente: fakeHelper(original) });
 
-  const fonte = await readWidget(join(raiz, 'wcm/widget/wdgX'));
+  const fonte = await lerWcm(join(raiz, 'wcm/widget/wdgX'));
   const deVolta = entradasDoZip(montarZip(fonte.entradas), 'o pacote').map((e) => e.nome);
   const deIda = entradasDoZip(original, 'o pacote').map((e) => e.nome);
 
-  // A ordem das entradas no .war não importa: o readWidget ordena ao empacotar.
+  // A ordem das entradas no .war não importa: o lerWcm ordena ao empacotar.
   assert.deepEqual(deVolta.sort(), deIda.filter((n) => n !== 'META-INF/MANIFEST.MF').sort());
 });
 
