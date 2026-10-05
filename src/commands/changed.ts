@@ -15,7 +15,10 @@ export type Artefato =
   | { tipo: 'dataset'; nome: string; arquivo: string }
   | { tipo: 'form'; pasta: string; camposNovos: string[]; htmlNovo: boolean }
   | { tipo: 'process'; processId: string; eventos: string[] }
-  | { tipo: 'diagram'; arquivo: string }
+  /** `eventos`: scripts do mesmo processo que mudaram e que o push diagram já publica. */
+  | { tipo: 'diagram'; arquivo: string; eventos: string[] }
+  /** Gerado pelo Studio ao exportar (`workflow/.resources`): não é fonte de publicação. */
+  | { tipo: 'gerado'; arquivo: string }
   | { tipo: 'widget'; pasta: string }
   | { tipo: 'nao-suportado'; arquivo: string; motivo: string };
 
@@ -87,6 +90,8 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
   const forms = new Set<string>();
   const processos = new Map<string, Set<string>>();
   const widgets = new Set<string>();
+  /** Diagramas alterados, pelo nome do arquivo sem `.process` — o prefixo dos scripts no Studio. */
+  const diagramas = new Map<string, string>();
   const outros: Artefato[] = [];
 
   for (const arquivo of arquivos) {
@@ -104,8 +109,10 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
         eventos.add(m[2]!);
         processos.set(m[1]!, eventos);
       }
-    } else if (partes[0] === 'workflow' && (arquivo.endsWith('.process') || arquivo.endsWith('.ecm30.xml'))) {
-      outros.push({ tipo: 'diagram', arquivo });
+    } else if (partes[0] === 'workflow' && partes[1] === 'diagrams' && arquivo.endsWith('.process')) {
+      diagramas.set(partes.at(-1)!.replace(/\.process$/, ''), arquivo);
+    } else if (partes[0] === 'workflow' && partes[1] === '.resources') {
+      outros.push({ tipo: 'gerado', arquivo });
     } else if (partes[0] === 'wcm' && partes[1] === 'widget' && partes.length >= 4) {
       widgets.add(`wcm/widget/${partes[2]}`);
     } else if (['events', 'mechanisms'].includes(partes[0]!) || (partes[0] === 'wcm' && partes[1] === 'layout')) {
@@ -123,10 +130,17 @@ export function classificar(raiz: string, arquivos: readonly string[], base: str
       const { campos, htmlNovo } = camposNovos(raiz, pasta, base);
       return { tipo: 'form', pasta, camposNovos: campos, htmlNovo };
     }),
-    ...[...processos].map(([processId, eventos]): Artefato => ({
+    // Scripts de um processo cujo diagrama também mudou vão no push diagram: um push
+    // process à parte criaria outra versão por cima.
+    ...[...processos].filter(([prefixo]) => !diagramas.has(prefixo)).map(([processId, eventos]): Artefato => ({
       tipo: 'process',
       processId,
       eventos: [...eventos].sort(),
+    })),
+    ...[...diagramas].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([prefixo, arquivo]): Artefato => ({
+      tipo: 'diagram',
+      arquivo,
+      eventos: [...(processos.get(prefixo) ?? [])].sort(),
     })),
     ...[...widgets].sort().map((pasta): Artefato => ({ tipo: 'widget', pasta })),
     ...outros,
@@ -153,7 +167,9 @@ export function comandoSugerido(a: Artefato, servidor: string): string {
     case 'widget':
       return `fluigctl push widget ${a.pasta} ${s} --dry-run`;
     case 'diagram':
-      return `# ${a.arquivo}: diagrama — pelo Studio, ou export do servidor + push process --base`;
+      return `fluigctl push diagram ${a.arquivo} ${s} --dry-run` + (a.eventos.length > 0 ? `   # inclui os scripts ${a.eventos.join(', ')}` : '');
+    case 'gerado':
+      return `# ${a.arquivo}: gerado pelo Studio ao exportar — o push diagram publica a partir do .process`;
     case 'nao-suportado':
       return `# ${a.arquivo}: ${a.motivo}`;
   }
