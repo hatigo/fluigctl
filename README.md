@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 437 | não | não | — |
+| Testes automatizados | 445 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -148,6 +148,12 @@ A tela é uma frente do mesmo cadastro, não uma segunda implementação: ela ch
 `addServer`, `removeServer`, `setProd`, `testServer` e `importCandidates`, os
 mesmos que o CLI. E é para gente — precisa de um terminal de verdade, e recusa
 com código 5 quando não há um (é o mesmo motivo do portão de produção).
+
+O `enter` sobre um servidor abre o formulário preenchido para corrigir host,
+porta, usuário e o resto. **Rever é tirar o antigo e gravar o novo** — com ou sem
+troca de nome —, porque `addServer` recusa nome repetido de propósito: gravar por
+cima do registro que está lá não passaria por essa checagem. O nome pode mudar,
+e o antigo não fica para trás.
 
 ### 2. No dia a dia: ver o que mudou, simular, publicar
 
@@ -832,7 +838,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 437 testes, sem rede e sem servidor Fluig
+npm test        # 445 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

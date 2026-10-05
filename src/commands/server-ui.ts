@@ -222,8 +222,11 @@ async function salvar(efeito: Extract<Efeito, { tipo: 'salvar' }>): Promise<Even
     const cookie = await login(url, provisorio.username, senha);
     const usuario = await findUserByLogin(url, cookie, provisorio.username);
 
+    // Rever um servidor é tirar o antigo e gravar o novo, com ou sem troca de
+    // nome: `addServer` recusa nome que já existe, de propósito, e por isso uma
+    // edição sem renomear não podia passar por ele em cima do registro atual.
     let config = atual;
-    if (efeito.original !== undefined && efeito.original !== efeito.nome) {
+    if (efeito.original !== undefined) {
       config = removeServer(config, efeito.original);
     }
     config = addServer(config, efeito.nome, {
