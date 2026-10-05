@@ -422,6 +422,13 @@ espaço no fim, como a do push) fica como está; diferente só é trocado com
 listando os arquivos — para não deixar a pasta metade do servidor e metade local.
 O `--dry-run` lista novos, iguais e diferentes sem gravar.
 
+Ciclo conferido no fluig-localdev, com a `portalMedicaoContratos` da Cetenco:
+`pull widget --instalar-helper` baixou e desmontou os 15 arquivos, e a árvore
+saiu **idêntica à pasta do workspace**, com uma única diferença acrescentada pelo
+próprio servidor no deploy (`application.tenant.code=1`). Publicando essa árvore
+de volta com `push widget` e baixando outra vez, os 15 arquivos saem como
+`iguais` — o ciclo converge.
+
 ## Publicando um widget
 
 `push widget` recebe a pasta da widget (`wcm/widget/<nome>`), monta o `.war` em
