@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { serverUrl, type Server } from '../config.js';
 import { ErroFluigctl } from '../errors.js';
@@ -7,13 +7,22 @@ import { cardIndexClient, type CardIndexClient } from '../fluig/cardindex-servic
 import { loadDataset, type DatasetNoServidor } from '../fluig/dataset-service.js';
 import { versaoAtiva } from '../fluig/document-service.js';
 import { login } from '../fluig/session.js';
+import {
+  instalarWidgetHelper,
+  semWidgetHelper,
+  widgetHelperClient,
+  type WidgetHelperClient,
+} from '../fluig/widget-helper.js';
 import { workflowEngineClient, type WorkflowEngineClient } from '../fluig/workflow-service.js';
+import { confirmProduction, type PromptSenha } from '../guard.js';
 import { decideForm } from '../push/form-resolve.js';
 import { arquivosDaPasta, nomeDaPasta } from '../push/form-source.js';
 import { eventosDoProcesso, normalizar } from '../push/process-events.js';
 import { prefixoDosScripts } from '../push/process-source.js';
 import { lerMetadataStudio } from '../push/studio-metadata.js';
+import { entradasDoZip } from '../push/zip.js';
 import { gerarProcess } from '../pull/process-diagram.js';
+import { desmontarWar } from '../pull/widget-war.js';
 
 /**
  * Baixa do servidor o que está publicado — o caminho inverso do push. Nunca
@@ -135,6 +144,154 @@ export async function pullDiagram(opcoes: OpcoesPullDiagram): Promise<ResultadoP
   const arquivo = join(opcoes.pastaWorkflow, 'diagrams', `${nome}.process`);
   const convertido = gerarProcess(exportado, nome);
   return { ...aplicarPull('.', [{ caminho: arquivo, conteudo: convertido.process }], opcoes), arquivo };
+}
+
+export interface OpcoesPullWidget {
+  server: Server;
+  senha: string;
+  /** `code` da widget, que é o nome da pasta: `wcm/widget/<code>`. */
+  nome: string;
+  /** Raiz do repositório (padrão: a pasta atual). */
+  raiz?: string;
+  dryRun?: boolean;
+  sobrescrever?: boolean;
+  /** Publica a widget auxiliar do Fluiggers, sem a qual não há leitura de widget. */
+  instalarHelper?: boolean;
+  /** Só o `--instalar-helper` usa: é ele que escreve no servidor. */
+  prompt?: PromptSenha;
+  /** Para testes. */
+  cliente?: WidgetHelperClient;
+}
+
+export interface ResultadoPullWidget extends ResultadoPull {
+  code: string;
+  /** Entradas do `.war` sem lugar na pasta da widget: manifesto e o que se gera de novo. */
+  ignorados: string[];
+  /** Classes sem código-fonte: vão para `src/main/java` e o push recusa a pasta. */
+  compilados: string[];
+  avisos: string[];
+  /** Arquivos da pasta local que o `.war` do servidor não tem (ficam como estão). */
+  soLocais: string[];
+  /** A auxiliar foi publicada agora, e não já estava no servidor. */
+  helperInstalado: boolean;
+}
+
+/** Os arquivos da pasta da widget, relativos a ela, sem dotfiles. */
+function arquivosLocaisDaWidget(pasta: string): string[] {
+  const achados: string[] = [];
+  const visitar = (dir: string) => {
+    for (const entrada of readdirSync(dir)) {
+      if (entrada.startsWith('.')) continue;
+      const caminho = join(dir, entrada);
+      if (statSync(caminho).isDirectory()) visitar(caminho);
+      else achados.push(relative(pasta, caminho).split(sep).join('/'));
+    }
+  };
+  if (existsSync(pasta)) visitar(pasta);
+  return achados.sort();
+}
+
+/**
+ * Uma widget instalada volta para `wcm/widget/<code>`, a pasta que o
+ * `push widget` lê — inclusive o `pom.xml` e o `src/main/java` de um pacote
+ * compilado, que o push recusa republicar sem build. Como nos outros pull, o
+ * local nunca é trocado em silêncio: o que o servidor não tem fica listado, e
+ * arquivo local diferente só é sobrescrito com `--overwrite`.
+ *
+ * A leitura passa pela widget auxiliar do Fluiggers, que é a única rota que
+ * existe — o Fluig não expõe serviço para baixar o `.war` instalado. Sem ela no
+ * servidor, a recusa aponta o `--instalar-helper`; instalar é publicar, então é
+ * explícito e passa pelo portão de produção.
+ */
+export async function pullWidget(opcoes: OpcoesPullWidget): Promise<ResultadoPullWidget> {
+  const { server, senha, nome } = opcoes;
+  const raiz = opcoes.raiz ?? '.';
+  const url = serverUrl(server);
+
+  // A sessão só abre quando é precisa: com cliente injetado (testes), ou para
+  // instalar, quem fala com o servidor é de fora.
+  let helper = opcoes.cliente;
+  let cookie: string | undefined;
+  let instalou = false;
+  const sessao = async () => (cookie ??= await login(url, server.username, senha));
+  if (!helper) helper = await widgetHelperClient(url, await sessao());
+
+  // A checagem vale sempre; o que o `--instalar-helper` muda é poder resolver a falta.
+  if (!(await helper.instalada())) {
+    if (!opcoes.instalarHelper) throw semWidgetHelper(url);
+    // Instalar é publicar: o --dry-run promete não escrever nada, então não instala.
+    if (opcoes.dryRun) {
+      throw new ErroFluigctl(
+        `o servidor ${url} não tem a widget auxiliar, e o --dry-run não publica nada — ` +
+          'sem ela não há como listar nem baixar widget. Rode sem --dry-run para publicá-la.',
+        3,
+      );
+    }
+    await confirmProduction(
+      server,
+      senha,
+      'instalar a widget auxiliar do Fluiggers (ela publica uma widget no servidor)',
+      opcoes.prompt ?? (async () => ''),
+    );
+    await instalarWidgetHelper(url, await sessao());
+    instalou = true;
+  }
+
+  const disponiveis = await helper.listar();
+  const escolhida = disponiveis.find((w) => w.code === nome);
+  if (!escolhida) {
+    const parecidas = disponiveis.filter((w) => w.code.toLowerCase() === nome.toLowerCase()).map((w) => w.code);
+    const dica = parecidas.length === 1 ? ` Existe uma com outra caixa: ${parecidas[0]}.` : '';
+    throw new ErroFluigctl(
+      `não existe widget "${nome}" em ${url}.${dica} ` +
+        (disponiveis.length
+          ? `As instaladas são: ${disponiveis.map((w) => w.code).sort().join(', ')}.`
+          : 'O servidor não devolveu nenhuma widget instalada.'),
+      3,
+    );
+  }
+  if (!escolhida.filename) {
+    throw new ErroFluigctl(`a widget auxiliar não informou o arquivo da widget "${nome}"`, 7);
+  }
+
+  const desmontado = desmontarWar(entradasDoZip(await helper.baixar(escolhida.filename), `o pacote da widget "${nome}"`), nome);
+  const pasta = join('wcm', 'widget', escolhida.code);
+  const arquivos: ArquivoBaixado[] = desmontado.arquivos.map((a) => ({
+    caminho: join(pasta, a.caminho),
+    conteudo: a.dados,
+  }));
+
+  const avisos: string[] = [];
+  if (desmontado.compilados.length) {
+    avisos.push(
+      `a widget "${nome}" tem ${desmontado.compilados.length} arquivo(s) compilado(s), guardado(s) em src/main/java: ` +
+        'o push widget recusa essa pasta, porque compilar de novo é trabalho do Maven.',
+    );
+  }
+  const locais = arquivosLocaisDaWidget(join(raiz, pasta));
+  const doServidor = new Set(desmontado.arquivos.map((a) => a.caminho));
+
+  return {
+    ...aplicarPull(raiz, arquivos, opcoes),
+    code: escolhida.code,
+    ignorados: desmontado.ignorados,
+    compilados: desmontado.compilados,
+    avisos,
+    soLocais: locais.filter((l) => !doServidor.has(l)),
+    helperInstalado: instalou,
+  };
+}
+
+/** As widgets instaladas no servidor, para o `--list`. Só lê. */
+export async function listarWidgets(opcoes: {
+  server: Server;
+  senha: string;
+  cliente?: WidgetHelperClient;
+}): Promise<{ code: string; title: string; description: string }[]> {
+  const url = serverUrl(opcoes.server);
+  const helper = opcoes.cliente ?? (await widgetHelperClient(url, await login(url, opcoes.server.username, opcoes.senha)));
+  if (!(await helper.instalada())) throw semWidgetHelper(url);
+  return (await helper.listar()).map(({ code, title, description }) => ({ code, title, description }));
 }
 
 export interface OpcoesPullDataset {

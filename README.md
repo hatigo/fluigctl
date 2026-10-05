@@ -68,8 +68,9 @@ e layout.
 | `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 465 de 475 diagramas reais convertem |
 | `pull process` / `pull dataset` / `pull form` (scripts de processo, código de dataset, anexos e eventos de formulário) | pronto |
 | `pull diagram` (definição publicada → `.process`) | pronto: estados, atribuições, gateways, eventos, subprocessos, propriedades/configurações avançadas, componentes gráficos, raias, fluxos e bendpoints |
+| `pull widget` (widget instalada → `wcm/widget/<code>`) | pronto; lê pela widget auxiliar do Fluiggers, que o `--instalar-helper` publica |
 
-Fora de escopo por enquanto: `pull` de widget, layout WCM, widget com código Java,
+Fora de escopo por enquanto: layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
 
 ## Instalação
@@ -323,6 +324,8 @@ fluigctl pull process reembolso --server cetenco-hml --dry-run
 fluigctl pull process reembolso --server cetenco-hml
 fluigctl pull dataset dsFoo --server cetenco-hml
 fluigctl pull form forms/formFoo --server cetenco-hml --dry-run
+fluigctl pull widget --server cetenco-hml                       # lista as instaladas
+fluigctl pull widget wdgAniversariantes --server cetenco-hml --dry-run
 ```
 
 O caminho inverso do push, para trazer ao repositório o que alguém publicou
@@ -343,6 +346,33 @@ direto no servidor. Só lê do servidor.
   raiz da pasta; os eventos vão para `events/<evento>.js`. Anexos são comparados
   byte a byte (imagens vêm intactas). Arquivo que só existe no local é listado e
   fica como está. A pasta pode não existir ainda: é criada.
+- `pull widget` baixa o `.war` instalado e desmonta em `wcm/widget/<code>`, a
+  mesma pasta que o `push widget` lê — incluindo `pom.xml` e `src/main/java` de
+  um pacote compilado, que o push recusa republicar sem o build do Maven. Sem o
+  código, o comando só lista as widgets instaladas. As entradas do `.war` que não
+  têm lugar na pasta (o `META-INF/MANIFEST.MF`, que o empacotamento refaz) são
+  listadas na saída, nunca descartadas em silêncio.
+
+### Lendo widget: a widget auxiliar do Fluiggers
+
+O Fluig não expõe serviço para baixar o `.war` de uma widget instalada. A
+extensão Fluiggers resolve isso publicando uma widget própria no servidor, a
+`fluiggersWidget`, que serve a lista e os pacotes por três rotas
+(`/fluiggersWidget/api/...`). O `fluigctl` lê pela mesma rota, e por isso
+`pull widget` depende dela.
+
+Sem a auxiliar no servidor, o comando recusa e aponta o caminho:
+
+```sh
+fluigctl pull widget wdgAniversariantes --server cetenco-hml --dry-run
+#   recusa: falta a widget auxiliar
+fluigctl pull widget wdgAniversariantes --server cetenco-hml --instalar-helper
+```
+
+O `--instalar-helper` **publica uma widget no servidor** — não é leitura. Por
+isso é explícito, sai da lista de comandos que o agente pode rodar sozinho, e em
+servidor marcado como produção passa pelo mesmo portão de senha do push. É a
+mesma restrição da extensão, que só instala a auxiliar quando você pede.
 
 Arquivo novo é gravado; igual ao servidor (a comparação ignora fim de linha e
 espaço no fim, como a do push) fica como está; diferente só é trocado com
