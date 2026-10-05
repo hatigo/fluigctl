@@ -1,0 +1,6 @@
+application.type=layout
+application.code=layoutExemplo
+application.title=layoutExemplo
+application.renderer=freemarker
+layout.defaultSlot=SlotA
+layout.file=layout.ftl

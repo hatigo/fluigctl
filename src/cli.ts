@@ -17,7 +17,7 @@ import { eventIdDoArquivo, pushEvent } from './commands/push-event.js';
 import { pushForm } from './commands/push-form.js';
 import { mecanismoIdDoArquivo, pushMechanism } from './commands/push-mechanism.js';
 import { pushProcess } from './commands/push-process.js';
-import { pushWidget } from './commands/push-widget.js';
+import { pushWcm } from './commands/push-wcm.js';
 import {
   pullDataset,
   pullDiagram,
@@ -64,6 +64,8 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       .process que tem este id, como o Studio, ou pelo próprio id; o diagrama vai pelo push diagram
   fluigctl push widget <wcm/widget/nome> --server <nome> [--dry-run]
       empacota a widget num .war e envia; o servidor instala ou atualiza em segundo plano
+  fluigctl push layout <wcm/layout/nome> --server <nome> [--dry-run]
+      o mesmo para um layout WCM; o application.type da pasta é conferido contra o comando
   fluigctl push diagram <arquivo.process> --server <nome> [--dry-run] [--save-xml <arquivo>]
                               [--create] [--no-release]
       converte o diagrama no XML que o servidor importa e publica: nova versão, import e liberação;
@@ -313,12 +315,13 @@ async function comandoPush(argv: string[]): Promise<void> {
   const tipo = argv[0];
   if (!ehTipoPush(tipo)) {
     throw new ErroFluigctl(
-      `push aceita "dataset", "form", "process", "widget", "diagram", "event" ou "mechanism" — recebi "${tipo ?? ''}"`,
+      `push aceita "dataset", "form", "process", "widget", "layout", "diagram", "event" ou "mechanism" — recebi "${tipo ?? ''}"`,
       2,
     );
   }
   if (tipo === 'process') return pushProcessCli(argv.slice(1));
-  if (tipo === 'widget') return pushWidgetCli(argv.slice(1));
+  if (tipo === 'widget') return pushWcmCli(argv.slice(1), 'widget');
+  if (tipo === 'layout') return pushWcmCli(argv.slice(1), 'layout');
   if (tipo === 'diagram') return pushDiagramCli(argv.slice(1));
   if (tipo === 'event') return pushEventCli(argv.slice(1));
   if (tipo === 'mechanism') return pushMechanismCli(argv.slice(1));
@@ -548,7 +551,7 @@ async function pushProcessCli(argv: string[]): Promise<void> {
   );
 }
 
-const TIPOS_PUSH = ['dataset', 'form', 'process', 'widget', 'diagram', 'event', 'mechanism'] as const;
+const TIPOS_PUSH = ['dataset', 'form', 'process', 'widget', 'layout', 'diagram', 'event', 'mechanism'] as const;
 type TipoPush = (typeof TIPOS_PUSH)[number];
 const ehTipoPush = (t: string | undefined): t is TipoPush =>
   t !== undefined && (TIPOS_PUSH as readonly string[]).includes(t);
@@ -648,7 +651,7 @@ async function pushMechanismCli(argv: string[]): Promise<void> {
   }
 }
 
-async function pushWidgetCli(argv: string[]): Promise<void> {
+async function pushWcmCli(argv: string[], tipo: 'widget' | 'layout'): Promise<void> {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -660,16 +663,20 @@ async function pushWidgetCli(argv: string[]): Promise<void> {
 
   const pasta = positionals[0];
   if (!pasta || !values.server) {
-    throw new ErroFluigctl('uso: fluigctl push widget <wcm/widget/nome> --server <nome> [--dry-run]', 2);
+    throw new ErroFluigctl(
+      `uso: fluigctl push ${tipo} <wcm/${tipo}/nome> --server <nome> [--dry-run]`,
+      2,
+    );
   }
 
   const servidor = resolveServer(loadConfig(), values.server);
   const senha = resolvePassword(servidor);
 
-  const r = await pushWidget({
+  const r = await pushWcm({
     server: servidor,
     senha,
     pasta,
+    tipo,
     dryRun: values['dry-run'],
     prompt: promptPassword,
   });
