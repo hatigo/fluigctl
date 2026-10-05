@@ -245,8 +245,7 @@ scripts de `workflow/scripts/` (filho 6). O harness compara agora os filhos 0–
 - Seguem recusados sem evidência nos pares: `messageData` (uma única mensagem
   em todos os workspaces), `movement*` preenchido, `scriptFileName` de outro
   processo, `scriptFileName` na tarefa de script (87, sem nenhum estado 87 nos
-  ecm30), `expression` no fluxo, fluxo sem origem (5 cópias de um processo de cotação;
-  o Studio grava o link sem `initialStateSequence`), gateway 121, e
+  ecm30), `expression` no fluxo, gateway 121, e
   `controlsAttachmentsSecurity`/`processAttachmentSecurity`/`notifyManagerComplements`/
   `deadlineTime`/`activeProcess` do processo (nenhum em par).
 
@@ -510,8 +509,7 @@ arquivos cada e nenhum com par: ad hoc (101), banco de dados, `BpmnGroup`,
 gateway 121, tarefa de e-mail (`messageData`), `scriptFileName` de outro processo,
 `appsConfiguration` na tarefa 81, atribuição por Usuário/"Associado" em caminho
 de gateway, `expression` no fluxo, `activeProcess`, propriedades estendidas no
-gateway, o fluxo sem origem das 5 cópias do `cotacao` e 2 arquivos que não são
-XML válido.
+gateway e 2 arquivos que não são XML válido.
 
 **Processo de teste redesenhado (03/10/2026).** O `teste_fluigctl` passou a usar
 a geometria de um processo real do corpus (`SolicitacaoDeConsultoriaGeral`, do
@@ -749,6 +747,33 @@ arquivo).
   caminho, que o servidor não libera), os dois `solicitacao-pessoal` (id de
   processo vazio e um terceiro nome de script), as 5 cópias do `cotacao` (fluxo
   sem origem) e 2 arquivos que não são XML válido.
+
+**Estado (05/10/2026, décimo corte).** Entra o fluxo sem origem, que sai da lista
+acima. O `getProcessLinkFromSequenceFlow` do marshaller decompilado (2.0.0.9) só
+chama `setInitialStateSequence` quando `sourceFlowNode instanceof BaseElement`:
+
+```java
+if (sourceFlowNode instanceof BaseElement) {
+    pl.setInitialStateSequence(Integer.valueOf(sequence));
+}
+```
+
+`null instanceof BaseElement` é falso, então com `sourceRef` nulo o campo **não sai
+do XMI**. O mesmo vale para `finalStateSequence`. Conferido contra o
+`cotacao.ecm30.xml` exportado pelo próprio Studio: o `<ProcessLink>` de
+`linkSequence` 62 sai byte a byte igual ao nosso, sem `initialStateSequence`. Fluxo
+sem nenhum dos dois lados continua recusado.
+
+- O harness diferencial tinha o mesmo critério estreito em dois pontos — contava
+  os fluxos exigindo as duas pontas e excluía do conjunto coberto o link sem uma
+  delas —, o que classificava os pares do `cotacao` como "mesma versão" e
+  reportava o link como sobra. Corrigido.
+- Os 5 pares do `cotacao` viram **gabarito batendo em todos os filhos**: 18/18,
+  contra 13/13. Os 5 pares de "mesma versão" (divergência falsa) somem.
+- Dos 45 `.process` de `~/fluig/workspaces`, **45 convertem** (eram 40). No corpus
+  de 475, os 5 arquivos bloqueados só por este motivo passam a converter: **470/475**
+  (o clone esparso dos 28 repositórios da StrategiConsultoria não está mais nesta
+  máquina, então o número é derivado da medição anterior, não remedido).
 
 ### 2. O resto da definição
 

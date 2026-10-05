@@ -1433,10 +1433,35 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
   const tipoNo = (id: string | undefined) => nos.get(id ?? '')?.tipo;
   const deAnotacao = (f: ObjetoBpmn) => ['BpmnAnnotation', 'BpmnDocument'].includes(tipoNo(f.attrs['sourceRef']) ?? '');
   const banco = (id: string | undefined) => tipoNo(id) === 'BpmnDatabase';
+  /*
+   * Fluxo sem um dos lados não é arquivo quebrado: o Studio grava o
+   * `ProcessLink` com o campo ausente. Do `getProcessLinkFromSequenceFlow`
+   * decompilado (2.0.0.9),
+   *
+   *   if (sourceFlowNode instanceof BaseElement) {
+   *       pl.setInitialStateSequence(Integer.valueOf(sequence));
+   *   }
+   *
+   * e `null instanceof BaseElement` é falso, então o `setInitialStateSequence`
+   * nunca roda e o campo sai do XMI. O `cotacao` do corpus depende disso. Sem
+   * nenhum dos dois lados não sobra link (nem forma para desenhar): recusado.
+   */
+  const semFonte = (f: ObjetoBpmn) => f.attrs['sourceRef'] === undefined;
+  const semAlvo = (f: ObjetoBpmn) => f.attrs['targetRef'] === undefined;
   const fluxosCobertos = fluxos.filter((f) => {
     const { sourceRef: de, targetRef: para } = f.attrs;
-    if ((deAnotacao(f) || ehEstado(de)) && ehEstado(para)) return true;
-    if ((banco(de) && ehEstado(para)) || (ehEstado(de) && banco(para))) return true;
+    if (semFonte(f) && semAlvo(f)) {
+      recusar(`fluxo ${f.attrs['id']} sem origem e sem destino`);
+      return false;
+    }
+    // Anotação e documento continuam exigindo destino, que vira ProcessLinkAssoc.
+    if (deAnotacao(f)) {
+      if (ehEstado(para)) return true;
+    } else if (ehEstado(de) || semFonte(f)) {
+      if (ehEstado(para) || semAlvo(f) || banco(para)) return true;
+    } else if (banco(de) && ehEstado(para)) {
+      return true;
+    }
     recusar(`fluxo ${f.attrs['id']} ligado a elemento não suportado`);
     return false;
   });
@@ -1449,14 +1474,17 @@ export function gerarEcm30(diagrama: Diagrama, opcoes: OpcoesConversao): Resulta
       ['processLinkPK', pk([['linkSequence', sufixo(a['id'])]])],
       ['actionLabel', a['atividadeFluxo'] ?? ''],
       ['returnPermited', booleano(a['permiteRetorno'], false)],
-      ['initialStateSequence', sufixo(a['sourceRef'])],
-      ['finalStateSequence', sufixo(a['targetRef'])],
+    ];
+    // O lado que o fluxo não tem simplesmente não sai, na ordem da classe.
+    if (a['sourceRef'] !== undefined) campos.push(['initialStateSequence', sufixo(a['sourceRef'])]);
+    if (a['targetRef'] !== undefined) campos.push(['finalStateSequence', sufixo(a['targetRef'])]);
+    campos.push(
       ['returnLabel', a['atividadeRetorno'] ?? ''],
       ['name', a['name'] ?? ''],
       ['automaticLink', booleano(a['fluxoAutomatico'], false)],
       ['defaultLink', booleano(a['defaultLink'], false)],
       ['type', 0],
-    ];
+    );
     // Na ordem da classe ProcessLink do Studio: expression vem depois de type e antes dos movement*.
     if (a['expression'] !== undefined) campos.push(['expression', a['expression']]);
     const movimento = MOVIMENTO.filter((m) => a[m] !== undefined);

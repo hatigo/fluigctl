@@ -612,6 +612,35 @@ test('fluxo ou associação com pool ou lane numa das pontas é recusado com có
   }
 });
 
+test('fluxo sem origem vira ProcessLink sem initialStateSequence, como o Studio grava', () => {
+  // O `getProcessLinkFromSequenceFlow` do Studio só chama setInitialStateSequence
+  // quando o sourceRef é um BaseElement: com sourceRef nulo o campo sai do XMI.
+  const semOrigem = FASE1.replace(' id="flow30" name="" sourceRef="task8"', ' id="flow30" name=""');
+  assert.notEqual(semOrigem, FASE1);
+  const links = porCampo(filhosDaRaiz(converterDiagrama(semOrigem, { companyId: 1 }).xml)[4]!, 'processLinkPK', 'linkSequence');
+
+  assert.deepEqual(nomes(links.get('30')!), ['processLinkPK', 'actionLabel', 'returnPermited', 'finalStateSequence', 'returnLabel', 'name', 'automaticLink', 'defaultLink', 'type']);
+  assert.equal(texto(links.get('30')!, 'finalStateSequence'), '15');
+  // Os outros fluxos continuam inteiros.
+  assert.equal(texto(links.get('20')!, 'initialStateSequence'), '4');
+});
+
+test('fluxo sem destino vira ProcessLink sem finalStateSequence', () => {
+  const semDestino = FASE1.replace(/ id="flow30" name="" sourceRef="task8" targetRef="endevent15"/, ' id="flow30" name="" sourceRef="task8"');
+  assert.notEqual(semDestino, FASE1);
+  const links = porCampo(filhosDaRaiz(converterDiagrama(semDestino, { companyId: 1 }).xml)[4]!, 'processLinkPK', 'linkSequence');
+  assert.equal(texto(links.get('30')!, 'initialStateSequence'), '8');
+  assert.ok(!nomes(links.get('30')!).includes('finalStateSequence'));
+});
+
+test('fluxo sem os dois lados é recusado com código 6: não sobra link', () => {
+  const solto = FASE1.replace(/ id="flow30" name="" sourceRef="task8" targetRef="endevent15"/, ' id="flow30" name=""');
+  assert.notEqual(solto, FASE1);
+  const erro = erroDe(() => converterDiagrama(solto, { companyId: 1 }));
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, /fluxo flow30 sem origem e sem destino/);
+});
+
 test('script com caractere de controle fora de tab, LF e CR é recusado com código 6', () => {
   const scripts = new Map([['servicetask5', 'var a = "\u0001";\n']]);
   const erro = erroDe(() => converterDiagrama(FASE1, { companyId: 1, scripts }));

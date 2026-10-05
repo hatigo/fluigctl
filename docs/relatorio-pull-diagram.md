@@ -44,6 +44,51 @@ round-trip alterar o processo.
 - pools, lanes, grupos, anotações, documentos, bancos, fluxos e bendpoints;
 - geração determinística da camada Graphiti.
 
+Dois exports são recusados antes de gravar, e **não por defeito do conversor** — o
+Fluig Studio faria pior com os dois:
+
+1. `AL001`: um evento de erro aponta para `parentSequence=6`, e a definição não
+tem esse estado. O `populateIntermediateEventLink` do Studio decompilado faz
+`mapParentIds.get(parentSequence) == null` e dá `continue`, ou seja, **descarta o
+evento em silêncio**; republicar sem ele mudaria o processo. O `pull` para e
+explica.
+2. `teste_adhoc`: um evento final traz `notifyAuthorityDelay=true` num tipo 68.
+O `getProcessStateFromEndEvents` do Studio decompilado fixa `true` para todo fim
+e depois sobrescreve com `false` no fim terminal (68), sem nunca ler o valor do
+modelo: o campo não existe no `.process`. Republicar gravaria `false`.
+
+Os dois valores vêm de fora do modelo do Studio — provavelmente de outra versão
+ou da interface web — e nenhum dos dois pode ser representado no `.process`.
+
+## Achado: fluxo sem origem
+
+O `cotacao` dos workspaces tem um `SequenceFlow` sem `sourceRef`. O conversor de
+ida recusava, e a recusa era um defeito: o
+`getProcessLinkFromSequenceFlow` do Studio faz
+
+```java
+if (sourceFlowNode instanceof BaseElement) {
+    pl.setInitialStateSequence(Integer.valueOf(sequence));
+}
+```
+
+e `null instanceof BaseElement` é falso, então o campo **não sai do XMI**. Correção
+feita, e conferida contra o `cotacao.ecm30.xml` que o próprio Studio exportou: o
+`<ProcessLink>` de `linkSequence` 62 sai byte a byte igual ao dele, sem
+`initialStateSequence`.
+
+O harness diferencial tinha o mesmo critério estreito em dois lugares (contava os
+fluxos por “as duas pontas são nós” e excluía do conjunto coberto o link sem uma
+das pontas), o que classificava esses pares como “mesma versão” e reportava o link
+como sobra. Corrigido também.
+
+| | antes | depois |
+|---|---|---|
+| `.process` dos workspaces que convertem | 40/45 | **45/45** |
+| pares gabarito (versão, nós e links iguais) | 13 | **18** |
+| gabaritos batendo em todos os filhos | 13/13 | **18/18** |
+| pares “mesma versão” (divergência falsa) | 5 | **0** |
+
 ## Como repetir
 
 ```bash
