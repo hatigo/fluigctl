@@ -4,7 +4,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { pullDataset, pullForm, pullProcess } from '../src/commands/pull.js';
+import { pullDataset, pullDiagram, pullForm, pullProcess } from '../src/commands/pull.js';
+import { gerarProcess } from '../src/pull/process-diagram.js';
+import { lerDiagrama } from '../src/push/diagram/modelo.js';
 import type { CardIndexClient } from '../src/fluig/cardindex-service.js';
 import type { WorkflowEngineClient } from '../src/fluig/workflow-service.js';
 import type { Server } from '../src/config.js';
@@ -88,6 +90,56 @@ test('pull process de um processo que não existe no servidor: código 3', async
     pullProcess({ server: SERVER, senha: 's', processId: 'naoExiste', pastaWorkflow: pastaWorkflow(), cliente: fakeWorkflow().cliente }),
     (e) => codigoDe(e) === 3,
   );
+});
+
+test('conversão inversa gera um .process estrutural com estados, raias, fluxos e bendpoints', () => {
+  const xml = readFileSync(join(import.meta.dirname, 'fixtures/diagrams/processoTeste.ecm30.xml'), 'utf8');
+  const convertido = gerarProcess(xml);
+  const diagrama = lerDiagrama(convertido.process);
+
+  assert.equal(convertido.processId, 'processoTeste');
+  assert.equal(diagrama.objetos.filter((o) => o.tipo === 'BpmnTask').length, 2);
+  assert.equal(diagrama.objetos.filter((o) => o.tipo === 'SequenceFlow').length, 3);
+  assert.equal(diagrama.caixas.size, 7);
+  assert.equal(diagrama.dobras.get('flow10')?.length, 2);
+});
+
+test('conversão inversa recusa estruturas ainda não cobertas, sem produzir um .process parcial', () => {
+  const xml = readFileSync(join(import.meta.dirname, 'fixtures/diagrams/processoTeste.ecm30.xml'), 'utf8');
+  const comSeguranca = xml.replace('<list/>', '<list><ProcessAttachmentSecurity/></list>');
+  assert.throws(() => gerarProcess(comSeguranca), (e) => codigoDe(e) === 6 && /ProcessAttachmentSecurity/.test((e as Error).message));
+});
+
+test('conversão inversa recompõe condições e regras do gateway no blob XStream', () => {
+  const xml = `<list>
+    <ProcessDefinition><processDefinitionPK><processId>condicao</processId></processDefinitionPK><processDescription>Condição</processDescription></ProcessDefinition>
+    <ProcessDefinitionVersion><processDefinitionVersionPK><version>1</version></processDefinitionVersionPK></ProcessDefinitionVersion>
+    <list>
+      <ProcessState><processStatePK><sequence>1</sequence></processStatePK><stateName>Decidir</stateName><positionX>10</positionX><positionY>10</positionY><bpmnType>120</bpmnType></ProcessState>
+      <ProcessState><processStatePK><sequence>2</sequence></processStatePK><stateName>Destino</stateName><positionX>200</positionX><positionY>10</positionY><bpmnType>80</bpmnType></ProcessState>
+    </list>
+    <list><ConditionProcessState><conditionProcessStatePK><expressionOrder>1</expressionOrder><sequence>1</sequence></conditionProcessStatePK><condition>x</condition><destinationSequenceId>2</destinationSequenceId><conditionType>1</conditionType></ConditionProcessState></list>
+    <list><ProcessLink><processLinkPK><linkSequence>3</linkSequence></processLinkPK><initialStateSequence>1</initialStateSequence><finalStateSequence>2</finalStateSequence></ProcessLink></list>
+    <list><ConditionProcessAutomaticRules><sequence>1</sequence><expressionOrder>1</expressionOrder><ruleOrder>1</ruleOrder><field>valor</field><value>sim</value><operator>0</operator><valueType>0</valueType></ConditionProcessAutomaticRules></list>
+  </list>`;
+  const diagrama = lerDiagrama(gerarProcess(xml).process);
+  const gateway = diagrama.objetos.find((o) => o.tipo === 'BpmnGateway')!;
+  assert.match(gateway.attrs.condition!, /<targetTask>task2<\/targetTask>/);
+  assert.match(gateway.attrs.condition!, /<field>valor<\/field>/);
+});
+
+test('pull diagram baixa somente a definição e grava workflow/diagrams/<id>.process', async () => {
+  const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-pull-diagram-'));
+  const workflow = join(raiz, 'workflow');
+  const xml = readFileSync(join(import.meta.dirname, 'fixtures/diagrams/processoTeste.ecm30.xml'));
+  const f = fakeWorkflow();
+  f.cliente.exportProcess = async () => { f.chamadas.push('export'); return xml; };
+
+  const r = await pullDiagram({ server: SERVER, senha: 's', processId: 'reembolso', pastaWorkflow: workflow, cliente: f.cliente });
+  const arquivo = join(workflow, 'diagrams/reembolso.process');
+  assert.equal(r.arquivo, arquivo);
+  assert.equal(lerDiagrama(ler(arquivo)).objetos.some((o) => o.tipo === 'BpmnProcess'), true);
+  assert.deepEqual(f.chamadas, ['list', 'export']);
 });
 
 test('pull dataset grava no arquivo que o repositório já tem, em qualquer subpasta', async () => {

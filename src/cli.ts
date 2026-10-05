@@ -16,7 +16,7 @@ import { pushDiagram } from './commands/push-diagram.js';
 import { pushForm } from './commands/push-form.js';
 import { pushProcess } from './commands/push-process.js';
 import { pushWidget } from './commands/push-widget.js';
-import { pullDataset, pullForm, pullProcess, type ResultadoPull } from './commands/pull.js';
+import { pullDataset, pullDiagram, pullForm, pullProcess, type ResultadoPull } from './commands/pull.js';
 import { importCandidates, scanServersJson } from './import.js';
 import { gravarNoEnv } from './env-file.js';
 import { avisoGit, garantirIgnorado } from './gitignore.js';
@@ -28,7 +28,7 @@ import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
 import { ErroFluigctl } from './errors.js';
 
-const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa scripts e datasets
+const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
   fluigctl server ls
   fluigctl server add <nome> --host H [--port P] [--ssl] --user U [--prod]
@@ -63,6 +63,8 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       baixa o código do dataset para o datasets/**/<nome>.js que já existe, ou datasets/<nome>.js
   fluigctl pull form <pasta/> --server <nome> [--document-id N] [--dry-run] [--overwrite]
       baixa anexos e eventos do formulário (alvo resolvido como no push form) para a pasta
+  fluigctl pull diagram <processId> --server <nome> [--workflow <pasta>] [--name <nome>] [--dry-run] [--overwrite]
+      converte a definição publicada em workflow/diagrams/<nome>.process
       Só lê do servidor. Arquivo local diferente do servidor só é trocado com --overwrite;
       sem ele, se algum diferir, nada é gravado
 
@@ -620,8 +622,9 @@ async function comandoPull(argv: string[]): Promise<void> {
   const uso =
     'uso: fluigctl pull process <processId> --server <nome> [--workflow <pasta>] [--dry-run] [--overwrite]\n' +
     '     fluigctl pull dataset <nome> --server <nome> [--dry-run] [--overwrite]\n' +
-    '     fluigctl pull form <pasta/> --server <nome> [--document-id N] [--dry-run] [--overwrite]';
-  if (tipo !== 'process' && tipo !== 'dataset' && tipo !== 'form') throw new ErroFluigctl(uso, 2);
+    '     fluigctl pull form <pasta/> --server <nome> [--document-id N] [--dry-run] [--overwrite]\n' +
+    '     fluigctl pull diagram <processId> --server <nome> [--workflow <pasta>] [--name <nome>] [--dry-run] [--overwrite]';
+  if (tipo !== 'process' && tipo !== 'dataset' && tipo !== 'form' && tipo !== 'diagram') throw new ErroFluigctl(uso, 2);
 
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
@@ -632,6 +635,7 @@ async function comandoPull(argv: string[]): Promise<void> {
       'dry-run': { type: 'boolean', default: false },
       overwrite: { type: 'boolean', default: false },
       'document-id': { type: 'string' },
+      name: { type: 'string' },
     },
   });
   const nome = positionals[0];
@@ -649,6 +653,11 @@ async function comandoPull(argv: string[]): Promise<void> {
       console.log('  o processo publicado não tem scripts.');
       return;
     }
+  } else if (tipo === 'diagram') {
+    r = await pullDiagram({
+      ...comum, processId: nome, pastaWorkflow: values.workflow,
+      ...(values.name ? { nomeDoArquivo: values.name } : {}),
+    });
   } else if (tipo === 'form') {
     const documentId = values['document-id'] === undefined ? undefined : Number(values['document-id']);
     if (documentId !== undefined && !(Number.isInteger(documentId) && documentId > 0)) {

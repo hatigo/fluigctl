@@ -13,6 +13,7 @@ import { arquivosDaPasta, nomeDaPasta } from '../push/form-source.js';
 import { eventosDoProcesso, normalizar } from '../push/process-events.js';
 import { prefixoDosScripts } from '../push/process-source.js';
 import { lerMetadataStudio } from '../push/studio-metadata.js';
+import { gerarProcess } from '../pull/process-diagram.js';
 
 /**
  * Baixa do servidor o que está publicado — o caminho inverso do push. Nunca
@@ -112,6 +113,28 @@ export async function pullProcess(opcoes: OpcoesPullProcess): Promise<ResultadoP
     .sort((a, b) => (a.eventId < b.eventId ? -1 : a.eventId > b.eventId ? 1 : 0))
     .map((e) => ({ caminho: join(pastaScripts, `${prefixo}.${e.eventId}.js`), conteudo: e.codigo }));
   return { ...aplicarPull('.', arquivos, opcoes), prefixo };
+}
+
+export interface OpcoesPullDiagram extends Omit<OpcoesPullProcess, 'pastaWorkflow'> {
+  /** Pasta `workflow` do repositório (padrão: `workflow`). */
+  pastaWorkflow: string;
+  /** Nome do arquivo, sem `.process`; por padrão usa o processId. */
+  nomeDoArquivo?: string;
+}
+
+/** Baixa a definição ECM 3.0 e a converte para um `.process` editável pelo Studio. */
+export async function pullDiagram(opcoes: OpcoesPullDiagram): Promise<ResultadoPull & { arquivo: string }> {
+  const cliente = opcoes.cliente ?? (await workflowEngineClient(
+    serverUrl(opcoes.server), opcoes.server.companyId, opcoes.server.username, opcoes.senha, opcoes.server.userCode,
+  ));
+  if (!(await cliente.listProcessIds()).includes(opcoes.processId)) {
+    throw new ErroFluigctl(`o processo "${opcoes.processId}" não existe em ${serverUrl(opcoes.server)}`, 3);
+  }
+  const exportado = (await cliente.exportProcess(opcoes.processId)).toString('latin1');
+  const nome = opcoes.nomeDoArquivo ?? opcoes.processId;
+  const arquivo = join(opcoes.pastaWorkflow, 'diagrams', `${nome}.process`);
+  const convertido = gerarProcess(exportado, nome);
+  return { ...aplicarPull('.', [{ caminho: arquivo, conteudo: convertido.process }], opcoes), arquivo };
 }
 
 export interface OpcoesPullDataset {
