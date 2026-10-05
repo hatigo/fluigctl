@@ -13,6 +13,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "diff-diagramas": "tsc && node dist/scripts/diff-diagramas.js",
+    "validar-pull-diagramas": "tsc && node dist/scripts/validar-pull-diagramas.js",
     "test": "tsc && cp -r test/fixtures dist/test/ && node --test \"dist/test/**/*.test.js\""
   },
   "dependencies": {
