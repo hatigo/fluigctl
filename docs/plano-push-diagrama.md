@@ -691,6 +691,27 @@ BPMN dentro do losango (desenho próprio).
   join seguiu sem esperar o ramo que não abriu — a semântica do inclusivo.
 - 459/475 `.process` convertem sem recusa (eram 456); gabaritos seguem 67/71.
 
+**Estado (05/10/2026, 20º corte).** Entra a tarefa de e-mail (84): o
+`messageData` vira um `ProcessStateTrigger` depois dos gatilhos de temporizador e
+condicional, continuando a numeração (`getTriggersFromMessageSenders`,
+decompilado) — `runType` 1 e `frequencia` "01" (os padrões de um BpmnTriggerData
+novo), `type` 0 e `value`
+`<BpmnMessageData><Type/><Receiver/><Subject/><Content/></BpmnMessageData>`, com o
+texto inserido sem escapar (por isso `<` e `&` na mensagem são recusados).
+Corrigido junto: o nome do script do evento condicional segue o nome do arquivo,
+como os scripts (`ProcessUtil.getFileName`), e não o id do processo.
+
+- **Par do Studio:** o `Solicitacao_pagamento` (fluigbsm), único gabarito com
+  tarefa de e-mail, passou a bater no filho 12 (71/71 gabaritos no filho; eram
+  70). Segue fora dos gabaritos inteiros pelas posições deslocadas já registradas.
+- `fluig-localdev`: versão 2 do `teste_inclusivo` com o Ramo A como tarefa de
+  e-mail (destinatário admin). Liberada; o export devolve o gatilho como enviado;
+  a solicitação 7 passou pela tarefa (executada pelo sistema) até o fim.
+- 462/475 `.process` convertem sem recusa (eram 459): as duas tarefas de e-mail e
+  o `TESTE.process` da sescrn, cujo condicional usava o nome do arquivo.
+- As variantes de teste e o gerador ficam em `~/projetos/teste-fluigctl-variantes/`
+  (o scratchpad da sessão é limpo com frequência).
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
