@@ -37,7 +37,7 @@ import { basename, dirname, join, relative } from 'node:path';
 
 import { textoAscii } from '../src/commands/push-diagram.js';
 import { gerarEcm30 } from '../src/push/diagram/ecm30.js';
-import { lerDiagrama, type Diagrama } from '../src/push/diagram/modelo.js';
+import { lerDiagrama, type Diagrama, type ObjetoBpmn } from '../src/push/diagram/modelo.js';
 import { lerXml, type No } from '../src/push/diagram/xml.js';
 import { normalizar } from '../src/push/process-events.js';
 import { lerScriptsDoProcesso } from '../src/push/process-source.js';
@@ -204,13 +204,19 @@ function porChave(nos: No[], chave: (n: No) => string, lado: string, difs: Difer
 function sequenciasDoDiagrama(d: Diagrama): { nos: Set<string>; fluxos: Set<string> } {
   const sufixo = (id: string | undefined) => /(\d+)$/.exec(id ?? '')?.[1] ?? '';
   const nosIds = new Set(d.objetos.filter((o) => TIPOS_DE_NO.has(o.tipo)).map((o) => o.attrs['id'] ?? ''));
+  // O lado que o fluxo não tem conta como suportado: é o que o Studio grava
+  // (`getProcessLinkFromSequenceFlow` deixa o campo fora do XMI). Sem nenhum dos
+  // lados não sobra link. Anotação e documento continuam de fora, porque o
+  // Studio os manda para o ProcessLinkAssoc (filho 10), não para o filho 4.
+  const fluxoConta = (o: ObjetoBpmn) => {
+    const de = o.attrs['sourceRef'];
+    const para = o.attrs['targetRef'];
+    if (de === undefined && para === undefined) return false;
+    return (de === undefined || nosIds.has(de)) && (para === undefined || nosIds.has(para));
+  };
   return {
     nos: new Set([...nosIds].map(sufixo)),
-    fluxos: new Set(
-      d.objetos
-        .filter((o) => o.tipo === 'SequenceFlow' && nosIds.has(o.attrs['sourceRef'] ?? '') && nosIds.has(o.attrs['targetRef'] ?? ''))
-        .map((o) => sufixo(o.attrs['id'])),
-    ),
+    fluxos: new Set(d.objetos.filter((o) => o.tipo === 'SequenceFlow' && fluxoConta(o)).map((o) => sufixo(o.attrs['id']))),
   };
 }
 
@@ -309,8 +315,12 @@ async function main(argv: string[]): Promise<void> {
     const cobertos = new Set(
       estadosStudio.filter((e) => TIPOS_COBERTOS.has(campo(e, 'bpmnType'))).map((e) => campo(e, 'processStatePK.sequence')),
     );
+    // Um lado ausente não tira o link da comparação: o Studio grava assim, e o
+    // gerado tem o mesmo link — excluí-lo faria a diferença aparecer como
+    // "entidade só no gerado".
+    const pontaCoberta = (v: string) => v === '' || cobertos.has(v);
     const linksCobertos = linksStudio.filter(
-      (l) => cobertos.has(campo(l, 'initialStateSequence')) && cobertos.has(campo(l, 'finalStateSequence')),
+      (l) => pontaCoberta(campo(l, 'initialStateSequence')) && pontaCoberta(campo(l, 'finalStateSequence')),
     );
     const seqLinks = new Set([
       ...linksCobertos.map((l) => campo(l, 'processLinkPK.linkSequence')),
