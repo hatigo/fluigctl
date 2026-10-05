@@ -520,8 +520,10 @@ test('valor sem mapeamento conferido continua recusado com código 6', () => {
       /BpmnIntermediateEvent \(type 44\)/,
     ],
     [
-      FASE1.replace('&lt;targetTask>task8&lt;/targetTask>', '&lt;targetTask>task8&lt;/targetTask>&#xA;    &lt;mechanism>Usu&#xe1;rio&lt;/mechanism>'),
-      /atribuição Usuário na condição 1 de exclusivegateway7/,
+      // Configuração do caminho que não é atribuição conhecida: segue recusado.
+      FASE1.replace('&lt;targetTask>task8&lt;/targetTask>', '&lt;targetTask>task8&lt;/targetTask>&#xA;    &lt;mechanism>X&lt;/mechanism>&#xA;    ' +
+        '&lt;mecanismoAtribuicaoConfiguracao class=&quot;org.eclipse.bpmn2.impl.AssignmentControllerDesconhecido&quot;>&lt;a>1&lt;/a>&lt;/mecanismoAtribuicaoConfiguracao>'),
+      /atribuição AssignmentControllerDesconhecido na condição 1 de exclusivegateway7/,
     ],
     [FASE1.replace('scriptFileName="processoFase1.servicetask5.js"', 'scriptFileName="outro.servicetask5.js"'), /scriptFileName "outro.servicetask5.js"/],
   ];
@@ -848,12 +850,14 @@ test('appsConfiguration fora da forma conferida é recusado com código 6, sem X
     assert.match(erro.message, motivo);
     assert.match(erro.message, /task5/);
   }
-  // Só a tarefa de usuário 80 foi conferida contra o Studio.
-  const naTarefa81 = comApps('task5', APPS(ok)).replace(/(<bpmn2:BpmnTask appsConfiguration="[^"]*" id="task5"[^>]*?)type="80"/, '$1type="81"');
-  assert.notEqual(naTarefa81, comApps('task5', APPS(ok)));
-  const erro = erroDe(() => converterDiagrama(naTarefa81, { companyId: 1 }));
+  // Tarefas 80 e 81 valem (o Studio lê de qualquer tarefa); outro tipo segue recusado.
+  const comTipo = (t: string) => comApps('task5', APPS(ok)).replace(/(<bpmn2:BpmnTask appsConfiguration="[^"]*" id="task5"[^>]*?)type="80"/, `$1type="${t}"`);
+  assert.notEqual(comTipo('81'), comApps('task5', APPS(ok)));
+  const linhas = filhosDaRaiz(converterDiagrama(comTipo('81'), { companyId: 1 }).xml)[17]!.filhos;
+  assert.deepEqual(linhas.map((l) => texto(l, 'stateSequence')), ['5']);
+  const erro = erroDe(() => converterDiagrama(comTipo('84'), { companyId: 1 }));
   assert.equal(erro.codigo, 6);
-  assert.match(erro.message, /appsConfiguration em task5 \(type 81\)/);
+  assert.match(erro.message, /appsConfiguration em task5 \(type 84\)/);
 });
 
 /** Troca a atribuição da task7 por um blob "Associado" com os controladores dados. */
@@ -1432,4 +1436,63 @@ test('gerarSvg desenha grupo, banco de dados e documento em <g componentSequence
   // Não são estados: o visualizador não os destaca.
   for (const seq of [20, 21, 22]) assert.ok(!sequenciasDoSvg(svg).has(seq));
   assert.ok(lerXml(svg.replace(/^<\?xml[^>]*>\n/, '')));
+});
+
+test('caminho de gateway: mecanismo com nome e sem configuração é recusado; "Associado" sai como na tarefa', () => {
+  const condicoesDe = (diagrama: string) => filhosDaRaiz(converterDiagrama(diagrama, { companyId: 1 }).xml)[3]!.filhos;
+  const comCampo = (c: No, campo: string) => c.filhos.some((f) => f.nome === campo);
+
+  // Mecanismo com nome e sem configuração: o servidor não libera (fluig-localdev); recusa antes.
+  const soNome = FASE1.replace('&lt;targetTask>task8&lt;/targetTask>', '&lt;targetTask>task8&lt;/targetTask>&#xA;    &lt;mechanism>Usu&#xe1;rio&lt;/mechanism>');
+  assert.notEqual(soNome, FASE1);
+  assert.match(erroDe(() => condicoesDe(soNome)).message, /mecanismo "Usuário" sem configuração na condição 1 de exclusivegateway7/);
+
+  const associado = '&lt;mechanism>Associado&lt;/mechanism>&#xA;    &lt;mecanismoAtribuicaoConfiguracao class=&quot;org.eclipse.bpmn2.impl.AssignmentControllerAssociated&quot;>' +
+    '&lt;type>OR&lt;/type>&lt;controllers class=&quot;list&quot;>&lt;org.eclipse.bpmn2.impl.AssignmentControllerExecutorMechanism>' +
+    '&lt;idNode>task8&lt;/idNode>&lt;returns>2&lt;/returns>&lt;mechanismName>Executor Atividade&lt;/mechanismName>' +
+    '&lt;/org.eclipse.bpmn2.impl.AssignmentControllerExecutorMechanism>&lt;/controllers>&lt;mechanismName>Associado&lt;/mechanismName>' +
+    '&lt;/mecanismoAtribuicaoConfiguracao>';
+  const comAssociado = FASE1.replace('&lt;targetTask>task8&lt;/targetTask>', `&lt;targetTask>task8&lt;/targetTask>&#xA;    ${associado}`);
+  assert.notEqual(comAssociado, FASE1);
+  const r = converterDiagrama(comAssociado, { companyId: 1 });
+  const c2 = filhosDaRaiz(r.xml)[3]!.filhos.find((c) => comCampo(c, 'engineAllocationConfiguration'))!;
+  assert.equal(texto(c2, 'engineAllocationId'), 'Associado');
+  assert.equal(texto(c2, 'engineAllocationConfiguration'),
+    '<AssociatedController ConditionAssociated="OR"><ControlXML TypeAssociated="Executor Atividade"><AssignmentController>' +
+    '<BaseActivity>8</BaseActivity><Returns>All</Returns></AssignmentController></ControlXML></AssociatedController>');
+  assert.match(r.avisos.join('\n'), /Associado" com OR.*condição 1 de exclusivegateway7/);
+});
+
+test('activeProcess="false" publica inativo; expression do fluxo sai no ProcessLink; propriedade estendida do gateway vai ao filho 13', () => {
+  const inativo = PROCESSO.replace('<bpmn2:BpmnProcess id="processoTeste"', '<bpmn2:BpmnProcess id="processoTeste" activeProcess="false"');
+  assert.notEqual(inativo, PROCESSO);
+  const f1 = filhosDaRaiz(converterDiagrama(inativo, { companyId: 1 }).xml);
+  assert.equal(texto(f1[0]!, 'active'), 'false');
+  assert.equal(texto(f1[1]!, 'active'), 'false');
+  const ativo = filhosDaRaiz(converterDiagrama(PROCESSO, { companyId: 1 }).xml);
+  assert.equal(texto(ativo[0]!, 'active'), 'true');
+
+  // Na ordem da classe ProcessLink: type, expression e só então os movement*.
+  const comExpressao = PROCESSO.replace('<bpmn2:SequenceFlow id="flow8"', '<bpmn2:SequenceFlow expression="" id="flow8"');
+  assert.notEqual(comExpressao, PROCESSO);
+  const link = filhosDaRaiz(converterDiagrama(comExpressao, { companyId: 1 }).xml)[4]!.filhos
+    .find((l) => texto(l, 'processLinkPK', 'linkSequence') === '8')!;
+  const nomes = link.filhos.map((f) => f.nome);
+  assert.equal(nomes[nomes.indexOf('type') + 1], 'expression');
+  assert.equal(texto(link, 'expression'), '');
+
+  const prop = '<list>\n  <org.eclipse.bpmn2.impl.ExtendedPropertyImpl>\n    <propertyName>teste</propertyName>\n    <propertyType>0</propertyType>\n' +
+    '    <propertyDescription>teste</propertyDescription>\n    <propertyValue>Texto</propertyValue>\n    <isDefaultProperty>false</isDefaultProperty>\n' +
+    '  </org.eclipse.bpmn2.impl.ExtendedPropertyImpl>\n</list>';
+  const noGateway = FASE1.replace(/(<bpmn2:BpmnGateway id="exclusivegateway7"[^\n]*?)extendedFields="[^"]*"/, `$1extendedFields="${comoAtributo(prop)}"`);
+  assert.notEqual(noGateway, FASE1);
+  const f3 = filhosDaRaiz(converterDiagrama(noGateway, { companyId: 1 }).xml);
+  assert.deepEqual(f3[13]!.filhos.map((e) => [texto(e, 'extendedPropertyFieldPK', 'stateSequence'), texto(e, 'extendedPropertyFieldPK', 'propertyName'), texto(e, 'propertyValue')]),
+    [['7', 'teste', 'Texto']]);
+  // Não vira propriedade avançada do processo (filho 7): o Studio só leva as do processo.
+  assert.equal(f3[7]!.filhos.length, 0);
+  // Em tarefa, os nomes especiais mudariam o estado: segue recusado.
+  const naTarefa = FASE1.replace(/(<bpmn2:BpmnTask id="task8"[^\n]*?)extendedFields="[^"]*"/, `$1extendedFields="${comoAtributo(prop)}"`);
+  assert.notEqual(naTarefa, FASE1);
+  assert.match(erroDe(() => converterDiagrama(naTarefa, { companyId: 1 })).message, /propriedades estendidas \(extendedFields\) em task8/);
 });
