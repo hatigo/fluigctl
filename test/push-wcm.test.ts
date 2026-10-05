@@ -167,7 +167,7 @@ test('push widget envia o .war com a sessão do login e os campos da extensão',
       prompt: async () => '',
     });
 
-    assert.equal(r.nome, 'wdgExemplo');
+    assert.equal(r.codigo, 'wdgExemplo');
     assert.equal(r.entradas, Object.keys(ESPERADO).length);
 
     const [envio] = uploads(a.fluig);
@@ -354,7 +354,7 @@ test('push layout monta o .war do layout e envia pela mesma rota', async () => {
   try {
     const r = await pushWcm({ tipo: 'layout', server: a.server, senha: 's', pasta: LAYOUT, prompt: async () => '' });
 
-    assert.equal(r.nome, 'layoutExemplo');
+    assert.equal(r.codigo, 'layoutExemplo');
     assert.equal(r.tipo, 'layout');
     assert.equal(r.entradas, 4);
 
@@ -388,6 +388,59 @@ test('push layout em dry-run monta o pacote e não envia nada', async () => {
     const r = await pushWcm({ tipo: 'layout', server: a.server, senha: 's', pasta: LAYOUT, dryRun: true, prompt: async () => '' });
     assert.equal(r.tipo, 'layout');
     assert.equal(uploads(a.fluig).length, 0);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('o alvo da publicação é o application.code, não o nome da pasta', async (t) => {
+  // Medido no fluig-localdev: um pacote enviado como DSA001semClasses.war foi
+  // registrado como DSA_001_java_gestao_contrato, que é o application.code.
+  const a = await ambiente();
+  const pasta = copiaDaFixture(t);
+
+  try {
+    const r = await pushWcm({ tipo: 'widget', server: a.server, senha: 's', pasta, prompt: async () => '' });
+    assert.equal(r.codigo, 'wdgExemplo');
+    assert.equal(r.pasta, 'wdgExemplo');
+    assert.equal(r.aviso, undefined);
+    // O nome do arquivo enviado segue o código, que é o que o servidor registra.
+    assert.match(uploads(a.fluig)[0]!.corpo.toString('latin1'), /name="fileName"\r\n\r\nwdgExemplo\.war/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('pasta com nome diferente do application.code avisa qual é o alvo', async (t) => {
+  const a = await ambiente();
+  const pasta = join(dirname(copiaDaFixture(t)), 'outroNome');
+  cpSync(FIXTURE, pasta, { recursive: true });
+
+  try {
+    const r = await pushWcm({ tipo: 'widget', server: a.server, senha: 's', pasta, prompt: async () => '' });
+    assert.equal(r.pasta, 'outroNome');
+    assert.equal(r.codigo, 'wdgExemplo');
+    assert.match(r.aviso!, /a pasta se chama "outroNome" e o application\.code é "wdgExemplo"/);
+    // E o pacote sai com o código, que é quem manda no servidor.
+    assert.match(uploads(a.fluig)[0]!.corpo.toString('latin1'), /wdgExemplo\.war/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('sem application.code o push recusa antes da rede: o servidor não identifica a aplicação', async (t) => {
+  const a = await ambiente();
+  const pasta = copiaDaFixture(t);
+  writeFileSync(join(pasta, 'src/main/resources/application.info'), 'application.type=widget\napplication.title=SemCodigo\n');
+
+  try {
+    const erro = await pushWcm({ tipo: 'widget', server: a.server, senha: 's', pasta, prompt: async () => '' }).then(
+      () => assert.fail('esperava recusa'),
+      (e: ErroFluigctl) => e,
+    );
+    assert.equal(erro.codigo, 3);
+    assert.match(erro.message, /não declara application\.code/);
+    assert.equal(a.fluig.requests.length, 0);
   } finally {
     await a.fluig.close();
   }

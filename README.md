@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 397 | não | não | — |
+| Testes automatizados | 400 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -436,6 +436,21 @@ memória — sem Maven — e envia pelo mesmo endpoint da extensão Fluiggers,
 `/portal/api/rest/wcmservice/rest/product/uploadfile`, com a sessão do portal.
 O nome da widget é o nome da pasta. Não há `--create`: o servidor instala se a
 widget não existe e atualiza se existe.
+
+**Quem escolhe o alvo é o `application.code`, não o nome da pasta nem o do
+arquivo.** Medido no fluig-localdev: um pacote enviado como
+`DSA001semClasses.war` foi registrado como `DSA_001_java_gestao_contrato`, que é o
+`application.code` do `application.info`. O `push` lê esse campo, publica com a
+identidade dele e avisa quando a pasta tem outro nome:
+
+```
+[dry-run] genteQueCresce.war — 12 arquivo(s), 16309 bytes seria enviado para …
+  aviso: a pasta se chama "pasta-renomeada" e o application.code é "genteQueCresce": o push publica "genteQueCresce".
+```
+
+Sem `application.code` o comando recusa antes da rede (código 3): o servidor não
+identifica a aplicação, e responde um `UploadErrorException` seco — medido.
+
 O pacote segue o mapeamento da extensão, sem compressão:
 
 | origem | no `.war` |
@@ -777,7 +792,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 397 testes, sem rede e sem servidor Fluig
+npm test        # 400 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
@@ -802,6 +817,8 @@ CETENCO (Fluig 1.8, `4.201.225.233:8021`), criando artefatos descartáveis:
 | `saveEventList` grava um evento ou a lista? | **A lista inteira.** Mandar um evento apagou o outro que existia. Toda publicação lê, troca a entrada e manda tudo de volta; uma leitura que falha recusa. |
 | A rota do WCM aceita widget com Java? | **Não.** Qualquer `.war` com `.class` (solto, renomeado, ou em `.jar`) volta `500 Existe uma declaração de componente repetida na lista de recursos da widget`. O mesmo pacote sem as classes sobe com `200`. Widget com Java é pelo Studio. |
 | A rota do WCM aceita layout? | **Sim**, o mesmo endpoint da widget, o mesmo pacote. O `layoutExterno` da Cetenco passou a responder `200` em `/layoutExterno/resources/…` (era `404`). |
+| Quem identifica a aplicação no deploy? | **O `application.code`**, não o nome do `.war`. Um pacote enviado como `DSA001semClasses.war` foi registrado como `DSA_001_java_gestao_contrato`. Sem `application.code`, o upload volta `500 UploadErrorException`. |
+| Widget publicada fica mesmo no ar? | Sim: registrada na lista como `APPLICATION_TYPE='widget'` e os recursos servidos em `/<code>/resources/…` (js, css e binário, `200`). O caminho `/resources/…` na raiz do portal dá `404` para qualquer widget — é caminho de página, não do app. |
 | O servidor compila o evento global? | **Sim, na gravação.** Um `.js` com erro de sintaxe volta `500` com `Não foi possível compilar o evento <id> [Erro na linha N]`, e a lista fica intacta. |
 | `createAttributionMechanism` num id que já existe | Recusa com `Código do mecanismo de atribuição já cadastrado`. É por isso que criar é `--create`, e não um upsert silencioso. |
 

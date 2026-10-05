@@ -5,7 +5,15 @@ import { ErroFluigctl } from '../errors.js';
 import type { EntradaZip } from './war.js';
 
 export interface FonteWcm {
+  /** Nome da pasta. Não é o alvo: quem identifica a aplicação no servidor é `codigo`. */
   nome: string;
+  /**
+   * O `application.code` do `application.info`. **É este o alvo da publicação:**
+   * o servidor registra a aplicação por ele, e o nome do `.war` é ignorado —
+   * medido no fluig-localdev, onde um pacote enviado como `DSA001semClasses.war`
+   * foi registrado como `DSA_001_java_gestao_contrato`.
+   */
+  codigo: string;
   /** O `application.type` do `application.info`: `widget` ou `layout`. */
   tipo: string;
   entradas: EntradaZip[];
@@ -56,7 +64,7 @@ export async function lerWcm(pasta: string, tipoEsperado: TipoWcm): Promise<Font
     );
   }
 
-  const tipo = await lerTipo(join(recursos, 'application.info'), pasta, tipoEsperado);
+  const { tipo, codigo } = await lerInfo(join(recursos, 'application.info'), pasta, tipoEsperado);
   const entradas: EntradaZip[] = [];
 
   for (const arquivo of await arquivosDoTopo(webInf, (n) => n.endsWith('.xml'))) {
@@ -100,18 +108,30 @@ export async function lerWcm(pasta: string, tipoEsperado: TipoWcm): Promise<Font
     }
   }
 
-  return { nome, tipo, entradas };
+  return { nome, codigo, tipo, entradas };
 }
 
 /**
- * O `application.type` do `application.info`, conferido contra o que o comando
- * publica. O arquivo é lido como latin1 pelo mesmo motivo do pacote: é um
- * `.properties` do Fluig, e a extensão o estraga lendo como UTF-8.
+ * O `application.type` e o `application.code` do `application.info`. O arquivo é
+ * lido como latin1 pelo mesmo motivo do pacote: é um `.properties` do Fluig, e a
+ * extensão o estraga lendo como UTF-8.
+ *
+ * O `type` é conferido contra o comando: widget e layout são o mesmo pacote, e
+ * sem a conferência um `push widget` de pasta de layout publica o layout.
+ *
+ * O `code` é o alvo de verdade. Sem ele o servidor recusa o upload com um
+ * `UploadErrorException` seco (medido), então a recusa aqui é mais útil.
  */
-async function lerTipo(caminho: string, pasta: string, tipoEsperado: TipoWcm): Promise<string> {
+async function lerInfo(
+  caminho: string,
+  pasta: string,
+  tipoEsperado: TipoWcm,
+): Promise<{ tipo: string; codigo: string }> {
   const info = await readFile(caminho, 'latin1');
-  const linha = /^[ \t]*application\.type[ \t]*=[ \t]*(.*?)[ \t\r]*$/m.exec(info);
-  const tipo = linha?.[1] ?? '';
+  const campo = (nome: string) =>
+    new RegExp(`^[ \\t]*application\\.${nome}[ \\t]*=[ \\t]*(.*?)[ \\t\\r]*$`, 'm').exec(info)?.[1] ?? '';
+
+  const tipo = campo('type');
   if (tipo === '') {
     throw new ErroFluigctl(
       `o application.info de ${pasta} não declara application.type, então não sei se é ` +
@@ -127,7 +147,17 @@ async function lerTipo(caminho: string, pasta: string, tipoEsperado: TipoWcm): P
       6,
     );
   }
-  return tipo;
+
+  const codigo = campo('code');
+  if (codigo === '') {
+    throw new ErroFluigctl(
+      `o application.info de ${pasta} não declara application.code, que é por onde o ` +
+        'servidor identifica a aplicação: sem ele o upload é recusado. ' +
+        'Acrescente "application.code=<nome>".',
+      3,
+    );
+  }
+  return { tipo, codigo };
 }
 
 async function arquivosDoTopo(dir: string, aceita: (nome: string) => boolean): Promise<string[]> {

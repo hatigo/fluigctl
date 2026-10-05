@@ -32,11 +32,16 @@ export interface OpcoesPushWcm {
 }
 
 export interface ResultadoPushWcm {
-  nome: string;
+  /** A pasta publicada. */
+  pasta: string;
+  /** O alvo de verdade: o `application.code`, que é como o servidor registra. */
+  codigo: string;
   tipo: TipoWcm;
   entradas: number;
   bytes: number;
   url: string;
+  /** A pasta tem outro nome que o `application.code`; o alvo é o código. */
+  aviso?: string;
 }
 
 const CAMINHO_UPLOAD = '/portal/api/rest/wcmservice/rest/product/uploadfile';
@@ -44,23 +49,29 @@ const CAMINHO_UPLOAD = '/portal/api/rest/wcmservice/rest/product/uploadfile';
 export async function pushWcm(opcoes: OpcoesPushWcm): Promise<ResultadoPushWcm> {
   const { server, senha, tipo } = opcoes;
 
-  const { nome, entradas } = await lerWcm(opcoes.pasta, tipo);
+  const { nome, codigo, entradas } = await lerWcm(opcoes.pasta, tipo);
   const war = montarZip(entradas);
   const base = serverUrl(server);
   const resultado: ResultadoPushWcm = {
-    nome,
+    pasta: nome,
+    codigo,
     tipo,
     entradas: entradas.length,
     bytes: war.length,
     url: base + CAMINHO_UPLOAD,
   };
+  // O nome do .war não escolhe o alvo (o servidor usa o application.code), mas
+  // pasta e código diferentes costumam ser engano de quem renomeou uma ou outro.
+  if (nome !== codigo) {
+    resultado.aviso = `a pasta se chama "${nome}" e o application.code é "${codigo}": o push publica "${codigo}".`;
+  }
 
   if (opcoes.dryRun) return resultado;
 
-  await confirmProduction(server, senha, `push ${tipo} ${nome}`, opcoes.prompt);
+  await confirmProduction(server, senha, `push ${tipo} ${codigo}`, opcoes.prompt);
 
   const cookie = await login(base, server.username, senha);
-  const arquivo = `${nome}.war`;
+  const arquivo = `${codigo}.war`;
   const corpo = new FormData();
   corpo.append('fileName', arquivo);
   corpo.append('fileDescription', 'WCM Eclipse Plugin Deploy Artifact');
@@ -76,7 +87,7 @@ export async function pushWcm(opcoes: OpcoesPushWcm): Promise<ResultadoPushWcm> 
 
   if (!resposta.ok) {
     throw new ErroFluigctl(
-      `o servidor recusou o ${tipo} "${nome}" (HTTP ${resposta.status}): ${texto.slice(0, 300)}`,
+      `o servidor recusou o ${tipo} "${codigo}" (HTTP ${resposta.status}): ${texto.slice(0, 300)}`,
       7,
     );
   }
@@ -86,7 +97,7 @@ export async function pushWcm(opcoes: OpcoesPushWcm): Promise<ResultadoPushWcm> 
     conteudo = JSON.parse(texto) as typeof conteudo;
   } catch {
     throw new ErroFluigctl(
-      `resposta inesperada ao enviar o ${tipo} "${nome}" (HTTP ${resposta.status}): não é JSON`,
+      `resposta inesperada ao enviar o ${tipo} "${codigo}" (HTTP ${resposta.status}): não é JSON`,
       7,
     );
   }
@@ -95,7 +106,7 @@ export async function pushWcm(opcoes: OpcoesPushWcm): Promise<ResultadoPushWcm> 
     const mensagem =
       typeof conteudo.message === 'string' ? conteudo.message : conteudo.message.message;
     throw new ErroFluigctl(
-      `o servidor recusou o ${tipo} "${nome}": ${mensagem ?? JSON.stringify(conteudo.message)}`,
+      `o servidor recusou o ${tipo} "${codigo}": ${mensagem ?? JSON.stringify(conteudo.message)}`,
       7,
     );
   }
