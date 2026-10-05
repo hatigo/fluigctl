@@ -4,13 +4,13 @@
   "description": "CLI para subir datasets e formulários no TOTVS Fluig",
   "type": "module",
   "bin": {
-    "fluigctl": "./dist/src/cli.js"
+    "fluigctl": "./bin/fluigctl.js"
   },
   "engines": {
     "node": ">=22.2"
   },
   "scripts": {
-    "build": "tsc && chmod +x dist/src/cli.js",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "diff-diagramas": "tsc && node dist/scripts/diff-diagramas.js",
     "validar-pull-diagramas": "tsc && node dist/scripts/validar-pull-diagramas.js",
