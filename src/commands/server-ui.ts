@@ -53,7 +53,10 @@ export interface OpcoesServerUi {
 }
 
 export async function serverUi(opcoes: OpcoesServerUi = {}): Promise<void> {
-  const terminal = opcoes.terminal ?? abrirTerminal();
+  // Sem terminal de verdade não há tela — e isso é uma questão de humano, como o
+  // portão de produção. Por isso código 5, e não o 1 genérico: o 1 não diz nada
+  // a quem lê a saída (nem a uma pessoa, nem a um agente).
+  const terminal = opcoes.terminal ?? abrirTerminalComRecusaHumana();
   const dirPadrao = opcoes.dir ?? join(process.env['HOME'] ?? '', 'fluig', 'workspaces');
 
   let estado = estadoInicial(linhas(loadConfig()), dirPadrao);
@@ -199,6 +202,17 @@ async function executar(efeito: Efeito): Promise<Evento[]> {
  * Cadastro pela metade — servidor gravado com companyId 0 porque o login falhou —
  * seria pior do que não gravar, e é o que o CLI também evita.
  */
+function abrirTerminalComRecusaHumana(): Terminal {
+  try {
+    return abrirTerminal();
+  } catch (erro) {
+    throw new ErroFluigctl(
+      `${(erro as Error).message} A tela de cadastro é para gente: rode você mesmo num terminal.`,
+      5,
+    );
+  }
+}
+
 async function salvar(efeito: Extract<Efeito, { tipo: 'salvar' }>): Promise<Evento[]> {
   try {
     const atual = loadConfig();

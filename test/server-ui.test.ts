@@ -6,6 +6,7 @@ import { join } from 'node:path';
 
 import { fakeFluig } from './helpers/fake-fluig.js';
 import { serverUi } from '../src/commands/server-ui.js';
+import { ErroFluigctl } from '../src/errors.js';
 import type { Terminal, Tecla } from '../src/tui/terminal.js';
 
 /**
@@ -348,4 +349,18 @@ test('a tela ouve o redimensionamento e para de ouvir ao sair', async () => {
     if (anterior === undefined) delete process.env['XDG_CONFIG_HOME'];
     else process.env['XDG_CONFIG_HOME'] = anterior;
   }
+});
+
+test('sem terminal de verdade a tela recusa com código 5, não com 1', async () => {
+  // A suíte roda sem tty, então é o caso real. Código 5 é "precisa de um
+  // humano no terminal", o mesmo do portão de produção: o agente que lê a saída
+  // sabe que não é para ele insistir. Um 1 genérico não diria nada.
+  const erro = await serverUi({}).then(
+    () => undefined,
+    (e: ErroFluigctl) => e,
+  );
+  assert.ok(erro, 'esperava a recusa');
+  assert.equal(erro.codigo, 5);
+  assert.match(erro.message, /precisa de um terminal de verdade/);
+  assert.match(erro.message, /é para gente/);
 });
