@@ -51,9 +51,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       copia as senhas (decifradas com a chave desta máquina) para o arquivo de senhas do fluigctl
   fluigctl server set-prod <nome> [--off]
   fluigctl server test <nome>
-  fluigctl server ui [--dir <pasta>]
+  fluigctl server ui [--dir <pasta>]      (para gente: precisa de um terminal de verdade)
       tela no terminal para cadastrar, rever, testar, marcar produção e remover servidores,
-      e para importar os da extensão Fluiggers; precisa de um terminal de verdade
+      e para importar os da extensão Fluiggers
 
   fluigctl changed [--since <ref>] [--server <nome>]
       lista o que mudou no git como artefatos do Fluig e sugere o comando de cada um; não envia nada
@@ -100,7 +100,18 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
 A senha de cada servidor vem, nesta ordem: da variável de ambiente (ex.: FLUIG_CETENCO_HML_PASSWORD),
 do arquivo de senhas do fluigctl (~/.config/fluigctl/env, permissão 600) ou do .vscode/servers.json
 da extensão, da pasta atual para cima. O .vscode/servers.json é mantido no .gitignore.
-Nenhuma senha é impressa, nem gravada no cadastro de servidores.`;
+Nenhuma senha é impressa, nem gravada no cadastro de servidores.
+
+Códigos de saída — nada é escrito quando o código é 2 a 6:
+  0  feito
+  2  uso errado (inclui push form sem dizer o que fazer com a versão)
+  3  servidor ou arquivo não encontrado
+  4  a senha não está em nenhuma das fontes; é pergunta para o humano
+  5  precisa de gente no terminal: produção, e a tela de servidores
+  6  ambíguo ou sem correspondência; a mensagem diz a flag que resolve
+  7  o servidor Fluig recusou a operação
+
+--dry-run existe em todo push e pull: mostra o alvo e o que mudaria, sem escrever.`;
 
 
 async function comandoServer(argv: string[]): Promise<void> {
