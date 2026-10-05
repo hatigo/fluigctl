@@ -65,6 +65,9 @@ export async function serverUi(opcoes: OpcoesServerUi = {}): Promise<void> {
     terminal.desenhar(desenhar(e, colunas, altura));
   };
 
+  // Janela redimensionada: redesenha o estado corrente, sem esperar uma tecla.
+  const pararDeOuvirOTamanho = terminal.aoRedimensionar(() => pinta(estado));
+
   pinta(estado);
   try {
     for await (const tecla of terminal.teclas()) {
@@ -76,6 +79,7 @@ export async function serverUi(opcoes: OpcoesServerUi = {}): Promise<void> {
       if (estado.sair) break;
     }
   } finally {
+    pararDeOuvirOTamanho();
     terminal.fechar();
   }
 }

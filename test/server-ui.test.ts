@@ -21,12 +21,27 @@ const LOGIN = '/portal/api/servlet/login.do';
 const USUARIO = '/portal/api/rest/wcmservice/rest/user/findUserByLogin';
 
 /** Um terminal de mentira: entrega as teclas e guarda os quadros desenhados. */
-function terminalDas(teclas: Tecla[], quadros: string[] = []): Terminal {
+interface Visto {
+  ouviu?: boolean;
+  desinscreveu?: boolean;
+  avisar?: () => void;
+}
+
+function terminalDas(teclas: Tecla[], quadros: string[] = [], visto?: Visto): Terminal {
   return {
     tamanho: () => ({ colunas: 100, linhas: 30 }),
     desenhar: (q) => void quadros.push(q),
     async *teclas() {
       for (const t of teclas) yield t;
+    },
+    aoRedimensionar(ouvinte) {
+      if (visto) {
+        visto.ouviu = true;
+        visto.avisar = () => ouvinte({ colunas: 120, linhas: 40 });
+      }
+      return () => {
+        if (visto) visto.desinscreveu = true;
+      };
     },
     fechar: () => {},
   };
@@ -323,3 +338,31 @@ async function rodarComDir(
     else process.env['XDG_CONFIG_HOME'] = anterior;
   }
 }
+
+test('a tela ouve o redimensionamento e para de ouvir ao sair', async () => {
+  const visto: { ouviu?: boolean; desinscreveu?: boolean; avisar?: () => void } = {};
+  const quadros: string[] = [];
+  const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-tui-'));
+  const anterior = process.env['XDG_CONFIG_HOME'];
+  process.env['XDG_CONFIG_HOME'] = raiz;
+  mkdirSync(join(raiz, 'fluigctl'), { recursive: true });
+  writeFileSync(join(raiz, 'fluigctl/servers.json'), JSON.stringify({ version: 1, servers: {} }));
+
+  try {
+    const antes = quadros.length;
+    await serverUi({ terminal: terminalDas([t('?'), t('z')], quadros, visto) });
+
+    assert.equal(visto.ouviu, true, 'a tela precisa ouvir o SIGWINCH');
+    assert.equal(visto.desinscreveu, true, 'e parar de ouvir ao sair, para não vazar ouvinte');
+
+    // O aviso do tamanho redesenha o estado corrente, sem tecla nenhuma.
+    const marco = quadros.length;
+    visto.avisar!();
+    assert.equal(quadros.length, marco + 1, 'o redimensionamento desenha um quadro');
+    void antes;
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+    if (anterior === undefined) delete process.env['XDG_CONFIG_HOME'];
+    else process.env['XDG_CONFIG_HOME'] = anterior;
+  }
+});

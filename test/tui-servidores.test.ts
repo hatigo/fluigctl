@@ -9,7 +9,7 @@ import {
   type Estado,
   type LinhaServidor,
 } from '../src/tui/servidores.js';
-import { decodificar, desistir, ESPERA_ESC_MS, quebrar, type Tecla } from '../src/tui/terminal.js';
+import { decodificar, desistir, ESPERA_ESC_MS, quebrar, vigiarTamanho, type Tecla } from '../src/tui/terminal.js';
 
 const SERVIDORES: LinhaServidor[] = [
   { nome: 'cetenco-hml', host: 'hml.exemplo.com.br', porta: 8021, ssl: false, usuario: 'integracao', companyId: 1, userCode: 'Integracao.Fluig', senhaEnv: 'FLUIG_CETENCO_HML_PASSWORD', prod: false },
@@ -407,4 +407,56 @@ test('login que dá certo sai do formulário com o recado', () => {
 
   assert.equal(fora.tela.tipo, 'lista');
   assert.equal(fora.recado?.tom, 'ok');
+});
+
+// --- redimensionamento da janela ---
+
+test('o vigia avisa quando o tamanho muda, e só quando muda', () => {
+  let tamanho = { colunas: 80, linhas: 24 };
+  let disparar: (() => void) | undefined;
+  const avisos: { colunas: number; linhas: number }[] = [];
+
+  const parar = vigiarTamanho({
+    ler: () => tamanho,
+    avisar: (t) => avisos.push(t),
+    inscrever: (f) => {
+      disparar = f;
+      return () => (disparar = undefined);
+    },
+    inicial: tamanho,
+  });
+
+  // O sinal sem mudança de tamanho não avisa.
+  disparar!();
+  assert.deepEqual(avisos, []);
+
+  tamanho = { colunas: 100, linhas: 40 };
+  disparar!();
+  assert.deepEqual(avisos, [{ colunas: 100, linhas: 40 }]);
+
+  disparar!();
+  assert.deepEqual(avisos.length, 1, 'o mesmo tamanho não avisa de novo');
+
+  tamanho = { colunas: 100, linhas: 24 };
+  disparar!();
+  assert.deepEqual(avisos.length, 2, 'só a largura mudar já é mudança');
+
+  parar();
+  assert.equal(disparar, undefined, 'parar desinscreve');
+});
+
+test('o vigia não quebra quando a leitura do tamanho falha', () => {
+  let disparar: (() => void) | undefined;
+  vigiarTamanho({
+    ler: () => {
+      throw new Error('sem tty');
+    },
+    avisar: () => assert.fail('não podia avisar'),
+    inscrever: (f) => {
+      disparar = f;
+      return () => {};
+    },
+    inicial: { colunas: 80, linhas: 24 },
+  });
+  assert.doesNotThrow(() => disparar!());
 });

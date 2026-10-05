@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 445 | não | não | — |
+| Testes automatizados | 448 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -143,6 +143,13 @@ Três decisões que valem saber:
   login roda primeiro e só depois o arquivo é escrito. Se a credencial não
   servir, o formulário continua ali com tudo o que foi digitado e o motivo,
   e nada é gravado.
+
+**A janela pode ser redimensionada durante o uso**, e a tela se refaz sozinha, sem
+esperar uma tecla. Isso custou uma medição: `columns`/`rows` de um `WriteStream`
+sobre `/dev/tty` fica congelado no valor da abertura — o Node só mantém isso em
+dia para `process.stdout`. Um `WriteStream` recém-criado, porém, lê o tamanho
+atual (e `destroy` nele não fecha o fd), então é assim que o tamanho é lido: uma
+vez na abertura, e outra a cada `SIGWINCH`.
 
 A tela é uma frente do mesmo cadastro, não uma segunda implementação: ela chama
 `addServer`, `removeServer`, `setProd`, `testServer` e `importCandidates`, os
@@ -838,7 +845,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 445 testes, sem rede e sem servidor Fluig
+npm test        # 448 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 

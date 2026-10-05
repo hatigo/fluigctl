@@ -25,12 +25,27 @@ export type Tecla =
 
 export interface Terminal {
   /** Tamanho atual, atualizado a cada mudança de janela. */
-  tamanho(): { colunas: number; linhas: number };
+  tamanho(): Tamanho;
   /** Uma tecla por vez, até o terminal fechar. */
   teclas(): AsyncIterable<Tecla>;
   /** Troca o quadro inteiro. */
   desenhar(quadro: string): void;
+  /** Chama quando a janela muda de tamanho. Devolve como parar de ouvir. */
+  aoRedimensionar(ouvinte: (t: Tamanho) => void): () => void;
   fechar(): void;
+}
+
+export interface Tamanho {
+  colunas: number;
+  linhas: number;
+}
+
+export interface OpcoesTerminal {
+  caminho?: string;
+  /** Como ler o tamanho da janela. Existe para o teste não precisar de tty. */
+  lerTamanho?: () => Tamanho;
+  /** Como ouvir o sinal de redimensionamento. Idem. */
+  inscrever?: (f: () => void) => () => void;
 }
 
 const TELA_ALTERNATIVA = '\x1b[?1049h';
@@ -40,24 +55,67 @@ const MOSTRA_CURSOR = '\x1b[?25h';
 const INICIO = '\x1b[H';
 const LIMPA = '\x1b[2J';
 
-export function abrirTerminal(caminho = '/dev/tty'): Terminal {
+export function abrirTerminal(opcoes: OpcoesTerminal | string = {}): Terminal {
+  const config = typeof opcoes === 'string' ? { caminho: opcoes } : opcoes;
+  const caminho = config.caminho ?? '/dev/tty';
   let fd: number;
   try {
     fd = openSync(caminho, 'r+');
   } catch (erro) {
     throw new Error(
       `não foi possível abrir o terminal ${caminho}: ${(erro as Error).message}. ` +
-        'O TUI precisa de um terminal de verdade.',
+        'A tela precisa de um terminal de verdade.',
     );
   }
   if (!isatty(fd)) {
     closeSync(fd);
-    throw new Error(`${caminho} não é um terminal. O TUI precisa de um terminal de verdade.`);
+    throw new Error(`${caminho} não é um terminal. A tela precisa de um terminal de verdade.`);
   }
 
   const entrada = new ReadStream(fd);
   const saida = new WriteStream(fd);
   let fechado = false;
+
+  /*
+   * O tamanho não vem do `WriteStream` guardado: o Node só mantém
+   * `columns`/`rows` em dia para `process.stdout`, e num fd próprio ele fica
+   * congelado no valor da abertura — medido, com SIGWINCH e tudo. Um
+   * `WriteStream` recém-criado, porém, lê o tamanho atual, e `destroy` nele não
+   * fecha o fd. É daí que sai o tamanho, uma vez na abertura e outra a cada
+   * SIGWINCH.
+   */
+  const lerTamanho =
+    config.lerTamanho ??
+    ((): Tamanho => {
+      const sonda = new WriteStream(fd);
+      const t = { colunas: sonda.columns || saida.columns || 80, linhas: sonda.rows || saida.rows || 24 };
+      sonda.destroy();
+      return t;
+    });
+
+  const inscrever =
+    config.inscrever ??
+    ((f: () => void) => {
+      process.on('SIGWINCH', f);
+      return () => process.removeListener('SIGWINCH', f);
+    });
+
+  let atual: Tamanho = { colunas: 80, linhas: 24 };
+  try {
+    atual = lerTamanho();
+  } catch {
+    /* sem tty legível, fica no padrão */
+  }
+  const ouvintes = new Set<(t: Tamanho) => void>();
+  const paraDeVigiar = vigiarTamanho({
+    ler: lerTamanho,
+    avisar: (t) => {
+      atual = t;
+      for (const ouvinte of ouvintes) ouvinte(t);
+    },
+    inscrever,
+    inicial: atual,
+  });
 
   const limpar = () => {
     if (fechado) return;
@@ -74,10 +132,12 @@ export function abrirTerminal(caminho = '/dev/tty'): Terminal {
   });
 
   return {
-    tamanho: () => ({
-      colunas: saida.columns || 80,
-      linhas: saida.rows || 24,
-    }),
+    tamanho: () => atual,
+
+    aoRedimensionar(ouvinte) {
+      ouvintes.add(ouvinte);
+      return () => ouvintes.delete(ouvinte);
+    },
 
     desenhar(quadro: string) {
       // Um write só, com limpeza: menos piscada que escrever linha a linha.
@@ -148,6 +208,7 @@ export function abrirTerminal(caminho = '/dev/tty'): Terminal {
     fechar() {
       if (fechado) return;
       fechado = true;
+      paraDeVigiar();
       limpar();
       process.removeListener('exit', limpar);
       try {
@@ -157,6 +218,33 @@ export function abrirTerminal(caminho = '/dev/tty'): Terminal {
       }
     },
   };
+}
+
+/**
+ * Avisa quando o tamanho da janela muda, comparando com o último visto.
+ *
+ * Separado de `abrirTerminal` para poder ser testado sem terminal: `inscrever`
+ * e `ler` entram por parâmetro, então o teste troca a fonte do sinal e a do
+ * tamanho.
+ */
+export function vigiarTamanho(opcoes: {
+  ler: () => Tamanho;
+  avisar: (t: Tamanho) => void;
+  inscrever: (f: () => void) => () => void;
+  inicial?: Tamanho;
+}): () => void {
+  let ultimo = opcoes.inicial;
+  return opcoes.inscrever(() => {
+    let lido: Tamanho;
+    try {
+      lido = opcoes.ler();
+    } catch {
+      return;
+    }
+    if (ultimo && lido.colunas === ultimo.colunas && lido.linhas === ultimo.linhas) return;
+    ultimo = lido;
+    opcoes.avisar(lido);
+  });
 }
 
 const SETAS: Record<string, Tecla> = {
