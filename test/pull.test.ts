@@ -106,8 +106,8 @@ test('conversão inversa gera um .process estrutural com estados, raias, fluxos 
 
 test('conversão inversa recusa estruturas ainda não cobertas, sem produzir um .process parcial', () => {
   const xml = readFileSync(join(import.meta.dirname, 'fixtures/diagrams/processoTeste.ecm30.xml'), 'utf8');
-  const comSeguranca = xml.replace('<list/>', '<list><ProcessAttachmentSecurity/></list>');
-  assert.throws(() => gerarProcess(comSeguranca), (e) => codigoDe(e) === 6 && /ProcessAttachmentSecurity/.test((e as Error).message));
+  const comComponente = xml.replace('<list/>', '<list><ProcessComponGraf><componType>9</componType></ProcessComponGraf></list>');
+  assert.throws(() => gerarProcess(comComponente), (e) => codigoDe(e) === 6 && /componType 9/.test((e as Error).message));
 });
 
 test('conversão inversa recompõe condições e regras do gateway no blob XStream', () => {

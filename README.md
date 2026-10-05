@@ -67,7 +67,7 @@ e layout.
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
 | `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 465 de 475 diagramas reais convertem |
 | `pull process` / `pull dataset` / `pull form` (scripts de processo, código de dataset, anexos e eventos de formulário) | pronto |
-| `pull diagram` (definição publicada → `.process`) | inicial: estados, atribuições simples, gateways e condições, temporizadores, raias, fluxos e bendpoints; recusa estruturas ainda não cobertas |
+| `pull diagram` (definição publicada → `.process`) | pronto: estados, atribuições, gateways, eventos, subprocessos, propriedades/configurações avançadas, componentes gráficos, raias, fluxos e bendpoints |
 
 Fora de escopo por enquanto: `pull` de widget, layout WCM, widget com código Java,
 evento global e mecanismo de atribuição.
@@ -130,10 +130,11 @@ fluigctl pull diagram reembolso --server cetenco-hml --dry-run
 fluigctl pull diagram reembolso --server cetenco-hml
 ```
 
-O `pull diagram` nunca gera um arquivo parcial: condições de gateway e gatilhos
-de temporizador/condicional já são reconstruídos; se a definição tiver
-subprocessos, segurança de anexos ou outras estruturas cuja conversão inversa
-ainda não foi validada, ele recusa antes de gravar e orienta usar o Studio.
+O `pull diagram` nunca gera um arquivo parcial: condições, gatilhos,
+subprocessos, segurança e regras de anexos, campos descritores, configuração
+mobile, propriedades estendidas e componentes gráficos são reconstruídos. Se a
+definição trouxer um tipo ou uma referência incoerente que não possa ser
+representada no `.process`, ele recusa antes de gravar.
 
 Formulário exige escolher a versão: `--keep-version` sobrescreve a ativa (só
 mudou JS, CSS, texto), `--new-version` cria a próxima (ganhou campo — o servidor
