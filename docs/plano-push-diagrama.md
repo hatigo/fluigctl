@@ -652,6 +652,28 @@ decompilado e conferidos no `fluig-localdev` (versões 3 a 6 do `teste_fluigctl`
 - 449/475 `.process` convertem sem recusa (eram 444); gabaritos seguem 67/71. O
   `helpdesk` segue recusado pelo mecanismo sem configuração.
 
+**Estado (05/10/2026, 18º corte).** Entra o subprocesso ad hoc (101), pela regra
+do `getProcessStatesFromSubProcess` decompilado: parte do subprocesso comum e
+troca `stateType` (0), `instruction` (instructions), `initialState`
+(initialTask), `selectColleague` e a atribuição (managerMechanism + configuração,
+nula sem blob); sem processo-alvo, `subProcessId` some. Atributos do ad hoc no
+subprocesso comum, e do comum no ad hoc, seguem recusados.
+
+- A forma bate com o export do `FLUIGADHOC` de fábrica do `fluig-localdev`
+  (stateType 0, sem subProcessId, "Executor Atividade" com BaseActivity 3 e First
+  no estado). O `transferAttachments` do de fábrica vem `true`, mas ele não foi
+  instalado a partir destes `.process` — vale a regra do Studio (ausente é false).
+- `fluig-localdev` reconfigurado: cópia do `FLUIGADHOC.process` do corpus como
+  `teste_adhoc`, ligada ao formulário `FLUIGADHOC` (3) pelo nome, com o script
+  `afterStateEntry`. Importada e liberada sem erro. Solicitação 1: gateway →
+  Aplicar a Solução → Fim. Solicitação 3, com uma atividade na tabela do
+  formulário (`nomeativ___1`, `hdnrespativ___1`, `dtprazoativ___1`): gateway → ad
+  hoc "Criar Tarefas" (admin, Executor Atividade do início) → o script criou a
+  atividade (solicitação 4, no `FLUIGADHOCPROCESS`), executada e finalizada → ad
+  hoc concluído para Aplicar a Solução → Fim. O servidor só aceita sair do ad hoc
+  pela seta dele (para o fim direto: "Tarefa informada 11 não é válida").
+- 456/475 `.process` convertem sem recusa (eram 449); gabaritos seguem 67/71.
+
 ### 2. O resto da definição
 
 Subprocessos, regras de anexo, campos de formulário, configuração de app,
