@@ -107,8 +107,15 @@ session, but do not publish it in logs, issues or commits. When they ask to stop
 fluigctl diagram close workflow/diagrams/<processo>.process
 ```
 
-This viewer is read-only. Do not claim that the human can edit the diagram in
-this first version.
+The human can also rename an element from the property panel, which writes the
+`.process` directly. That is the only edit the viewer makes. If they do it, expect
+the file to change under you: re-read it before your next write, so you do not
+overwrite their rename. Concurrency is handled per element name — the viewer
+refuses to save when the name it started from is no longer there — but your own
+writes have no such protection.
+
+This viewer is read-only except for renaming an element from the property panel.
+Do not claim that the human can otherwise edit the diagram in this version.
 
 ## Pushing
 
