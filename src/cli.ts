@@ -11,6 +11,7 @@ import {
   serverUrl,
 } from './config.js';
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
+import { serverUi } from './commands/server-ui.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushDiagram } from './commands/push-diagram.js';
 import { eventIdDoArquivo, pushEvent } from './commands/push-event.js';
@@ -50,6 +51,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       copia as senhas (decifradas com a chave desta máquina) para o arquivo de senhas do fluigctl
   fluigctl server set-prod <nome> [--off]
   fluigctl server test <nome>
+  fluigctl server ui [--dir <pasta>]
+      tela no terminal para cadastrar, rever, testar, marcar produção e remover servidores,
+      e para importar os da extensão Fluiggers; precisa de um terminal de verdade
 
   fluigctl changed [--since <ref>] [--server <nome>]
       lista o que mudou no git como artefatos do Fluig e sugere o comando de cada um; não envia nada
@@ -289,6 +293,15 @@ async function comandoServer(argv: string[]): Promise<void> {
         : `${nome} marcado como produção — push passa a exigir a senha no terminal.`,
     );
     return;
+  }
+
+  if (sub === 'ui') {
+    const { values } = parseArgs({
+      args: resto,
+      allowPositionals: true,
+      options: { dir: { type: 'string' } },
+    });
+    return serverUi(values.dir === undefined ? {} : { dir: values.dir });
   }
 
   if (sub === 'test') {

@@ -48,7 +48,7 @@ cada comando custa):
 | Mantém nome e descritor do formulário | sim | sim | depende do agente | sim |
 | Produção a partir de um agente | bloqueada (exige TTY) | flags que o agente escreve | variável que o agente define | — |
 | Cópia antes / conferência depois | dataset | não | checklist manual | não |
-| Testes automatizados | 400 | não | não | — |
+| Testes automatizados | 437 | não | não | — |
 
 Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo), widget com código Java, evento global, mecanismo de atribuição
@@ -59,6 +59,7 @@ e layout.
 | | |
 |---|---|
 | `server add` / `ls` / `rm` / `test` / `set-prod` | pronto |
+| `server ui` (tela no terminal para o cadastro) | pronto |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
 | `push dataset` | pronto |
@@ -108,6 +109,45 @@ echo "export FLUIG_CETENCO_HML_PASSWORD='...'" >> ~/.config/fluigctl/env && chmo
 ```
 
 `server add` descobre `companyId` e `userCode` sozinho, consultando o servidor.
+
+#### Pela tela do terminal
+
+```sh
+fluigctl server ui
+```
+
+Abre uma tela no terminal para fazer o mesmo sem decorar flags: cadastrar,
+rever, testar, marcar produção, remover e importar. As teclas estão na própria
+tela (`?`):
+
+```
+fluigctl · servidores — 2 servidores
+
+▶ hml   http://homolog.exemplo.com.br:8021  integracao  FLUIG_HML_PASSWORD
+   prod PRODUÇÃO  http://fluig.exemplo.com.br:8021  integracao  FLUIG_PROD_PASSWORD
+
+  ↑↓ mover   enter rever   a novo   t testar   p produção   x remover   i importar   ? ajuda   q sair
+```
+
+Três decisões que valem saber:
+
+- **O que é grave passa por confirmação.** Remover pede `s`, e marcar produção
+  também — é a marca que faz o push exigir a senha digitada no terminal, e
+  ligar isso sem querer muda o comportamento de todo push seguinte. Desligar não
+  pede nada, porque não esconde perigo.
+- **A senha digitada vai para o arquivo próprio (600)**, nunca para o
+  `servers.json` — a mesma regra do `server import --with-passwords`. Deixar o
+  campo vazio usa a variável de ambiente ou o `servers.json` da extensão, como o
+  `server add`. A senha nunca aparece na tela: o formulário mostra só o tamanho.
+- **O cadastro é provado antes de ser gravado**, na ordem do `server add`: o
+  login roda primeiro e só depois o arquivo é escrito. Se a credencial não
+  servir, o formulário continua ali com tudo o que foi digitado e o motivo,
+  e nada é gravado.
+
+A tela é uma frente do mesmo cadastro, não uma segunda implementação: ela chama
+`addServer`, `removeServer`, `setProd`, `testServer` e `importCandidates`, os
+mesmos que o CLI. E é para gente — precisa de um terminal de verdade, e recusa
+com código 5 quando não há um (é o mesmo motivo do portão de produção).
 
 ### 2. No dia a dia: ver o que mudou, simular, publicar
 
@@ -792,7 +832,7 @@ Duas armadilhas que só o WSDL revela e que o código trata:
 ## Testes
 
 ```sh
-npm test        # 400 testes, sem rede e sem servidor Fluig
+npm test        # 437 testes, sem rede e sem servidor Fluig
 npm run typecheck
 ```
 
