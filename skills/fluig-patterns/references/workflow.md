@@ -157,8 +157,14 @@ Flows:
 
 ### Re-laying out an existing diagram
 
-`fluigctl diagram` has no layout command. The skill ships one script for this,
-`scripts/relayout.py`:
+There are two ways:
+- **No spec.** The **Organizar** button of the viewer's edit mode
+  (`fluigctl diagram open`) applies this recipe to the whole diagram. It
+  reorders into chronological columns, keeps each element in its lane, places
+  the recovery pairs, sizes the lanes and routes every flow, as one undoable
+  edit. Prefer it when the human is in the viewer.
+- **A spec you control.** For a layout decided column by column, as in the
+  approved `validacao_minutas`, the skill ships `scripts/relayout.py`:
 
 ```sh
 python3 -I scripts/relayout.py <entrada.process> <spec.json> <saida.process>

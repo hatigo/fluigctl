@@ -13,12 +13,12 @@ import { ConflitoEdicao, EdicaoInvalida, trocarCoordenada } from './edit.js';
 
 const TOKEN = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*"[^"]*")*)\s*(\/?)>/g;
 
-interface Tag {
+export interface Tag {
   inicio: number;
   tag: string;
 }
 
-interface Forma {
+export interface Forma {
   id?: string | undefined;
   profundidade: number;
   ga?: Tag;
@@ -27,7 +27,7 @@ interface Forma {
 }
 
 /** Toda forma do pictograma (inclusive as aninhadas), com a tag do seu graphicsAlgorithm e dos rótulos. */
-function formas(xml: string): Forma[] {
+export function formas(xml: string): Forma[] {
   const lista: Forma[] = [];
   const pilha: { nome: string; forma?: Forma; rotulo?: boolean }[] = [];
   let dentroDoDiagrama = false;
