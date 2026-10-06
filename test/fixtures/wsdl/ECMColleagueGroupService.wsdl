@@ -1,0 +1,250 @@
+<?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://ws.foundation.ecm.technology.totvs.com/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:ns1="http://schemas.xmlsoap.org/soap/http" name="ECMColleagueGroupServiceService" targetNamespace="http://ws.foundation.ecm.technology.totvs.com/">
+  <wsdl:types>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://ws.foundation.ecm.technology.totvs.com/" attributeFormDefault="unqualified" elementFormDefault="unqualified" targetNamespace="http://ws.foundation.ecm.technology.totvs.com/">
+  <xs:complexType name="colleagueGroupDto">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="colleagueId" type="xs:string"/>
+      <xs:element name="companyId" type="xs:long"/>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="foo" nillable="true" type="xs:string"/>
+      <xs:element minOccurs="0" name="groupId" type="xs:string"/>
+      <xs:element minOccurs="0" name="writeAllowed" type="xs:boolean"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType final="#all" name="colleagueGroupDtoArray">
+    <xs:sequence>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="item" nillable="true" type="tns:colleagueGroupDto"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="Exception" type="tns:Exception"/>
+  <xs:complexType name="Exception">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="message" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>
+  </wsdl:types>
+  <wsdl:message name="getColleagueGroupResponse">
+    <wsdl:part name="colab" type="tns:colleagueGroupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getColleagueGroupsByColleagueId">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="colleagueId" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="updateColleagueGroupResponse">
+    <wsdl:part name="resultXML" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getAllColleagueGroupsResponse">
+    <wsdl:part name="result" type="tns:colleagueGroupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="deleteColleagueGroup">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="GroupId" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="ColleagueId" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="updateColleagueGroup">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="ColleagueGroups" type="tns:colleagueGroupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getAllColleagueGroups">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getColleagueGroupsByGroupId">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="groupId" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="createColleagueGroupResponse">
+    <wsdl:part name="resultXML" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="deleteColleagueGroupResponse">
+    <wsdl:part name="return" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="Exception">
+    <wsdl:part element="tns:Exception" name="Exception">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getColleagueGroup">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="GroupId" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="ColleagueId" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getColleagueGroupsByColleagueIdResponse">
+    <wsdl:part name="result" type="tns:colleagueGroupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getColleagueGroupsByGroupIdResponse">
+    <wsdl:part name="result" type="tns:colleagueGroupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="createColleagueGroup">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="ColleagueGroups" type="tns:colleagueGroupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:portType name="ColleagueGroupService">
+    <wsdl:operation name="updateColleagueGroup">
+      <wsdl:input message="tns:updateColleagueGroup" name="updateColleagueGroup">
+    </wsdl:input>
+      <wsdl:output message="tns:updateColleagueGroupResponse" name="updateColleagueGroupResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getAllColleagueGroups">
+      <wsdl:input message="tns:getAllColleagueGroups" name="getAllColleagueGroups">
+    </wsdl:input>
+      <wsdl:output message="tns:getAllColleagueGroupsResponse" name="getAllColleagueGroupsResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getColleagueGroupsByColleagueId">
+      <wsdl:input message="tns:getColleagueGroupsByColleagueId" name="getColleagueGroupsByColleagueId">
+    </wsdl:input>
+      <wsdl:output message="tns:getColleagueGroupsByColleagueIdResponse" name="getColleagueGroupsByColleagueIdResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getColleagueGroupsByGroupId">
+      <wsdl:input message="tns:getColleagueGroupsByGroupId" name="getColleagueGroupsByGroupId">
+    </wsdl:input>
+      <wsdl:output message="tns:getColleagueGroupsByGroupIdResponse" name="getColleagueGroupsByGroupIdResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getColleagueGroup">
+      <wsdl:input message="tns:getColleagueGroup" name="getColleagueGroup">
+    </wsdl:input>
+      <wsdl:output message="tns:getColleagueGroupResponse" name="getColleagueGroupResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="createColleagueGroup">
+      <wsdl:input message="tns:createColleagueGroup" name="createColleagueGroup">
+    </wsdl:input>
+      <wsdl:output message="tns:createColleagueGroupResponse" name="createColleagueGroupResponse">
+    </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="deleteColleagueGroup">
+      <wsdl:input message="tns:deleteColleagueGroup" name="deleteColleagueGroup">
+    </wsdl:input>
+      <wsdl:output message="tns:deleteColleagueGroupResponse" name="deleteColleagueGroupResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="ECMColleagueGroupServiceServiceSoapBinding" type="tns:ColleagueGroupService">
+    <soap:binding style="rpc" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="updateColleagueGroup">
+      <soap:operation soapAction="updateColleagueGroup" style="rpc"/>
+      <wsdl:input name="updateColleagueGroup">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="updateColleagueGroupResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getAllColleagueGroups">
+      <soap:operation soapAction="getAllColleagueGroups" style="rpc"/>
+      <wsdl:input name="getAllColleagueGroups">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getAllColleagueGroupsResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getColleagueGroupsByColleagueId">
+      <soap:operation soapAction="getColleagueGroupsByColleagueId" style="rpc"/>
+      <wsdl:input name="getColleagueGroupsByColleagueId">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getColleagueGroupsByColleagueIdResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getColleagueGroupsByGroupId">
+      <soap:operation soapAction="getColleagueGroupsByGroupId" style="rpc"/>
+      <wsdl:input name="getColleagueGroupsByGroupId">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getColleagueGroupsByGroupIdResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getColleagueGroup">
+      <soap:operation soapAction="getColleagueGroup" style="rpc"/>
+      <wsdl:input name="getColleagueGroup">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getColleagueGroupResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="createColleagueGroup">
+      <soap:operation soapAction="createCollegue" style="rpc"/>
+      <wsdl:input name="createColleagueGroup">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="createColleagueGroupResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="deleteColleagueGroup">
+      <soap:operation soapAction="deleteColleagueGroup" style="rpc"/>
+      <wsdl:input name="deleteColleagueGroup">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="deleteColleagueGroupResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="ECMColleagueGroupServiceService">
+    <wsdl:port binding="tns:ECMColleagueGroupServiceServiceSoapBinding" name="ColleagueGroupServicePort">
+      <soap:address location="http://100.90.132.16:8080/webdesk/ECMColleagueGroupService"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

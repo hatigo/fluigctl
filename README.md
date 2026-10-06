@@ -63,6 +63,8 @@ atribuição já são publicados pelo `fluigctl`.
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
 | `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, remover, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação), ligar, remover, tamanho de raias e pool, e Organizar |
+| `group ls` / `show` / `add` / `add-member` (grupos sem o painel do Fluig) | pronto |
+| `process versions` / `release` (versões do processo e liberar a em edição) | pronto |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -81,6 +83,30 @@ atribuição já são publicados pelo `fluigctl`.
 Fora de escopo por enquanto: `pull` de layout WCM (não há rota no servidor — veja
 "Publicando um layout") e `push` de widget com código Java (a rota do WCM recusa —
 veja "Widget com Java").
+
+### Grupos e versões de processo
+
+O que antes pedia o painel de administração do Fluig:
+
+```sh
+fluigctl group ls --server hml                     # os grupos do servidor
+fluigctl group show suporte_processos --server hml # e quem está no grupo
+fluigctl group add suporte_processos --server hml --description "Suporte de processos"
+fluigctl group add-member suporte_processos joao.silva --server hml   # pelo login
+fluigctl process versions contratacao --server hml # qual versão roda, quais ficaram em edição
+fluigctl process release contratacao --server hml  # libera a versão em edição
+```
+
+- **Escritas conferidas:** criar grupo e pôr membro relêem o servidor. A resposta
+  do Fluig é um XML livre, então só vale o que aparece na lista.
+- **Produção:** passa pelo mesmo porteiro dos pushes, e `--dry-run` mostra o que
+  seria feito.
+- **Versões:** a lista vem do dataset interno `processDefinitionVersion`. O
+  Fluig não tem operação para descartar uma versão em edição; liberar, tem.
+- **Grupos no `push diagram`:** o push confere se os grupos do Pool Grupo e
+  Grupo existem no destino e recusa antes de criar a versão. Sem essa
+  conferência, a liberação falhava depois do import e a versão nova ficava presa
+  em edição. O `--dry-run` só lista os grupos usados, porque ele não abre sessão.
 
 ## Instalação
 
