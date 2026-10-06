@@ -372,6 +372,15 @@ Measured against Fluig 1.8, and the reason several pushes fail before sending:
 - the global-event route replaces the whole list, so it is read-modify-write
 - the server identifies a WCM application by `application.code`, not by the file
   name; a widget is registered under that code
+- a service task with `executionType="1"` (posterior execution) must have at
+  least one error capture event attached: the **import succeeds and the release
+  fails** with "deve possuir pelo menos um evento de captura de erro anexo",
+  leaving the version in edit. Either attach an `intermediateerror` (the task's
+  `attachedEvents` points at it, and its `sequenceAttached` is the task's
+  sequence) or make the task synchronous with `executionType="0"`
+- a form's parent folder is not guessable from the error: a bad `--parent-id`
+  answers only "Documento Pai Inválido". Read `parentDocumentId` from an existing
+  document before creating a form
 
 ## Never
 
