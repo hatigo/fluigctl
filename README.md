@@ -62,7 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
-| `diagram open` + painel (inspeção de elementos e renomear com desfazer) | pronto, inspeção e renomear; o resto é somente leitura |
+| `diagram open` + modo de edição (renomear e mover elementos, desfazer/refazer) | pronto: renomear e mover; adicionar, ligar, remover e propriedades ainda não |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -243,10 +243,37 @@ outras mudanças enquanto o ID existir.
 Para automação sem navegador use `--no-open`; para depurar o servidor no processo atual,
 `--foreground`.
 
+#### Modo de edição
+
+O visualizador abre somente leitura. O botão **Editar** liga o modo de edição, e
+**Sair da edição** volta. No modo de edição dá para:
+
+- **renomear** pelo campo **Nome** do painel (abaixo);
+- **mover** tarefas, eventos e gateways:
+  - arrastando, com encaixe na grade de 10 px;
+  - ou, com o elemento selecionado, pelas setas: 10 px, ou 50 px com `Shift`.
+
+  O evento de erro preso a uma tarefa vai junto. Pool e raias não se movem, e um
+  card não sai da pool. Quando o elemento muda de raia, ou o `diagram check`
+  passa a acusar algo, o aviso diz;
+- **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
+  `Ctrl+Shift+Z`.
+
+Toda edição passa pelo mesmo caminho:
+1. **Hash da tela.** A edição só vale sobre o texto que a tela desenhou. Se o
+   arquivo mudou nesse meio-tempo, ela é recusada e a tela se atualiza.
+2. **Troca de texto.** Só o atributo editado muda (`name`, ou o `x`/`y` da
+   forma), sem reserializar o XML.
+3. **Conferência.** O resultado precisa ser relido, e o `diagram check` não pode
+   acusar erro de estrutura que o arquivo não tinha.
+4. **Escrita atômica.**
+
+As linhas ligadas a um elemento movido mantêm as dobras que tinham. Traçar os
+fluxos é o próximo passo.
+
 #### Renomear pelo painel
 
-O campo **Nome** do painel grava no `.process`. Só ele é editável; o resto é
-inspeção por enquanto. `Ctrl`+`Enter` ou **Salvar** confirma, **Cancelar** volta
+O campo **Nome** do painel, no modo de edição, grava no `.process`. `Ctrl`+`Enter` ou **Salvar** confirma, **Cancelar** volta
 atrás, e nada é escrito enquanto você digita.
 
 A gravação troca apenas o atributo `name` daquele objeto: espaços, ordem,
@@ -263,8 +290,9 @@ visualizador não grava:
 - elemento removido: nada é recriado;
 - arquivo trocado durante o salvamento: o salvamento é repetido por você.
 
-Depois de salvar aparece **Desfazer**, que restaura a versão anterior. Ele só
-funciona enquanto o arquivo continuar exatamente como ficou depois da edição — se
+Depois de salvar aparece **Desfazer**, que restaura a versão anterior (e
+**Refazer** depois dele). Os dois só funcionam enquanto o arquivo continuar
+exatamente como a edição o deixou — se
 o agente escreveu qualquer coisa depois, o desfazer recusa, para não apagar o
 trabalho dele. A versão anterior fica no diretório de estado do `fluigctl`
 (`~/.local/state/fluigctl/edicoes/`), não no workspace: nunca aparece um `.bak`
