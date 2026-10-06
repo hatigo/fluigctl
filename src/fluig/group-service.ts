@@ -35,13 +35,15 @@ export async function groupClient(baseUrl: string, companyId: number, username: 
   const membros = await fluigSoapClient(baseUrl, 'ECMColleagueGroupService');
   const credencial = { username, password, companyId };
 
+  const list = async (): Promise<Grupo[]> => {
+    const r = await invoke<{ result?: { item?: GroupDto | GroupDto[] } | null }>(grupos, 'getGroups', credencial);
+    return itens<GroupDto>(r?.result ?? undefined)
+      .filter((g) => typeof g.groupId === 'string')
+      .map((g) => ({ groupId: g.groupId!, descricao: g.groupDescription ?? '' }));
+  };
+
   return {
-    async list() {
-      const r = await invoke<{ result?: { item?: GroupDto | GroupDto[] } | null }>(grupos, 'getGroups', credencial);
-      return itens<GroupDto>(r?.result ?? undefined)
-        .filter((g) => typeof g.groupId === 'string')
-        .map((g) => ({ groupId: g.groupId!, descricao: g.groupDescription ?? '' }));
-    },
+    list,
 
     async create(groupId, descricao) {
       const r = await invoke<{ resultXML?: string }>(grupos, 'createGroup', {
@@ -52,10 +54,16 @@ export async function groupClient(baseUrl: string, companyId: number, username: 
     },
 
     async members(groupId) {
-      const r = await invoke<{ result?: { item?: ColleagueGroupDto | ColleagueGroupDto[] } | null }>(membros, 'getColleagueGroupsByGroupId', {
-        ...credencial,
-        groupId,
-      });
+      let r: { result?: { item?: ColleagueGroupDto | ColleagueGroupDto[] } | null };
+      try {
+        r = await invoke(membros, 'getColleagueGroupsByGroupId', { ...credencial, groupId });
+      } catch (erro) {
+        // Grupo sem membros: o Fluig responde com falha ("Grupo não encontrado.").
+        // Se o grupo está na lista, a falha quer dizer vazio; senão, é erro mesmo.
+        const lista = await list();
+        if (lista.some((g) => g.groupId === groupId)) return [];
+        throw erro;
+      }
       return itens<ColleagueGroupDto>(r?.result ?? undefined)
         .map((m) => m.colleagueId)
         .filter((c): c is string => typeof c === 'string');
