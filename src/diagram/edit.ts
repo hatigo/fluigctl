@@ -521,13 +521,14 @@ export function trocarDobras(pedido: PedidoDobras): ResultadoAplicacao {
 
 export interface PedidoEndireitar {
   arquivo: string;
-  /** Um fluxo (endireita ele) ou um elemento (endireita todas as ligações dele). */
-  id: string;
+  /** Um fluxo (endireita ele), um elemento (todas as ligações dele) ou, sem id, o diagrama inteiro. */
+  id?: string;
   hashBase: string;
   undoDir: string;
 }
 
 export interface ResultadoEndireitar extends ResultadoAplicacao {
+  /** Só os fluxos cujas dobras mudaram. */
   fluxos: string[];
 }
 
@@ -546,10 +547,15 @@ function fluxosDe(xml: string, id: string): string[] {
 export function endireitar(pedido: PedidoEndireitar): ResultadoEndireitar {
   let fluxos: string[] = [];
   const r = aplicarEdicao(pedido.arquivo, pedido.undoDir, (texto) => {
-    fluxos = fluxosDe(texto, pedido.id);
-    if (fluxos.length === 0) throw new EdicaoInvalida('este elemento não tem ligações para endireitar');
+    const alvos = pedido.id === undefined ? [...lerDiagrama(texto).dobras.keys()] : fluxosDe(texto, pedido.id);
+    if (alvos.length === 0) throw new EdicaoInvalida(pedido.id === undefined ? 'o diagrama não tem ligações' : 'este elemento não tem ligações para endireitar');
     let novo = texto;
-    for (const f of fluxos) novo = trocarDobrasNoXml(novo, f, rotaOrtogonal(lerDiagrama(novo), f));
+    fluxos = [];
+    for (const f of alvos) {
+      const depois = trocarDobrasNoXml(novo, f, rotaOrtogonal(lerDiagrama(novo), f));
+      if (depois !== novo) fluxos.push(f);
+      novo = depois;
+    }
     if (novo === texto) throw new EdicaoInvalida('as ligações já estão retas');
     return novo;
   }, pedido.hashBase);

@@ -265,7 +265,10 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
     - Saída de evento de erro: fica a diagonal curta.
   - **Remover dobras**: deixa a linha reta de ponta a ponta.
   - **Endireitar ligações**: com uma tarefa, evento ou gateway selecionado,
-    endireita todas as que entram e saem dele. É o passo natural depois de mover;
+    endireita todas as que entram e saem dele. É o passo natural depois de mover.
+  - **Endireitar todas** (na barra do modo de edição): refaz todas as ligações
+    do diagrama numa edição só. Um `Ctrl+Z` volta tudo, e o aviso diz quantas
+    mudaram;
 - **propriedades** no painel:
   - **Service task:** mostra o tipo de execução. Fora do padrão, oferece
     **Tornar automática** (`executionType="1"`). O painel não grava `0` nem `2`:

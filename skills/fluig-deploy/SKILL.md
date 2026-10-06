@@ -112,8 +112,10 @@ they can:
 - rename an element from the property panel;
 - move tasks, events and gateways, by dragging or with the arrow keys. An
   attached error event moves with its task;
-- route flows: drag, add or remove bendpoints, or straighten a flow, or all the
-  flows of an element, into right angles by the layout recipe.
+- route flows: drag, add or remove bendpoints, or straighten into right angles
+  by the layout recipe. They can straighten one flow, all the flows of an
+  element, or every flow in the diagram ("Endireitar todas", a single undoable
+  edit).
 - edit properties in the panel:
   - make a service task automatic;
   - set a human task's assignment: Pool Grupo, Grupo, Pool Papel, Usuário,
