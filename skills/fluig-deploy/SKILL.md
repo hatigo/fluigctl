@@ -136,7 +136,14 @@ they can:
 - connect two elements, by dragging the blue handle on the right of the
   selected one, or with "Ligar a…" and a click on the target. The new flow is
   routed by the recipe. The router goes around cards in the way, through the
-  corridor above them, so no line crosses a card. Every edit writes the `.process` directly and goes through the same
+  corridor above them, so no line crosses a card.
+- remove the selected element or flow (button or Delete). Its flows go too,
+  and so does a service task's attached error event. Every position reference
+  is renumbered. The gateway condition for a target that lost its flow is
+  dropped. Removal is refused for pool and lanes, for an element another
+  task's assignment uses, for one side of a link pair, and for a gateway whose
+  conditions the panel cannot rewrite. A removed service task's script stays
+  on disk. Every edit writes the `.process` directly and goes through the same
 safeguards:
 - **Hash check.** The edit only applies to the text the screen was drawn from.
   If the file changed, the edit is refused and the screen refreshes.
@@ -152,7 +159,7 @@ If the human edits, expect the file to change under you. Re-read it before your
 next write, so you do not overwrite their edit. Your own writes have none of
 these protections. Outside edit mode the viewer is read-only.
 
-Do not claim the viewer can do more than this. Removing elements is not built yet.
+Do not claim the viewer can do more than this. The "+ Adicionar" menu creates only the types listed above.
 
 ## Pushing
 
