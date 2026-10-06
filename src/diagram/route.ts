@@ -68,6 +68,24 @@ function atravessa(linha: Ponto[], obs: Caixa[]): boolean {
   return false;
 }
 
+/** A linha com estas dobras atravessa algum card (fora as pontas e os eventos presos a elas)? */
+export function cruzaCards(diagrama: Diagrama, fluxoId: string, pontos: Ponto[]): boolean {
+  const fluxo = objeto(diagrama, fluxoId);
+  const o = objeto(diagrama, fluxo?.attrs['sourceRef']), d = objeto(diagrama, fluxo?.attrs['targetRef']);
+  const co = diagrama.caixas.get(fluxo?.attrs['sourceRef'] ?? ''), cd = diagrama.caixas.get(fluxo?.attrs['targetRef'] ?? '');
+  if (!fluxo || !o || !d || !co || !cd) return false;
+  return atravessa([centroDaFigura(o, co), ...pontos, centroDaFigura(d, cd)], obstaculos(diagrama, o.attrs['id']!, d.attrs['id']!));
+}
+
+/** Os centros que as pontas de um fluxo miram. */
+export function pontasDoFluxo(diagrama: Diagrama, fluxoId: string): [Ponto, Ponto] | undefined {
+  const fluxo = objeto(diagrama, fluxoId);
+  const o = objeto(diagrama, fluxo?.attrs['sourceRef']), d = objeto(diagrama, fluxo?.attrs['targetRef']);
+  const co = diagrama.caixas.get(fluxo?.attrs['sourceRef'] ?? ''), cd = diagrama.caixas.get(fluxo?.attrs['targetRef'] ?? '');
+  if (!o || !d || !co || !cd) return undefined;
+  return [centroDaFigura(o, co), centroDaFigura(d, cd)];
+}
+
 /**
  * Nenhuma linha cruza um card (receita de layout). Se a rota atravessa algum nó,
  * ela vai pelo corredor 20 px acima dos nós daquele trecho, sai por cima da
@@ -88,14 +106,42 @@ function desviar(diagrama: Diagrama, fluxoId: string, pontos: Ponto[]): Ponto[] 
 
   const fa = caixaDaFigura(o, co), fb = caixaDaFigura(d, cd);
   const xmin = Math.min(a.x, b.x), xmax = Math.max(a.x, b.x);
+
   const noTrecho = [fa, fb, ...obs.filter((c) => c.absX < xmax && c.absX + c.largura > xmin)];
   const acima = Math.min(...noTrecho.map((c) => c.absY)) - CORREDOR;
   const abaixo = Math.max(...noTrecho.map((c) => c.absY + c.altura)) + CORREDOR;
-  for (const y of acima >= 0 ? [acima, abaixo] : [abaixo]) {
-    const alternativa = [{ x: a.x, y }, { x: b.x, y }];
-    if (!atravessa([a, ...alternativa, b], obs)) return alternativa;
+
+  // Candidatas ortogonais com as pontas mirando os centros:
+  //   horizontal-vertical-horizontal, com o degrau em x;
+  //   vertical-horizontal-vertical, com o corredor em y.
+  const xs = new Set<number>([encaixar((xmin + xmax) / 2)]);
+  for (const c of [fa, fb, ...obs]) {
+    for (const x of [c.absX - CORREDOR, c.absX + c.largura + CORREDOR]) if (x > xmin && x < xmax) xs.add(encaixar(x));
   }
-  return pontos;
+  const ys = new Set<number>([acima, abaixo]);
+  for (const c of [fa, fb, ...obs.filter((c) => c.absX < xmax && c.absX + c.largura > xmin)]) {
+    for (const y of [c.absY - CORREDOR, c.absY + c.altura + CORREDOR]) ys.add(Math.round(y));
+  }
+  const candidatas: Ponto[][] = [
+    ...[...xs].map((x) => [{ x, y: a.y }, { x, y: b.y }]),
+    ...[...ys].filter((y) => y >= 0).map((y) => [{ x: a.x, y }, { x: b.x, y }]),
+  ];
+  const comprimento = (pts: Ponto[]) => {
+    const linha = [a, ...pts, b];
+    let total = 0;
+    for (let i = 0; i < linha.length - 1; i++) total += Math.abs(linha[i + 1]!.x - linha[i]!.x) + Math.abs(linha[i + 1]!.y - linha[i]!.y);
+    return total;
+  };
+  // Um retorno prefere o corredor de cima (receita); fora isso, a mais curta.
+  const atras = fb.absX + fb.largura < fa.absX;
+  const livres = candidatas.filter((c) => !atravessa([a, ...c, b], obs));
+  if (livres.length === 0) return pontos;
+  if (atras) {
+    const deCima = livres.filter((c) => c[0]!.x === a.x && c[0]!.y < Math.min(fa.absY, fb.absY));
+    if (deCima.length) return deCima.sort((p, q) => q[0]!.y - p[0]!.y)[0]!;
+  }
+  // Empate: a mais alta, como o corredor de cima da receita.
+  return livres.sort((p, q) => comprimento(p) - comprimento(q) || Math.min(p[0]!.y, p[1]!.y) - Math.min(q[0]!.y, q[1]!.y))[0]!;
 }
 
 function rota(diagrama: Diagrama, fluxoId: string): Ponto[] {

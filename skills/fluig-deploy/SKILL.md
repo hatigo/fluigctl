@@ -147,7 +147,12 @@ they can:
   on disk.
 - resize a lane (panel field or the handle on its bottom edge) or the pool
   width. Everything below the lane moves with it, and the pool follows.
-  Shrinking is refused if it would cut an element that fits today. Every edit writes the `.process` directly and goes through the same
+  Shrinking is refused if it would cut an element that fits today.
+- **Organizar:** re-lay out the whole diagram by the layout recipe, as one
+  undoable edit. It keeps every element in its lane, puts the flow in
+  chronological columns, places each recovery pair by the recipe, sizes each
+  lane to its content and routes every flow. Running it twice gives the same
+  result. Every edit writes the `.process` directly and goes through the same
 safeguards:
 - **Hash check.** The edit only applies to the text the screen was drawn from.
   If the file changed, the edit is refused and the screen refreshes.

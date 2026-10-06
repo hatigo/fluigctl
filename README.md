@@ -62,7 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
-| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, remover, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação), ligar, remover e tamanho de raias e pool |
+| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, remover, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação), ligar, remover, tamanho de raias e pool, e Organizar |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -373,6 +373,25 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
   - **Validação:** nos 105 `.process`, aumentar e voltar cada uma das 296 raias
     e a largura das 93 pools devolve o arquivo idêntico, sem erro de estrutura
     nem piora na conversão do `push`;
+- **Organizar** (barra do modo de edição): reorganiza o diagrama inteiro pela
+  receita de layout da skill, sem spec escrita à mão. É uma edição só, e um
+  `Ctrl+Z` volta tudo.
+  - **Ordem cronológica** da esquerda para a direita, a partir do início. Os
+    retornos não contam.
+  - **Raias:** cada elemento fica na raia em que estava, porque a raia é o
+    papel. Na mesma raia e na mesma coluna, o segundo desce para uma linha de
+    ramo, e um ramo continua na própria linha.
+  - **Pares da recuperação:** bolinha no canto e tratamento 33 px abaixo.
+  - **Tamanhos:** cada raia do tamanho do conteúdo, e a pool acompanha.
+  - **Ligações:** traçadas pela rota da receita. Os fluxos curtos são traçados
+    primeiro. Trilhos de origens e destinos diferentes não correm um em cima
+    do outro; dividir o trilho só vale para as saídas do mesmo elemento, e
+    juntar, para as chegadas no mesmo elemento.
+  - **Estabilidade:** organizar duas vezes dá o mesmo resultado.
+  - **Validação:** nos 105 `.process`, nenhuma falha, nenhum erro de estrutura,
+    nenhuma piora na conversão do `push` e nenhum erro de padrão novo. As
+    sobreposições de cards caem de 15 para 0, e as linhas que cruzam cards, de
+    78 para 37;
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
   `Ctrl+Shift+Z`. Salvar sem mudança não grava nem ocupa o histórico.
 
