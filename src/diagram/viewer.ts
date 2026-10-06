@@ -338,7 +338,7 @@ export function lerEstadoInicial(arquivo: string): EstadoVisualizador {
   }
 }
 
-function diretorioDeEstado(): string {
+export function diretorioDeEstado(): string {
   const xdg = process.env['XDG_STATE_HOME'];
   const base = xdg && xdg.length > 0 ? xdg : join(homedir(), '.local', 'state');
   return join(base, 'fluigctl', 'diagramas');

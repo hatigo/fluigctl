@@ -268,9 +268,17 @@ an error.
   - anchors and connections agree in both directions;
   - each connection joins the shapes of its flow's `sourceRef`/`targetRef`;
   - each flow is drawn once;
-  - `outgoing`/`incoming` agree with the flows.
-  - A broken style, colour or font reference is only a warning: Studio writes
-    some and still opens the file.
+  - `outgoing`/`incoming` agree with the flows;
+  - every `al:Text` and `al:MultiText` has `font="/0/@fonts.N"` that resolves.
+    Without it Studio throws a NullPointerException while opening the editor
+    and shows only a red icon. Shape labels use `<fonts name="Arial" size="8"
+    bold="true"/>`, flow labels `<fonts name="Arial" size="8"/>`, both at the
+    end of `pi:Diagram`. `diagram check --fix` adds what is missing.
+  - A broken style or colour reference is only a warning: Studio writes some
+    and still opens the file.
+- **Elements:** every element has an outgoing flow (except end events and link
+  senders) and an incoming one (except start events, link receivers and
+  attached error events).
 - **Pattern,** for each service task:
   - `executionType="1"`;
   - exactly one attached error event;

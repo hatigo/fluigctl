@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import {
@@ -48,7 +48,9 @@ import { promptPassword } from './prompt.js';
 import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
 import { ErroFluigctl } from './errors.js';
-import { abrirVisualizador, executarServidor, fecharVisualizador } from './diagram/viewer.js';
+import { abrirVisualizador, diretorioDeEstado, executarServidor, fecharVisualizador } from './diagram/viewer.js';
+import { aplicarEdicao } from './diagram/edit.js';
+import { garantirFontes, textosSemFonte } from './diagram/fonts.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -84,10 +86,10 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl process release <processId> --server <nome> [--dry-run]
       as versões do processo (qual roda, quais ficaram em edição) e liberar a em edição
 
-  fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json]
+  fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]
       confere um .process editado fora do Studio: referências do Graphiti,
-      fluxos x formas, elementos sem saída ou sem entrada, e o padrão de
-      recuperação das service tasks
+      fluxos x formas, textos sem fonte, elementos sem saída ou sem entrada, e o
+      padrão de recuperação das service tasks; --fix acrescenta as fontes que faltam
 
   fluigctl dataset run <nome> --server <nome> [--where campo=valor]... [--fields a,b]
                               [--order a,b] [--limit N] [--json]
@@ -1242,7 +1244,7 @@ async function comandoDiagram(argv: string[]): Promise<void> {
   const uso =
     'uso: fluigctl diagram open <arquivo.process> [--no-open] [--foreground]\n' +
     '     fluigctl diagram close <arquivo.process>\n' +
-    '     fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json]';
+    '     fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]';
 
   if (sub === 'check') {
     const { values, positionals } = parseArgs({
@@ -1252,10 +1254,21 @@ async function comandoDiagram(argv: string[]): Promise<void> {
         except: { type: 'string', multiple: true },
         group: { type: 'string' },
         json: { type: 'boolean', default: false },
+        fix: { type: 'boolean', default: false },
       },
     });
     const arquivo = positionals[0];
     if (!arquivo || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+    if (values.fix) {
+      // Só o reparo seguro: as fontes que faltam. Passa pelo histórico do
+      // visualizador, então o Desfazer de lá volta o arquivo.
+      const faltam = textosSemFonte(readFileSync(arquivo, 'latin1'));
+      if (faltam === 0) console.log(`--fix: nenhum texto sem fonte em ${arquivo}`);
+      else {
+        aplicarEdicao(arquivo, join(diretorioDeEstado(), 'edicoes'), garantirFontes);
+        console.log(`--fix: fonte acrescentada em ${faltam} texto(s) de ${arquivo} (desfaz pelo visualizador)`);
+      }
+    }
     const achados = checarDiagrama(readFileSync(arquivo, 'utf8'), {
       excecoes: values.except ?? [],
       ...(values.group === undefined ? {} : { grupo: values.group }),

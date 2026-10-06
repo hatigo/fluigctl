@@ -275,7 +275,8 @@ fluigctl push diagram workflow/diagrams/<processo>.process --server <servidor>
 
 `diagram check` comes first.
 - **What it checks:** the pictogram (references by position, anchors against
-  connections, connections against flows), elements with no outgoing or no
+  connections, connections against flows, a font on every text — without one
+  Studio cannot open the file; `--fix` adds them), elements with no outgoing or no
   incoming flow (a request that reaches a dead end stays stuck), and the service-task recovery pattern.
 - **Why it comes first:** the dry-run looks only at the model. A `.process`
   edited by an agent can pass the dry-run, publish, and still fail to open in

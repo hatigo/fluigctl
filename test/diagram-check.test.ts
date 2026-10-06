@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { checarDiagrama, type Achado } from '../src/diagram/check.js';
 import { removerNoXml } from '../src/diagram/remove.js';
+import { garantirFontes, textosSemFonte } from '../src/diagram/fonts.js';
 
 /**
  * O `diagram check` existe porque o agente edita o `.process` direto. Cada teste
@@ -127,4 +128,22 @@ test('elemento sem saída ou sem entrada é erro: a solicitação para ou nunca 
   );
   // Fim, início e o erro anexado não entram na regra; o acervo do Studio passa.
   assert.deepEqual(erros(checarDiagrama(fixture('processoTeste.process'))), []);
+});
+
+test('texto sem fonte é erro de estrutura, e garantirFontes acerta como o Studio grava', () => {
+  const semFonte = trocar(CONTRATACAO, ' font="/0/@fonts.0" value="Aprovar"', ' value="Aprovar"');
+  assert.deepEqual(
+    erros(checarDiagrama(semFonte)).map((a) => a.mensagem.split(':')[0]),
+    ['texto sem fonte'],
+  );
+  // O reparo devolve exatamente o arquivo bom: mesma fonte, mesma posição do atributo.
+  assert.equal(garantirFontes(semFonte), CONTRATACAO);
+  assert.equal(garantirFontes(CONTRATACAO), CONTRATACAO, 'sem nada a fazer, não mexe');
+  // Sem nenhuma <fonts>, cria a negrito para formas e a normal só se houver rótulo de fluxo.
+  const nenhuma = CONTRATACAO.replace(/ font="\/0\/@fonts\.0"/g, '').replace(/\n\s*<fonts [^>]*\/>/, '');
+  assert.equal(textosSemFonte(nenhuma), 14);
+  assert.equal(garantirFontes(nenhuma), CONTRATACAO);
+  // Fonte quebrada também impede o Studio de abrir.
+  const quebrada = trocar(CONTRATACAO, ' font="/0/@fonts.0" value="Aprovar"', ' font="/0/@fonts.7" value="Aprovar"');
+  assert.match(erros(checarDiagrama(quebrada))[0]!.mensagem, /font aponta para \/0\/@fonts\.7/);
 });

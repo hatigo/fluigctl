@@ -91,6 +91,15 @@ function conferirEstrutura(raiz: No, diagrama: No, objetos: Map<string, ObjetoBp
   const erro = (onde: string, mensagem: string) => achados.push({ nivel: 'erro', grupo: 'estrutura', onde, mensagem });
   const caminhoDe = caminhos(diagrama);
 
+  // 0. Todo texto tem fonte. Sem ela o Studio não abre o arquivo: o editor
+  //    mede o rótulo de cada gateway ao abrir (getFont().getName()) e dá
+  //    NullPointerException. Nos 3.585 textos do acervo, todos têm.
+  for (const [no, caminho] of caminhoDe) {
+    if (no.nome === 'graphicsAlgorithm' && /^al:(Text|MultiText)$/.test(no.attrs['xsi:type'] ?? '') && !no.attrs['font']) {
+      erro(caminho, 'texto sem fonte: o Studio não abre o arquivo (NullPointerException); fluigctl diagram check --fix acrescenta');
+    }
+  }
+
   // 1. Toda referência por caminho resolve.
   for (const [no, caminho] of caminhoDe) {
     for (const [attr, valor] of Object.entries(no.attrs)) {
@@ -98,8 +107,9 @@ function conferirEstrutura(raiz: No, diagrama: No, objetos: Map<string, ObjetoBp
       if (tokens.length === 0 || !tokens.every((t) => CAMINHO.test(t))) continue;
       for (const t of tokens) {
         if (resolver(raiz, t)) continue;
-        // Estilo, cor e fonte só mudam a aparência; o Studio grava alguns quebrados e abre.
-        if (/^\/0\/@(styles|colors|fonts)\b/.test(t)) {
+        // Estilo e cor só mudam a aparência; o Studio grava alguns quebrados e abre.
+        // Fonte, não: o editor lê a fonte dos rótulos ao abrir (veja abaixo).
+        if (/^\/0\/@(styles|colors)\b/.test(t)) {
           achados.push({ nivel: 'aviso', grupo: 'estrutura', onde: caminho, mensagem: `${attr} aponta para ${t}, que não existe` });
         } else {
           erro(caminho, `${attr} aponta para ${t}, que não existe`);

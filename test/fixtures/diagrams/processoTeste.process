@@ -10,14 +10,14 @@
         <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="870" height="150" x="30"/>
         <link businessObjects="bpmnswimlane2"/>
         <children visible="true">
-          <graphicsAlgorithm xsi:type="al:Text" width="30" height="150" value="Solicitante"/>
+          <graphicsAlgorithm xsi:type="al:Text" width="30" height="150" font="/0/@fonts.0" value="Solicitante"/>
         </children>
       </children>
       <children xsi:type="pi:ContainerShape" visible="true" active="true">
         <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="870" height="150" x="30" y="150"/>
         <link businessObjects="bpmnswimlane9"/>
         <children visible="true">
-          <graphicsAlgorithm xsi:type="al:Text" width="30" height="150" value="Aprova&#xe7;&#xe3;o"/>
+          <graphicsAlgorithm xsi:type="al:Text" width="30" height="150" font="/0/@fonts.0" value="Aprova&#xe7;&#xe3;o"/>
         </children>
       </children>
     </children>
@@ -33,7 +33,7 @@
       <link businessObjects="task5"/>
       <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.1" incomingConnections="/0/@connections.0"/>
       <children visible="true">
-        <graphicsAlgorithm xsi:type="al:MultiText" width="96" height="57" x="5" y="5" value="Preencher &gt; revisar"/>
+        <graphicsAlgorithm xsi:type="al:MultiText" width="96" height="57" x="5" y="5" font="/0/@fonts.0" value="Preencher &gt; revisar"/>
       </children>
     </children>
     <children xsi:type="pi:ContainerShape" visible="true" active="true">
@@ -54,7 +54,7 @@
       <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
       <link businessObjects="flow10"/>
       <connectionDecorators visible="true" locationRelative="true" location="0.5">
-        <graphicsAlgorithm xsi:type="al:Text" x="10" value="Enviar"/>
+        <graphicsAlgorithm xsi:type="al:Text" x="10" font="/0/@fonts.1" value="Enviar"/>
       </connectionDecorators>
       <bendpoints x="203" y="236"/>
       <bendpoints y="236"/>
@@ -63,6 +63,8 @@
       <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
       <link businessObjects="flow11"/>
     </connections>
+    <fonts name="Arial" size="8" bold="true"/>
+    <fonts name="Arial" size="8"/>
   </pi:Diagram>
   <bpmn2:BpmnPool id="bpmnpool1" name="Processo de Teste" cores="FFFFFF"/>
   <bpmn2:BpmnSwimLane id="bpmnswimlane2" name="Solicitante" cores="FFBE6F"/>
