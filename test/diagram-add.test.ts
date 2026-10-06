@@ -328,3 +328,22 @@ test('ver script: lê o arquivo da service task, diz quando não existe e recusa
     p.limpar();
   }
 });
+
+test('início, gateway paralelo e junção: ids no padrão do Studio, sem estilo emprestado, e o push converte', () => {
+  let xml = CONTRATACAO;
+  const ids: string[] = [];
+  for (const [tipo, x] of [['inicio', 200], ['paralelo', 350], ['juncao', 500]] as const) {
+    const r = adicionarNoXml(xml, { tipo, x, y: 480 });
+    ids.push(r.criados[0]!);
+    xml = r.xml;
+  }
+  assert.deepEqual(ids, ['startevent37', 'parallelgateway38', 'joingateway39']);
+  assert.equal(objeto(xml, 'parallelgateway38')!.attrs['type'], '126');
+  assert.equal(objeto(xml, 'joingateway39')!.attrs['type'], '127');
+  assert.equal(objeto(xml, 'joingateway39')!.attrs['name'], 'Junção');
+  // O modelo embutido dos paralelos vem de um diagrama do Studio, sem as referências de estilo dele.
+  assert.deepEqual(checarDiagrama(xml).filter((a) => a.grupo === 'estrutura'), []);
+  const p = ligarNoXml(xml, 'task2', 'parallelgateway38');
+  assert.doesNotThrow(() => converterDiagrama(p.xml, { companyId: 1, formId: 1 }));
+  assert.throws(() => ligarNoXml(p.xml, 'task2', 'startevent37'), /início não tem entrada/);
+});

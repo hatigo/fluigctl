@@ -305,8 +305,10 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
 - **adicionar** pelo menu **+ Adicionar…**: escolha o tipo e clique no
   diagrama onde ele vai ficar (`Esc` cancela). O elemento já vem selecionado,
   com o campo Nome em foco.
-  - Tipos: tarefa humana, gateway, fim, service task sozinha, e **service task
-    com recuperação**.
+  - Tipos: tarefa humana, gateway exclusivo, gateway paralelo (abre), junção
+    paralela (fecha), início, fim, service task sozinha, e **service task com
+    recuperação**. O temporizador fica para depois: ele exige configurar o
+    gatilho no painel.
   - A **service task com recuperação** cria o padrão inteiro de uma vez:
     - a tarefa automática;
     - o evento de erro no canto inferior direito;
