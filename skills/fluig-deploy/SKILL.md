@@ -124,7 +124,12 @@ they can:
     equal) or as an expression.
 
   Assignment and condition blobs are only rewritten in Studio's exact format.
-  When the panel cannot round-trip one, it shows it read-only. Every edit writes the `.process` directly and goes through the same
+  When the panel cannot round-trip one, it shows it read-only.
+- add elements from the "+ Adicionar…" menu: human task, gateway, end, a lone
+  service task, or a **service task with recovery**. The last one creates the
+  whole recovery pattern at once: the task, the error event, the handling task
+  in `suporte_processos`, and both flows. A new service task has no script
+  yet, and `push diagram` warns about it. Every edit writes the `.process` directly and goes through the same
 safeguards:
 - **Hash check.** The edit only applies to the text the screen was drawn from.
   If the file changed, the edit is refused and the screen refreshes.
@@ -140,8 +145,8 @@ If the human edits, expect the file to change under you. Re-read it before your
 next write, so you do not overwrite their edit. Your own writes have none of
 these protections. Outside edit mode the viewer is read-only.
 
-Do not claim the viewer can do more than this. Adding, connecting or removing
-elements is not built yet.
+Do not claim the viewer can do more than this. Connecting elements by hand and removing
+them are not built yet.
 
 ## Pushing
 

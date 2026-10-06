@@ -248,7 +248,23 @@ export function renomearElemento(pedido: PedidoRenomear): ResultadoEdicao {
     if (objeto.attrs['name'] !== pedido.nomeOriginal) {
       throw new ConflitoEdicao('nome-alterado', `o nome de ${pedido.id} mudou enquanto você editava`, objeto.attrs['name']);
     }
-    return trocarNomeNoXml(texto, pedido.id, pedido.nomeOriginal, pedido.nomeNovo);
+    let novo = trocarNomeNoXml(texto, pedido.id, pedido.nomeOriginal, pedido.nomeNovo);
+    // Os nomes que a criação da service task com recuperação gerou acompanham o
+    // renomear. Só esses: um nome que alguém mudou à mão não é tocado.
+    if (objeto.tipo === 'BpmnTask' && objeto.attrs['type'] === '82') {
+      const d = lerDiagrama(texto);
+      for (const ev of (objeto.attrs['attachedEvents'] ?? '').split(/\s+/).filter(Boolean)) {
+        const evento = d.objetos.find((o) => o.attrs['id'] === ev);
+        if (evento?.attrs['name'] === `Erro: ${pedido.nomeOriginal}`) novo = trocarNomeNoXml(novo, ev, evento.attrs['name'], `Erro: ${pedido.nomeNovo}`);
+        for (const f of (evento?.attrs['outgoing'] ?? '').split(/\s+/).filter(Boolean)) {
+          const alvo = d.objetos.find((o) => o.attrs['id'] === d.objetos.find((x) => x.attrs['id'] === f)?.attrs['targetRef']);
+          if (alvo?.attrs['name'] === `Tratar erro: ${pedido.nomeOriginal}`) {
+            novo = trocarNomeNoXml(novo, alvo.attrs['id']!, alvo.attrs['name'], `Tratar erro: ${pedido.nomeNovo}`);
+          }
+        }
+      }
+    }
+    return novo;
   };
   const r = aplicarEdicao(pedido.arquivo, pedido.undoDir, verificar);
   return { arquivo: r.arquivo, id: pedido.id, nome: pedido.nomeNovo, hash: r.hash, avisos: r.avisos };
