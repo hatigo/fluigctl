@@ -108,14 +108,17 @@ fluigctl diagram close workflow/diagrams/<processo>.process
 ```
 
 The viewer has an **edit mode** that the human turns on with **Editar**. In it
-they can rename an element from the property panel and move tasks, events and
-gateways, by dragging or with the arrow keys. An attached error event moves with
-its task. Every edit writes the `.process` directly and goes through the same
+they can:
+- rename an element from the property panel;
+- move tasks, events and gateways, by dragging or with the arrow keys. An
+  attached error event moves with its task;
+- route flows: drag, add or remove bendpoints, or straighten a flow, or all the
+  flows of an element, into right angles by the layout recipe. Every edit writes the `.process` directly and goes through the same
 safeguards:
 - **Hash check.** The edit only applies to the text the screen was drawn from.
   If the file changed, the edit is refused and the screen refreshes.
-- **Text patch.** The change touches only the attribute being edited (`name`, or
-  a shape's `x`/`y`). Nothing else in the file is rewritten.
+- **Text patch.** The change touches only what is being edited: the `name`, a
+  shape's `x`/`y`, or a flow's `<bendpoints>`. Nothing else in the file is rewritten.
 - **Structure check.** `diagram check` must find no structural error that the
   file did not already have.
 - **Atomic write.**
@@ -127,7 +130,7 @@ next write, so you do not overwrite their edit. Your own writes have none of
 these protections. Outside edit mode the viewer is read-only.
 
 Do not claim the viewer can do more than this. Adding, connecting or removing
-elements, routing flows and editing properties are not built yet.
+elements, and editing properties, are not built yet.
 
 ## Pushing
 

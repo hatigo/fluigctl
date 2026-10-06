@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { lerDiagrama, type Caixa } from '../push/diagram/modelo.js';
+import { lerDiagrama, type Caixa, type Ponto } from '../push/diagram/modelo.js';
 import { decodificarEntidades, escaparTexto } from '../push/diagram/xml.js';
 import { checarDiagrama, type Achado } from './check.js';
+import { rotaOrtogonal } from './route.js';
 
 export type MotivoConflito = 'elemento-removido' | 'nome-alterado' | 'arquivo-alterado' | 'sem-desfazer' | 'sem-refazer';
 
@@ -426,4 +427,129 @@ export function moverElemento(pedido: PedidoMover): ResultadoMover {
     return feito.xml;
   }, pedido.hashBase);
   return { ...r, movidos, raiaAntes, raiaDepois };
+}
+
+/** A conexão de um fluxo no texto: onde estão as dobras e onde ela fecha. */
+interface ConexaoNoTexto {
+  /** Trechos `[inicio, fim)` de cada `<bendpoints .../>`, com o recuo da linha. */
+  dobras: [number, number][];
+  /** Início da linha do `</connections>`. */
+  fechamento: number;
+  recuo: string;
+}
+
+/** Acha as conexões diretas do `pi:Diagram` pelo fluxo do `<link>`, sem reserializar. */
+export function conexoesNoTexto(xml: string): Map<string, ConexaoNoTexto> {
+  const conexoes = new Map<string, ConexaoNoTexto>();
+  const pilha: string[] = [];
+  let nivelDiagrama = -1;
+  let atual: { id?: string | undefined; dobras: [number, number][]; recuo: string } | undefined;
+  const inicioDaLinha = (i: number) => xml.lastIndexOf('\n', i - 1) + 1;
+  for (const m of xml.matchAll(TOKEN)) {
+    const [inteiro, fecha, nome] = m;
+    if (nome === undefined) continue;
+    const vazia = m[4] === '/';
+    if (fecha) {
+      pilha.pop();
+      if (atual && nome === 'connections' && pilha.length === nivelDiagrama + 1) {
+        const linha = inicioDaLinha(m.index);
+        if (atual.id) conexoes.set(atual.id, { dobras: atual.dobras, fechamento: linha, recuo: atual.recuo });
+        atual = undefined;
+      }
+      if (nome === 'pi:Diagram') nivelDiagrama = -1;
+      continue;
+    }
+    const profundidade = pilha.length;
+    if (nome === 'pi:Diagram') nivelDiagrama = profundidade;
+    else if (nivelDiagrama >= 0 && profundidade === nivelDiagrama + 1 && nome === 'connections' && !vazia) {
+      atual = { dobras: [], recuo: '' };
+    } else if (atual && profundidade === nivelDiagrama + 2) {
+      const linha = inicioDaLinha(m.index);
+      if (nome === 'link') {
+        atual.id = /\sbusinessObjects="([^"]*)"/.exec(inteiro)?.[1];
+        atual.recuo = xml.slice(linha, m.index);
+      }
+      if (nome === 'bendpoints') {
+        // A linha inteira sai, com a quebra que a precede.
+        const fim = m.index + inteiro.length;
+        atual.dobras.push(/^\s*$/.test(xml.slice(linha, m.index)) ? [linha - 1, fim] : [m.index, fim]);
+      }
+    }
+    if (!vazia) pilha.push(nome);
+  }
+  return conexoes;
+}
+
+const MAX_DOBRAS = 50;
+
+/** Troca as dobras de um fluxo. Sem dobras, a linha vai reta de ponta a ponta. */
+export function trocarDobrasNoXml(xml: string, fluxoId: string, pontos: Ponto[]): string {
+  if (!Array.isArray(pontos) || pontos.length > MAX_DOBRAS) throw new EdicaoInvalida(`um fluxo leva de 0 a ${MAX_DOBRAS} dobras`);
+  for (const p of pontos) {
+    if (!p || !Number.isInteger(p.x) || !Number.isInteger(p.y) || p.x < 0 || p.y < 0 || p.x > 100000 || p.y > 100000) {
+      throw new EdicaoInvalida('cada dobra precisa de x e y inteiros, não negativos');
+    }
+  }
+  const objeto = lerDiagrama(xml).objetos.find((o) => o.attrs['id'] === fluxoId);
+  if (!objeto) throw new ConflitoEdicao('elemento-removido', `o fluxo ${fluxoId} não existe mais`);
+  if (objeto.tipo !== 'SequenceFlow') throw new EdicaoInvalida(`${fluxoId} não é um fluxo`);
+  const conexao = conexoesNoTexto(xml).get(fluxoId);
+  if (!conexao) throw new EdicaoInvalida(`o fluxo ${fluxoId} não está desenhado no diagrama`);
+
+  // Como o Studio: coordenada 0 não é gravada (`<bendpoints y="236"/>`).
+  const coordenadas = (p: Ponto) => `${p.x === 0 ? '' : ` x="${p.x}"`}${p.y === 0 ? '' : ` y="${p.y}"`}`;
+  const novas = pontos.map((p) => `${conexao.recuo}<bendpoints${coordenadas(p)}/>\n`).join('');
+  // Do fim para o começo: primeiro entram as novas antes do fechamento, depois saem as velhas.
+  let texto = xml.slice(0, conexao.fechamento) + novas + xml.slice(conexao.fechamento);
+  for (const [inicio, fim] of [...conexao.dobras].reverse()) texto = texto.slice(0, inicio) + texto.slice(fim);
+  return texto;
+}
+
+export interface PedidoDobras {
+  arquivo: string;
+  id: string;
+  pontos: Ponto[];
+  hashBase: string;
+  undoDir: string;
+}
+
+export function trocarDobras(pedido: PedidoDobras): ResultadoAplicacao {
+  return aplicarEdicao(pedido.arquivo, pedido.undoDir, (t) => trocarDobrasNoXml(t, pedido.id, pedido.pontos), pedido.hashBase);
+}
+
+export interface PedidoEndireitar {
+  arquivo: string;
+  /** Um fluxo (endireita ele) ou um elemento (endireita todas as ligações dele). */
+  id: string;
+  hashBase: string;
+  undoDir: string;
+}
+
+export interface ResultadoEndireitar extends ResultadoAplicacao {
+  fluxos: string[];
+}
+
+/** Os fluxos que um endireitar alcança: o próprio fluxo, ou todos os que entram e saem do elemento. */
+function fluxosDe(xml: string, id: string): string[] {
+  const d = lerDiagrama(xml);
+  const o = d.objetos.find((x) => x.attrs['id'] === id);
+  if (!o) throw new ConflitoEdicao('elemento-removido', `o elemento ${id} não existe mais`);
+  if (o.tipo === 'SequenceFlow') return [id];
+  return d.objetos
+    .filter((x) => x.tipo === 'SequenceFlow' && (x.attrs['sourceRef'] === id || x.attrs['targetRef'] === id))
+    .map((x) => x.attrs['id']!)
+    .filter((f) => d.dobras.has(f));
+}
+
+export function endireitar(pedido: PedidoEndireitar): ResultadoEndireitar {
+  let fluxos: string[] = [];
+  const r = aplicarEdicao(pedido.arquivo, pedido.undoDir, (texto) => {
+    fluxos = fluxosDe(texto, pedido.id);
+    if (fluxos.length === 0) throw new EdicaoInvalida('este elemento não tem ligações para endireitar');
+    let novo = texto;
+    for (const f of fluxos) novo = trocarDobrasNoXml(novo, f, rotaOrtogonal(lerDiagrama(novo), f));
+    if (novo === texto) throw new EdicaoInvalida('as ligações já estão retas');
+    return novo;
+  }, pedido.hashBase);
+  return { ...r, fluxos };
 }

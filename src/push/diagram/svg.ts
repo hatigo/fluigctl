@@ -81,6 +81,16 @@ function figura(o: ObjetoBpmn | undefined, c: Caixa): Caixa {
   return c;
 }
 
+/** Centro da parte desenhada: é para onde cada ponta de um fluxo aponta. */
+export function centroDaFigura(o: ObjetoBpmn | undefined, c: Caixa): Ponto {
+  return centro(figura(o, c));
+}
+
+/** A caixa desenhada (sem o rótulo pendurado do gateway). */
+export function caixaDaFigura(o: ObjetoBpmn | undefined, c: Caixa): Caixa {
+  return figura(o, c);
+}
+
 /** Contorno de cada forma no SVG do Studio. */
 const CONTORNO: Record<string, string> = {
   inicio: '336633', fim: '993333', tarefa: '191970', gateway: '000000', intermediario: '999900',
