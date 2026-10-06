@@ -60,7 +60,7 @@ atribuição já são publicados pelo `fluigctl`.
 |---|---|
 | `server add` / `ls` / `rm` / `test` / `set-prod` | pronto |
 | `server ui` (tela no terminal para o cadastro) | pronto |
-| `skill install` / `uninstall` (a skill que ensina um agente a publicar) | pronto |
+| `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
 | `diagram open` + painel (inspeção de elementos e renomear com desfazer) | pronto, inspeção e renomear; o resto é somente leitura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
@@ -98,16 +98,23 @@ Node 22.2 ou mais novo.
 
 ### Para um agente
 
-O repositório traz a skill `fluig-deploy`, que ensina um agente a publicar com o
-`fluigctl` — os comandos, os códigos de saída e as regras que ele não deve
-atravessar (produção é do humano). Uma vez:
+O repositório traz duas skills:
+
+- `fluig-deploy` ensina um agente a publicar com o `fluigctl`: os comandos, os
+  códigos de saída e as regras que ele não deve atravessar (produção é do humano).
+- `fluig-patterns` ensina a escrever o artefato no padrão dos projetos: nomes,
+  limites do Rhino, a linha STATUS/MESSAGE dos datasets, consultas ao RM, travas
+  sem `disabled`, tarefas de erro nas service tasks, retentativas idempotentes.
+  Ela foi tirada do repositório da Cetenco e das lições do histórico dele.
+
+Uma vez:
 
 ```sh
-fluigctl skill install    # põe a skill onde os agentes procuram
-fluigctl skill            # diz onde ela está, e se está atualizada
+fluigctl skill install    # põe as skills onde os agentes procuram
+fluigctl skill            # diz onde elas estão, e se estão atualizadas
 ```
 
-Ela sai como **link** para este repositório, e não como cópia: `git pull` aqui
+Elas saem como **link** para este repositório, e não como cópia: `git pull` aqui
 atualiza o que o agente lê na próxima sessão. `--copy` copia, `--force` sobrepõe
 uma skill de mesmo nome que não seja do `fluigctl`, e `--dir` escolhe o destino.
 

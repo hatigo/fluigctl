@@ -13,7 +13,7 @@ import {
 } from './config.js';
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { serverUi } from './commands/server-ui.js';
-import { estado as estadoDaSkill, instalarSkill, origemDaSkill, removerSkill } from './commands/skill.js';
+import { estado as estadoDaSkill, instalarSkill, origensDasSkills, removerSkill } from './commands/skill.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushDiagram } from './commands/push-diagram.js';
 import { eventIdDoArquivo, pushEvent } from './commands/push-event.js';
@@ -59,8 +59,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       e para importar os da extensão Fluiggers
 
   fluigctl skill [ls | install [--copy] [--force] | uninstall]
-      põe (ou tira) a skill que ensina um agente a publicar com o fluigctl;
-      sem argumento, diz onde ela está e onde daria para instalar
+      põe (ou tira) as skills que ensinam um agente a publicar com o fluigctl
+      (fluig-deploy) e a escrever no padrão dos projetos (fluig-patterns);
+      sem argumento, diz onde elas estão e onde daria para instalar
 
   fluigctl diagram open <arquivo.process> [--no-open] [--foreground]
       abre no navegador um visualizador local que acompanha mudanças no arquivo
@@ -948,14 +949,16 @@ function comandoSkill(argv: string[]): void {
     '     fluigctl skill uninstall [--dir <pasta>] [--dry-run]';
 
   if (sub === 'ls') {
-    let origem: string;
+    let origens: string[];
     try {
-      origem = origemDaSkill();
+      origens = origensDasSkills();
     } catch (erro) {
       throw new ErroFluigctl((erro as Error).message, 3);
     }
-    console.log(`esta é a skill que vem com o fluigctl: ${origem}`);
-    for (const e of estadoDaSkill()) {
+    console.log('estas são as skills que vêm com o fluigctl:');
+    for (const o of origens) console.log(`  ${o}`);
+    console.log('');
+    for (const e of estadoDaSkill(undefined, origens)) {
       const situacao = !e.instalada
         ? e.pastaExiste
           ? 'não instalada'
@@ -965,7 +968,7 @@ function comandoSkill(argv: string[]): void {
           : `${e.como === 'link' ? 'instalada como link para o repositório' : 'instalada como cópia'}${e.desatualizada ? ', e desatualizada' : ''}`;
       console.log(`  ${e.destino}\n      ${situacao}`);
     }
-    console.log('\n"fluigctl skill install" põe a skill onde os agentes procuram.');
+    console.log('\n"fluigctl skill install" põe as skills onde os agentes procuram.');
     return;
   }
 
@@ -993,7 +996,7 @@ function comandoSkill(argv: string[]): void {
     }
     for (const x of r.recusados) console.log(`recusado: ${x.destino} — ${x.motivo}`);
     if (values['dry-run']) console.log('[dry-run] Nada foi escrito.');
-    else if (r.feito.length > 0) console.log('\nUm agente que leia esse diretório passa a ver a skill na próxima sessão.');
+    else if (r.feito.length > 0) console.log('\nUm agente que leia esse diretório passa a ver as skills na próxima sessão.');
     if (r.recusados.length > 0) throw new ErroFluigctl('havia skill ocupada; nada dela foi tocado', 6);
     return;
   }

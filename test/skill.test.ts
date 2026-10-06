@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { estado, estadoEm, instalarSkill, locaisDeSkill, origemDaSkill, removerSkill } from '../src/commands/skill.js';
+import { estado, estadoEm, instalarSkill, locaisDeSkill, origemDaSkill, removerSkill, SKILLS } from '../src/commands/skill.js';
 import { ErroFluigctl } from '../src/errors.js';
 
 /**
@@ -33,11 +33,22 @@ test('a skill vem do repositório, e o caminho dela existe', () => {
   assert.ok(existsSync(join(ORIGEM, 'SKILL.md')));
 });
 
-test('o frontmatter declara o mesmo nome do diretório, como o spec pede', () => {
+test('cada skill declara no frontmatter o mesmo nome do diretório, como o spec pede', () => {
   // Implementações mais estritas recusam nome diferente do diretório.
-  const texto = readFileSync(join(ORIGEM, 'SKILL.md'), 'utf8');
-  assert.match(texto, /^name: fluig-deploy$/m);
-  assert.ok(ORIGEM.endsWith('/fluig-deploy'));
+  for (const nome of SKILLS) {
+    const texto = readFileSync(join(origemDaSkill(undefined, nome), 'SKILL.md'), 'utf8');
+    assert.match(texto, new RegExp(`^name: ${nome}$`, 'm'));
+  }
+});
+
+test('os links relativos da skill apontam para arquivos que existem', () => {
+  for (const nome of SKILLS) {
+    const origem = origemDaSkill(undefined, nome);
+    const texto = readFileSync(join(origem, 'SKILL.md'), 'utf8');
+    for (const [, alvo] of texto.matchAll(/\]\((?!https?:)([^)#]+)\)/g)) {
+      assert.ok(existsSync(join(origem, alvo!)), `${nome}: ${alvo} não existe`);
+    }
+  }
 });
 
 test('instalar linka para o repositório, e o link aponta para a skill certa', () => {
@@ -45,7 +56,8 @@ test('instalar linka para o repositório, e o link aponta para a skill certa', (
   try {
     const r = instalarSkill({ home });
     const destino = join(locaisDeSkill(home)[0]!, 'fluig-deploy');
-    assert.deepEqual(r.feito.map((f) => f.acao), ['instalada']);
+    assert.deepEqual(r.feito.map((f) => f.acao), SKILLS.map(() => 'instalada'), 'todas as skills do pacote');
+    for (const nome of SKILLS) assert.ok(existsSync(join(locaisDeSkill(home)[0]!, nome, 'SKILL.md')));
     assert.ok(lstatSync(destino).isSymbolicLink(), 'linkar é o padrão: git pull atualiza o que o agente lê');
     assert.ok(existsSync(join(destino, 'SKILL.md')));
   } finally {
@@ -59,7 +71,7 @@ test('instalar de novo é idempotente, e não reescreve nada', () => {
     instalarSkill({ home });
     const marco = lstatSync(join(locaisDeSkill(home)[0]!, 'fluig-deploy')).ino;
     const r = instalarSkill({ home });
-    assert.deepEqual(r.feito.map((f) => f.acao), ['ja estava']);
+    assert.deepEqual(r.feito.map((f) => f.acao), SKILLS.map(() => 'ja estava'));
     assert.equal(lstatSync(join(locaisDeSkill(home)[0]!, 'fluig-deploy')).ino, marco, 'o mesmo link');
   } finally {
     limpar();
@@ -77,8 +89,28 @@ test('--copy copia o conteúdo, e uma cópia desatualizada é atualizada', () =>
     // Envelhece a cópia: reinstalar tem de trazer a versão do repositório de volta.
     writeFileSync(join(destino, 'SKILL.md'), '---\nname: fluig-deploy\n---\n\n# versão velha\n');
     const r = instalarSkill({ home, copiar: true });
-    assert.deepEqual(r.feito.map((f) => f.acao), ['atualizada']);
+    assert.deepEqual(r.feito.map((f) => [basename(f.destino), f.acao]), SKILLS.map((n) => [n, n === 'fluig-deploy' ? 'atualizada' : 'ja estava']));
     assert.equal(readFileSync(join(destino, 'SKILL.md'), 'utf8'), readFileSync(join(ORIGEM, 'SKILL.md'), 'utf8'));
+  } finally {
+    limpar();
+  }
+});
+
+test('--copy leva as referências, e uma referência velha também desatualiza a cópia', () => {
+  const { home, limpar } = casa();
+  try {
+    const origem = origemDaSkill(undefined, 'fluig-patterns');
+    const dir = locaisDeSkill(home)[0]!;
+    const destino = join(dir, 'fluig-patterns');
+    instalarSkill({ home, copiar: true, origem });
+    const ref = join(destino, 'references', 'datasets.md');
+    assert.equal(readFileSync(ref, 'utf8'), readFileSync(join(origem, 'references', 'datasets.md'), 'utf8'));
+
+    writeFileSync(ref, 'versão velha\n');
+    assert.equal(estadoEm(dir, origem).desatualizada, true, 'o SKILL.md igual não basta');
+    const r = instalarSkill({ home, copiar: true, origem });
+    assert.deepEqual(r.feito.map((f) => f.acao), ['atualizada']);
+    assert.equal(readFileSync(ref, 'utf8'), readFileSync(join(origem, 'references', 'datasets.md'), 'utf8'));
   } finally {
     limpar();
   }
@@ -92,7 +124,7 @@ test('skill com outro nome no frontmatter é recusada, e nada dela é tocado', (
     skillAlheia(dir);
 
     const r = instalarSkill({ home });
-    assert.deepEqual(r.feito, []);
+    assert.ok(!r.feito.some((f) => basename(f.destino) === 'fluig-deploy'), 'a ocupada não é tocada');
     assert.equal(r.recusados.length, 1);
     assert.match(r.recusados[0]!.motivo, /não foi o fluigctl que a pôs/);
     assert.match(readFileSync(join(dir, 'fluig-deploy/SKILL.md'), 'utf8'), /outra-coisa/, 'intacta');
@@ -120,7 +152,7 @@ test('--dry-run não escreve', () => {
   try {
     const r = instalarSkill({ home, dryRun: true });
     assert.equal(r.feito[0]!.acao, 'instalada');
-    assert.ok(!existsSync(join(locaisDeSkill(home)[0]!, 'fluig-deploy')), 'nada no disco');
+    assert.ok(!existsSync(locaisDeSkill(home)[0]!), 'nada no disco');
   } finally {
     limpar();
   }
@@ -147,7 +179,7 @@ test('sem --dir, instala também onde o Claude Code já tem pasta', () => {
     const r = instalarSkill({ home });
     assert.deepEqual(
       r.feito.map((f) => f.destino).sort(),
-      [join(convencao!, 'fluig-deploy'), join(claude!, 'fluig-deploy')].sort(),
+      SKILLS.flatMap((n) => [join(convencao!, n), join(claude!, n)]).sort(),
     );
   } finally {
     limpar();
@@ -160,8 +192,8 @@ test('desinstalar só remove o que foi o fluigctl que pôs', () => {
     const dir = locaisDeSkill(home)[0]!;
     instalarSkill({ home });
     const r = removerSkill({ home });
-    assert.equal(r.removidos.length, 1);
-    assert.ok(!existsSync(join(dir, 'fluig-deploy')));
+    assert.equal(r.removidos.length, SKILLS.length);
+    for (const nome of SKILLS) assert.ok(!existsSync(join(dir, nome)));
 
     // O alheio fica.
     mkdirSync(dir, { recursive: true });
