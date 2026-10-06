@@ -64,9 +64,13 @@ export function trocarAtributosNoXml(xml: string, id: string, mudancas: Record<s
     achada = m;
   }
   if (!achada) throw new ConflitoEdicao('elemento-removido', `o elemento ${id} não existe mais`);
-  let texto = achada[0];
-  const estilo = estiloDoArquivo(xml);
-  const codificarAtributo_ = (v: string) => codificarAtributo(v, estilo);
+  const texto = trocarAtributosNaTag(achada[0], mudancas, inserirDepois, estiloDoArquivo(xml));
+  return xml.slice(0, achada.index) + texto + xml.slice(achada.index + achada[0].length);
+}
+
+/** Troca, insere ou remove atributos de uma tag isolada; o valor existente dita o estilo de codificação. */
+export function trocarAtributosNaTag(tag: string, mudancas: Record<string, string | null>, inserirDepois: string[], estilo: EstiloAtributo): string {
+  let texto = tag;
   for (const [nome, valor] of Object.entries(mudancas)) {
     const existente = new RegExp(`\\s${nome}="([^"]*)"`);
     const atual = existente.exec(texto);
@@ -78,13 +82,13 @@ export function trocarAtributosNoXml(xml: string, id: string, mudancas: Record<s
     } else {
       // Entra depois do primeiro vizinho que existir; senão, antes do fim da tag.
       const vizinho = inserirDepois.find((v) => new RegExp(`\\s${v}="[^"]*"`).test(texto));
-      const novo = ` ${nome}="${codificarAtributo_(valor)}"`;
+      const novo = ` ${nome}="${codificarAtributo(valor, estilo)}"`;
       texto = vizinho
         ? texto.replace(new RegExp(`(\\s${vizinho}="[^"]*")`), (m) => m + novo)
-        : texto.replace(/\s*(\/?)>$/, (m, barra: string) => `${novo}${barra}>`);
+        : texto.replace(/\s*(\/?)>$/, (_m, barra: string) => `${novo}${barra}>`);
     }
   }
-  return xml.slice(0, achada.index) + texto + xml.slice(achada.index + achada[0].length);
+  return texto;
 }
 
 // ---------------------------------------------------------------------------

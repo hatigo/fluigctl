@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
+import { adicionarNoXml, type TipoNovo } from './add.js';
 import { ConflitoEdicao, EdicaoInvalida, aplicarEdicao, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras } from './edit.js';
 import {
   MECANISMOS,
@@ -489,6 +490,26 @@ async function tratarEdicao(
       respostaJson(res, 200, { ok: true, fluxos: resultado.fluxos, avisos: resultado.avisos });
       return;
     }
+    if (rota === 'add') {
+      const numero = (chave: string): number => {
+        const valor = corpo[chave];
+        if (typeof valor !== 'number') throw new EdicaoInvalida(`o campo ${chave} é obrigatório`);
+        return valor;
+      };
+      const tipo = texto('tipo') as TipoNovo;
+      const x = numero('x');
+      const y = numero('y');
+      const nome = typeof corpo['nome'] === 'string' ? corpo['nome'] : undefined;
+      const grupo = typeof corpo['grupo'] === 'string' ? corpo['grupo'] : undefined;
+      let criados: string[] = [];
+      const r = aplicarEdicao(arquivo, undoDir, (t) => {
+        const feito = adicionarNoXml(t, { tipo, x, y, ...(nome === undefined ? {} : { nome }), ...(grupo === undefined ? {} : { grupo }) });
+        criados = feito.criados;
+        return feito.xml;
+      }, texto('hash'));
+      respostaJson(res, 200, { ok: true, criados, avisos: r.avisos });
+      return;
+    }
     if (rota === 'execution') {
       const id = texto('id');
       const r = aplicarEdicao(arquivo, undoDir, (t) => tornarAutomaticaNoXml(t, id), texto('hash'));
@@ -571,6 +592,7 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 .conflict{margin-top:12px;padding:11px 12px;border:1px solid #fca5a5;background:#fef2f2;border-radius:9px;color:#991b1b;font-size:13px}
 .conflict dl{margin:8px 0 0}.conflict dt{color:#b91c1c}.conflict .row{display:flex;gap:8px;margin-top:11px}
 #notice .row{display:flex;align-items:center;gap:10px;justify-content:space-between}#notice button{padding:4px 9px}
+#add-menu{border:1px solid var(--brand);color:var(--brand);background:#fff;border-radius:8px;padding:6px 8px;font:inherit;font-weight:600;cursor:pointer}body.colocando #canvas{cursor:crosshair}body.colocando .fluig-hit{cursor:crosshair}
 .save{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;padding:4px 9px;border-radius:999px;border:1px solid transparent}
 .save::before{content:"";width:8px;height:8px;border-radius:50%;background:#94a3b8}.save.ok{color:#15803d;background:#f0fdf4;border-color:#bbf7d0}.save.ok::before{background:#16a34a}
 .save.busy{color:#1e40af;background:#eff6ff}.save.busy::before{background:transparent;border:2px solid #93c5fd;border-top-color:#1d4ed8;width:6px;height:6px;animation:gira .7s linear infinite}
@@ -586,7 +608,7 @@ body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cu
 .props .row{display:flex;gap:8px;align-items:center;margin-top:10px}.cond{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:10px}.cond strong{display:block;font-size:13px}.regra{display:grid;grid-template-columns:104px 1fr auto;gap:6px;margin-top:8px}.regra input:first-child{grid-column:1/-1}.regra button{padding:5px 8px}.note{font-size:12px;color:var(--muted);margin:6px 0 0}.warn{color:var(--warn)}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
-<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><span id="save-state" class="save" role="status" aria-live="polite" title="As edições são gravadas no .process assim que você as faz">Tudo salvo</span><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
+<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><span id="save-state" class="save" role="status" aria-live="polite" title="As edições são gravadas no .process assim que você as faz">Tudo salvo</span><select id="add-menu" aria-label="Adicionar elemento" title="Escolha o tipo e clique no diagrama onde ele vai ficar"><option value="">+ Adicionar…</option><option value="humana">Tarefa humana</option><option value="recuperacao">Service task com recuperação</option><option value="servico">Service task sozinha</option><option value="gateway">Gateway</option><option value="fim">Fim</option></select><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
 <div id="error" class="banner" role="alert"></div><div id="notice" class="banner" role="status"></div>
 <div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div>
 <form id="name-form" class="name-form" hidden><label for="name-input">Nome</label><input id="name-input" type="text" autocomplete="off" spellcheck="false" maxlength="200"><div class="row"><button id="save-name" type="submit">Salvar</button><button id="cancel-name" type="button">Cancelar</button><span id="dirty" class="dirty" hidden>Alteração não salva</span></div><p class="hint">Vazio deixa o elemento <strong>Sem nome</strong>. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva.</p></form>
@@ -601,7 +623,7 @@ const canvas=document.querySelector('#canvas'), status=document.querySelector('#
 const form=document.querySelector('#name-form'), input=document.querySelector('#name-input'), dirty=document.querySelector('#dirty'), conflict=document.querySelector('#conflict');
 let svg, original, box, drag, elements=[], selectedId, editando, noticeTimer, editMode=false, hashAtual, ocupado=false;
 const moveHint=document.querySelector('#move-hint'), editTools=document.querySelector('#edit-tools'), editToggle=document.querySelector('#edit-toggle');
-function setEditMode(on){editMode=on;document.body.classList.toggle('editing',on);editToggle.setAttribute('aria-pressed',String(on));editToggle.textContent=on?'Sair da edição':'Editar';editToggle.title=on?'Voltar ao modo somente leitura':'Ligar o modo de edição';editTools.hidden=!on;try{localStorage.setItem('fluigctl-edicao',on?'1':'0')}catch{}if(!on&&editando&&sujo())cancelarEdicao();if(selectedId)select(selectedId)}
+function setEditMode(on){if(!on&&typeof pararDeColocar==='function')pararDeColocar();editMode=on;document.body.classList.toggle('editing',on);editToggle.setAttribute('aria-pressed',String(on));editToggle.textContent=on?'Sair da edição':'Editar';editToggle.title=on?'Voltar ao modo somente leitura':'Ligar o modo de edição';editTools.hidden=!on;try{localStorage.setItem('fluigctl-edicao',on?'1':'0')}catch{}if(!on&&editando&&sujo())cancelarEdicao();if(selectedId)select(selectedId)}
 editToggle.addEventListener('click',()=>setEditMode(!editMode));
 function dimensions(el){const w=Number(el.getAttribute('width'))||1000,h=Number(el.getAttribute('height'))||700;return {x:0,y:0,w,h}}
 function apply(){if(svg&&box)svg.setAttribute('viewBox',box.x+' '+box.y+' '+box.w+' '+box.h)}
@@ -612,7 +634,7 @@ canvas.addEventListener('wheel',e=>{if(!svg)return;e.preventDefault();const r=sv
 function escala(){const r=svg.getBoundingClientRect();return Math.max(box.w/r.width,box.h/r.height)}
 function hitsDe(ids){return [...svg.querySelectorAll('.fluig-hit')].filter(n=>ids.includes(n.dataset.id))}
 function soltarPrevia(){svg?.querySelectorAll('.fluig-hit.moving').forEach(n=>{n.classList.remove('moving');n.removeAttribute('transform')})}
-canvas.addEventListener('pointerdown',e=>{if(!svg||e.button!==0)return;const hit=e.target.closest?.('.fluig-hit');const el=hit&&elements.find(x=>x.id===hit.dataset.id);canvas.setPointerCapture(e.pointerId);
+canvas.addEventListener('pointerdown',e=>{if(!svg||e.button!==0)return;if(editMode&&colocando){e.preventDefault();void colocarEm(e);return}const hit=e.target.closest?.('.fluig-hit');const el=hit&&elements.find(x=>x.id===hit.dataset.id);canvas.setPointerCapture(e.pointerId);
   const alca=e.target.closest?.('.handle');
   if(editMode&&alca&&!ocupado){const fl=elements.find(x=>x.id===selectedId);if(fl&&fl.dobras){drag={modo:'dobra',x:e.clientX,y:e.clientY,el:fl,indice:Number(alca.dataset.indice),dobras:fl.dobras.map(p=>({...p})),moved:false};return}}
   if(editMode&&el&&el.podeMover&&!ocupado){drag={modo:'mover',x:e.clientX,y:e.clientY,hitId:el.id,ids:[el.id,...el.anexados],moved:false,dx:0,dy:0};return}
@@ -850,6 +872,18 @@ function renderProps(el){
       no('div',{class:'row'},no('button',{type:'button',text:'Salvar condições',onclick:()=>void gravarProps('conditions',{id:el.id,condicoes:modelo.filter(m=>m.c).map(m=>m.c)},'Condições salvas.')})));
   }
 }
+// Adicionar: escolhe o tipo no menu, e o próximo clique no diagrama diz onde.
+const addMenu=document.querySelector('#add-menu');let colocando,selecionarDepois;
+const NOMES_TIPO={humana:'tarefa humana',recuperacao:'service task com recuperação',servico:'service task',gateway:'gateway',fim:'fim'};
+function pararDeColocar(){colocando=undefined;addMenu.value='';document.body.classList.remove('colocando')}
+addMenu.addEventListener('change',()=>{colocando=addMenu.value||undefined;document.body.classList.toggle('colocando',Boolean(colocando));if(colocando)flash('Clique no diagrama onde a '+NOMES_TIPO[colocando]+' vai ficar. Esc cancela.')});
+async function colocarEm(e){
+  const tipo=colocando;pararDeColocar();if(ocupado)return;ocupado=true;
+  try{const q=pontoDoDiagrama(e);const {status,dados}=await pedir('add',{tipo,x:Math.round(q.x/10)*10,y:Math.round(q.y/10)*10,hash:hashAtual});
+    if(dados.ok){selecionarDepois=dados.criados[0];flash(((tipo==='recuperacao'?'Service task, evento de erro e tratamento criados. ':'Criado. ')+'Renomeie no painel. '+resumoAvisos(dados)).trim(),{rotulo:'Desfazer',aoClicar:desfazer});return}
+    flash(dados.mensagem||'não foi possível criar.');if(status===409)void update()}
+  finally{ocupado=false}
+}
 function digitando(alvo){return alvo instanceof HTMLElement&&(alvo.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))}
 document.querySelector('#straighten-all').addEventListener('click',()=>void endireitarEl(undefined));
 document.querySelector('#undo').addEventListener('click',()=>void desfazer());
@@ -868,8 +902,8 @@ input.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))
 function cancelarEdicao(){limparConflito();if(editando)input.value=editando.baseline;atualizarSujo()}
 document.querySelector('#cancel-name').addEventListener('click',cancelarEdicao);
 document.querySelector('#close-panel').addEventListener('click',clearSelection);
-document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
-async function update(){try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();elements=s.elementos||[];hashAtual=s.hash;sugestoes=s.sugestoes||sugestoes;if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(colocando){pararDeColocar();flash('Adição cancelada.');return}if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
+async function update(){try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();elements=s.elementos||[];hashAtual=s.hash;sugestoes=s.sugestoes||sugestoes;if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}if(selecionarDepois&&elements.some(x=>x.id===selecionarDepois)){select(selecionarDepois);selecionarDepois=undefined;document.querySelector('#name-input')?.focus()}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
 try{if(localStorage.getItem('fluigctl-edicao')==='1')setEditMode(true)}catch{}
 update();const events=new EventSource('events');events.addEventListener('change',update);events.onerror=()=>{dot.classList.add('bad');status.textContent='reconectando…'};
 </script></body></html>`;

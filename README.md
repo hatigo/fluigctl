@@ -62,7 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
-| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, desfazer/refazer) | pronto: renomear, mover, traçar, execução, atribuição e condições; adicionar, ligar e remover ainda não |
+| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades e adicionar (com a service task com recuperação); ligar e remover ainda não |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -294,6 +294,26 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
     `sequence`, ordem);
   - o estilo de codificação do arquivo é respeitado (`&#xA;` ou `&#10;`, `>` ou
     `&gt;`);
+- **adicionar** pelo menu **+ Adicionar…**: escolha o tipo e clique no
+  diagrama onde ele vai ficar (`Esc` cancela). O elemento já vem selecionado,
+  com o campo Nome em foco.
+  - Tipos: tarefa humana, gateway, fim, service task sozinha, e **service task
+    com recuperação**.
+  - A **service task com recuperação** cria o padrão inteiro de uma vez:
+    - a tarefa automática;
+    - o evento de erro no canto inferior direito;
+    - o tratamento 33 px abaixo, no Pool Grupo `suporte_processos`;
+    - as duas ligações.
+
+    Renomear a service task leva junto os nomes que a criação gerou
+    ("Erro: …", "Tratar erro: …"), mas não um nome mudado à mão.
+  - A forma nova é clonada de uma do mesmo tipo do próprio arquivo, então sai no
+    estilo dele. Ela vai para o fim da lista, sem mudar a posição de nada que
+    já existe, e ganha um id com número inédito.
+  - Nos 93 `.process` dos workspaces com pool, criar cada tipo e a recuperação
+    não gerou erro de estrutura nem piorou a conversão do `push`.
+  - A service task nova ainda não tem script: o `push diagram` avisa, e o
+    `workflow/scripts/<processo>.<id>.js` é com você;
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
   `Ctrl+Shift+Z`. Salvar sem mudança não grava nem ocupa o histórico.
 
