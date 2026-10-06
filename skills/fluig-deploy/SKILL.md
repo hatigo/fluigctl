@@ -204,9 +204,21 @@ with exit 6 before writing — register them in the destination's control panel 
 fix the diagram in Studio. The category is free text and is not checked.
 
 ```sh
+fluigctl diagram check workflow/diagrams/<processo>.process --group suporte_processos
 fluigctl push diagram workflow/diagrams/<processo>.process --server <servidor> --dry-run
 fluigctl push diagram workflow/diagrams/<processo>.process --server <servidor>
 ```
+
+`diagram check` comes first.
+- **What it checks:** the pictogram (references by position, anchors against
+  connections, connections against flows) and the service-task recovery
+  pattern.
+- **Why it comes first:** the dry-run looks only at the model. A `.process`
+  edited by an agent can pass the dry-run, publish, and still fail to open in
+  Studio.
+- **On exit 6,** fix the file before pushing.
+- **`--except <id>`** is only for a service task the human explicitly exempted
+  from the pattern.
 
 Read the publish result: `ok=true` with `activityError=[]` and `flowError=[]`
 means the new version was released cleanly. To check that a process actually

@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="ASCII"?>
+<xmi:XMI xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:al="http://eclipse.org/graphiti/mm/algorithms" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL-XMI" xmlns:pi="http://eclipse.org/graphiti/mm/pictograms">
+  <pi:Diagram visible="true" gridUnit="10" diagramTypeId="BPMNdiagram" name="contratacao" snapToGrid="true" version="0.16.0">
+    <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1700" height="700"/>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1700" height="560" x="10" y="10"/>
+      <link businessObjects="bpmnpool1"/>
+      <anchors xsi:type="pi:ChopboxAnchor"/>
+      <children xsi:type="pi:ContainerShape" visible="true" active="true">
+        <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1670" height="160" x="30"/>
+        <link businessObjects="bpmnswimlane2"/>
+        <children visible="true">
+          <graphicsAlgorithm xsi:type="al:Text" width="30" height="160" value="Solicitante"/>
+        </children>
+      </children>
+      <children xsi:type="pi:ContainerShape" visible="true" active="true">
+        <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1670" height="400" x="30" y="160"/>
+        <link businessObjects="bpmnswimlane3"/>
+        <children visible="true">
+          <graphicsAlgorithm xsi:type="al:Text" width="30" height="400" value="Aprova&#xe7;&#xe3;o"/>
+        </children>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Ellipse" lineWidth="1" width="35" height="35" x="83" y="82">
+        <graphicsAlgorithmChildren xsi:type="al:Ellipse" lineWidth="1" width="35" height="35"/>
+      </graphicsAlgorithm>
+      <link businessObjects="startevent1"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.0"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="180" y="66"/>
+      <link businessObjects="task2"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.1" incomingConnections="/0/@connections.0"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Preencher requisi&#xe7;&#xe3;o"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.user" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="450" y="326"/>
+      <link businessObjects="task13"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.12" incomingConnections="/0/@connections.11"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Tratar erro de al&#xe7;ada"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.user" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="650" y="326"/>
+      <link businessObjects="task15"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.14" incomingConnections="/0/@connections.13"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Tratar erro do aviso"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.user" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="850" y="226"/>
+      <link businessObjects="task5"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.4" incomingConnections="/0/@connections.3"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Aprovar"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.user" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="1360" y="226"/>
+      <link businessObjects="servicetask10"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.10" incomingConnections="/0/@connections.9 /0/@connections.18"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Avisar aprova&#xe7;&#xe3;o"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.service" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Ellipse" lineWidth="1" width="35" height="35" x="1583" y="242">
+        <graphicsAlgorithmChildren xsi:type="al:Ellipse" lineWidth="1" width="35" height="35"/>
+      </graphicsAlgorithm>
+      <link businessObjects="endevent11"/>
+      <anchors xsi:type="pi:ChopboxAnchor" incomingConnections="/0/@connections.10"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="450" y="226"/>
+      <link businessObjects="servicetask3"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.2" incomingConnections="/0/@connections.1 /0/@connections.12"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Obter al&#xe7;adas"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.service" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="650" y="226"/>
+      <link businessObjects="servicetask4"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.3" incomingConnections="/0/@connections.2 /0/@connections.8 /0/@connections.14"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Avisar aprovador"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.service" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Polygon" lineWidth="1" width="60" height="60" x="1060" y="230">
+        <graphicsAlgorithmChildren xsi:type="al:Polygon" lineWidth="1"/>
+      </graphicsAlgorithm>
+      <link businessObjects="exclusivegateway6"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.5 /0/@connections.6" incomingConnections="/0/@connections.4"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Text" width="60" height="30" y="60" value="Aprovado?"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Polygon" lineWidth="1" width="60" height="60" x="1230" y="230">
+        <graphicsAlgorithmChildren xsi:type="al:Polygon" lineWidth="1"/>
+      </graphicsAlgorithm>
+      <link businessObjects="exclusivegateway9"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.8 /0/@connections.9" incomingConnections="/0/@connections.6"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Text" width="60" height="30" y="60" value="Tem mais?"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="1020" y="386"/>
+      <link businessObjects="servicetask7"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.7" incomingConnections="/0/@connections.5 /0/@connections.17"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Avisar reprova&#xe7;&#xe3;o"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.service" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Ellipse" lineWidth="1" width="35" height="35" x="1233" y="402">
+        <graphicsAlgorithmChildren xsi:type="al:Ellipse" lineWidth="1" width="35" height="35"/>
+      </graphicsAlgorithm>
+      <link businessObjects="endevent8"/>
+      <anchors xsi:type="pi:ChopboxAnchor" incomingConnections="/0/@connections.7"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Ellipse" lineWidth="1" width="35" height="35" x="573" y="276">
+        <graphicsAlgorithmChildren xsi:type="al:Ellipse" lineWidth="1" width="35" height="35"/>
+      </graphicsAlgorithm>
+      <link businessObjects="intermediateerror12"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.11"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Ellipse" lineWidth="1" width="35" height="35" x="773" y="276">
+        <graphicsAlgorithmChildren xsi:type="al:Ellipse" lineWidth="1" width="35" height="35"/>
+      </graphicsAlgorithm>
+      <link businessObjects="intermediateerror14"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.13"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Ellipse" lineWidth="1" width="35" height="35" x="1143" y="436">
+        <graphicsAlgorithmChildren xsi:type="al:Ellipse" lineWidth="1" width="35" height="35"/>
+      </graphicsAlgorithm>
+      <link businessObjects="intermediateerror31"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.15"/>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Ellipse" lineWidth="1" width="35" height="35" x="1483" y="276">
+        <graphicsAlgorithmChildren xsi:type="al:Ellipse" lineWidth="1" width="35" height="35"/>
+      </graphicsAlgorithm>
+      <link businessObjects="intermediateerror32"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.16"/>
+    </children>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.1/@anchors.0" end="/0/@children.2/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow16"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.2/@anchors.0" end="/0/@children.8/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow17"/>
+      <bendpoints x="390" y="100"/>
+      <bendpoints x="390" y="260"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.8/@anchors.0" end="/0/@children.9/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow18"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.9/@anchors.0" end="/0/@children.5/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow19"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.5/@anchors.0" end="/0/@children.10/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow20"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.10/@anchors.0" end="/0/@children.12/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow21"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.10/@anchors.0" end="/0/@children.11/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow22"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.12/@anchors.0" end="/0/@children.13/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow23"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.11/@anchors.0" end="/0/@children.9/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow24"/>
+      <bendpoints x="1260" y="207"/>
+      <bendpoints x="720" y="207"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.11/@anchors.0" end="/0/@children.6/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow25"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.6/@anchors.0" end="/0/@children.7/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow26"/>
+    </connections>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="1020" y="486"/>
+      <link businessObjects="task35"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.17" incomingConnections="/0/@connections.15"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Tratar erro de reprova&#xe7;&#xe3;o"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.user" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <children xsi:type="pi:ContainerShape" visible="true" active="true">
+      <graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="140" height="67" x="1360" y="326"/>
+      <link businessObjects="task36"/>
+      <anchors xsi:type="pi:ChopboxAnchor" outgoingConnections="/0/@connections.18" incomingConnections="/0/@connections.16"/>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:MultiText" width="130" height="57" x="5" y="5" value="Tratar erro de aprova&#xe7;&#xe3;o"/>
+      </children>
+      <children visible="true">
+        <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" x="5" y="5" id="com.totvs.tds.ecm.designer.task.user" stretchH="false" stretchV="false" proportional="false"/>
+      </children>
+    </children>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.14/@anchors.0" end="/0/@children.3/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow27"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.3/@anchors.0" end="/0/@children.8/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow28"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.15/@anchors.0" end="/0/@children.4/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow29"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.4/@anchors.0" end="/0/@children.9/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow30"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.16/@anchors.0" end="/0/@children.18/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow33"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.17/@anchors.0" end="/0/@children.19/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow34"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.18/@anchors.0" end="/0/@children.12/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow35"/>
+    </connections>
+    <connections xsi:type="pi:FreeFormConnection" visible="true" active="true" start="/0/@children.19/@anchors.0" end="/0/@children.6/@anchors.0">
+      <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1"/>
+      <link businessObjects="flow36"/>
+    </connections>
+  </pi:Diagram>
+  <bpmn2:BpmnPool id="bpmnpool1" name="Contrata&#xe7;&#xe3;o de Colaborador" cores="FFFFFF"/>
+  <bpmn2:BpmnSwimLane id="bpmnswimlane2" name="Solicitante" cores="FFBE6F"/>
+  <bpmn2:BpmnSwimLane id="bpmnswimlane3" name="Aprova&#xe7;&#xe3;o" cores="99CCFF"/>
+  <bpmn2:BpmnStartEvent id="startevent1" name="In&#xed;cio" outgoing="flow16" type="10" extendedFields="&lt;list/>" signalId="0" expediente="" selecionaColaboradores="1" esforcoCalculo="0"/>
+  <bpmn2:BpmnTask id="task2" name="Preencher requisi&#xe7;&#xe3;o" incoming="flow16" outgoing="flow17" type="80" extendedFields="&lt;list/>" managerMechanism="Executor Atividade" managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerExecutorMechanism>&#xA;  &lt;idNode>startevent1&lt;/idNode>&#xA;  &lt;returns>1&lt;/returns>&#xA;  &lt;mechanismName>Executor Atividade&lt;/mechanismName>&#xA;&lt;/org.eclipse.bpmn2.impl.AssignmentControllerExecutorMechanism>" loopType="0" authNotify="true" expediente="" selecionaColaboradores="1" esforcoCalculo="0" executionAttempts="0" frequency="0" prazoConclusao="1440.0" instrucoes="Informe cargo, sal&#xe1;rio, justificativa e a data necess&#xe1;ria. O sal&#xe1;rio define quantos n&#xed;veis de al&#xe7;ada a requisi&#xe7;&#xe3;o precisa."/>
+  <bpmn2:BpmnTask id="task13" name="Tratar erro de al&#xe7;ada" incoming="flow27" outgoing="flow28" type="80" extendedFields="&lt;list/>" managerMechanism="Pool Grupo" managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>&#xA;  &lt;groupId>suporte_processos&lt;/groupId>&#xA;  &lt;mechanismName>Pool Grupo&lt;/mechanismName>&#xA;&lt;/org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>" loopType="0" authNotify="true" expediente="" selecionaColaboradores="1" esforcoCalculo="0" executionAttempts="0" frequency="0" instrucoes="Ocorreu erro ao montar as al&#xe7;adas. O suporte deve corrigir a causa e concluir esta atividade para repetir Obter al&#xe7;adas."/>
+  <bpmn2:BpmnTask id="task15" name="Tratar erro do aviso" incoming="flow29" outgoing="flow30" type="80" extendedFields="&lt;list/>" managerMechanism="Pool Grupo" managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>&#xA;  &lt;groupId>suporte_processos&lt;/groupId>&#xA;  &lt;mechanismName>Pool Grupo&lt;/mechanismName>&#xA;&lt;/org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>" loopType="0" authNotify="true" expediente="" selecionaColaboradores="1" esforcoCalculo="0" executionAttempts="0" frequency="0" instrucoes="Ocorreu erro ao avisar o aprovador. O suporte deve corrigir a causa e concluir esta atividade para repetir Avisar aprovador."/>
+  <bpmn2:BpmnTask id="task5" name="Aprovar" incoming="flow19" outgoing="flow20" type="80" extendedFields="&lt;list/>" managerMechanism="MEC_ALCADAS" managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerCustom>&#xA;  &lt;mechanismName>MEC_ALCADAS&lt;/mechanismName>&#xA;&lt;/org.eclipse.bpmn2.impl.AssignmentControllerCustom>" loopType="0" authNotify="true" expediente="" atividadeConjunta="true" selecionaColaboradores="2" esforcoCalculo="0" executionAttempts="0" frequency="0" prazoConclusao="2880.0" instrucoes="Confira cargo, sal&#xe1;rio e justificativa. A reprova&#xe7;&#xe3;o exige justificativa."/>
+  <bpmn2:BpmnTask id="servicetask10" name="Avisar aprova&#xe7;&#xe3;o" incoming="flow25 flow36" outgoing="flow26" type="82" extendedFields="&lt;list/>" managerMechanism="" loopType="0" authNotify="true" serviceName="" scriptFileName="contratacao.servicetask10.js" expediente="" selecionaColaboradores="1" esforcoCalculo="0" attachedEvents="intermediateerror32" executionType="1" executionAttempts="0" executionSucessfulMessage="Integration performed successfully" frequency="0"/>
+  <bpmn2:BpmnEndEvent id="endevent11" name="Aprovada" incoming="flow26" type="60" extendedFields="&lt;list/>" signalId="0"/>
+  <bpmn2:BpmnTask id="servicetask3" name="Obter al&#xe7;adas" incoming="flow17 flow28" outgoing="flow18" type="82" extendedFields="&lt;list/>" managerMechanism="" loopType="0" authNotify="true" serviceName="" scriptFileName="contratacao.servicetask3.js" expediente="" selecionaColaboradores="1" esforcoCalculo="0" attachedEvents="intermediateerror12" executionType="1" executionAttempts="0" executionSucessfulMessage="Integration performed successfully" frequency="0"/>
+  <bpmn2:BpmnTask id="servicetask4" name="Avisar aprovador" incoming="flow18 flow24 flow30" outgoing="flow19" type="82" extendedFields="&lt;list/>" managerMechanism="" loopType="0" authNotify="true" serviceName="" scriptFileName="contratacao.servicetask4.js" expediente="" selecionaColaboradores="1" esforcoCalculo="0" attachedEvents="intermediateerror14" executionType="1" executionAttempts="0" executionSucessfulMessage="Integration performed successfully" frequency="0"/>
+  <bpmn2:BpmnGateway id="exclusivegateway6" name="Aprovado?" incoming="flow20" outgoing="flow21 flow22" type="120" extendedFields="&lt;list/>" condition="&lt;list>&#xA;  &lt;org.eclipse.bpmn2.impl.ConditionImpl>&#xA;    &lt;order>1&lt;/order>&#xA;    &lt;expression>&lt;/expression>&#xA;    &lt;targetTask>exclusivegateway9&lt;/targetTask>&#xA;    &lt;conditionType>1&lt;/conditionType>&#xA;    &lt;rules>&#xA;      &lt;com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;        &lt;tenantId>0&lt;/tenantId>&#xA;        &lt;version>0&lt;/version>&#xA;        &lt;sequence>6&lt;/sequence>&#xA;        &lt;expressionOrder>1&lt;/expressionOrder>&#xA;        &lt;ruleOrder>1&lt;/ruleOrder>&#xA;        &lt;field>decisaoAprovacao&lt;/field>&#xA;        &lt;value>aprovado&lt;/value>&#xA;        &lt;operator>1&lt;/operator>&#xA;        &lt;valueType>1&lt;/valueType>&#xA;      &lt;/com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;    &lt;/rules>&#xA;  &lt;/org.eclipse.bpmn2.impl.ConditionImpl>&#xA;  &lt;org.eclipse.bpmn2.impl.ConditionImpl>&#xA;    &lt;order>2&lt;/order>&#xA;    &lt;expression>&lt;/expression>&#xA;    &lt;targetTask>servicetask7&lt;/targetTask>&#xA;    &lt;conditionType>1&lt;/conditionType>&#xA;    &lt;rules>&#xA;      &lt;com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;        &lt;tenantId>0&lt;/tenantId>&#xA;        &lt;version>0&lt;/version>&#xA;        &lt;sequence>6&lt;/sequence>&#xA;        &lt;expressionOrder>2&lt;/expressionOrder>&#xA;        &lt;ruleOrder>1&lt;/ruleOrder>&#xA;        &lt;field>decisaoAprovacao&lt;/field>&#xA;        &lt;value>reprovado&lt;/value>&#xA;        &lt;operator>1&lt;/operator>&#xA;        &lt;valueType>1&lt;/valueType>&#xA;      &lt;/com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;    &lt;/rules>&#xA;  &lt;/org.eclipse.bpmn2.impl.ConditionImpl>&#xA;&lt;/list>"/>
+  <bpmn2:BpmnGateway id="exclusivegateway9" name="Tem mais?" incoming="flow22" outgoing="flow24 flow25" type="120" extendedFields="&lt;list/>" condition="&lt;list>&#xA;  &lt;org.eclipse.bpmn2.impl.ConditionImpl>&#xA;    &lt;order>1&lt;/order>&#xA;    &lt;expression>&lt;/expression>&#xA;    &lt;targetTask>servicetask4&lt;/targetTask>&#xA;    &lt;conditionType>1&lt;/conditionType>&#xA;    &lt;rules>&#xA;      &lt;com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;        &lt;tenantId>0&lt;/tenantId>&#xA;        &lt;version>0&lt;/version>&#xA;        &lt;sequence>9&lt;/sequence>&#xA;        &lt;expressionOrder>1&lt;/expressionOrder>&#xA;        &lt;ruleOrder>1&lt;/ruleOrder>&#xA;        &lt;field>faltaAprovador&lt;/field>&#xA;        &lt;value>sim&lt;/value>&#xA;        &lt;operator>1&lt;/operator>&#xA;        &lt;valueType>1&lt;/valueType>&#xA;      &lt;/com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;    &lt;/rules>&#xA;  &lt;/org.eclipse.bpmn2.impl.ConditionImpl>&#xA;  &lt;org.eclipse.bpmn2.impl.ConditionImpl>&#xA;    &lt;order>2&lt;/order>&#xA;    &lt;expression>&lt;/expression>&#xA;    &lt;targetTask>servicetask10&lt;/targetTask>&#xA;    &lt;conditionType>1&lt;/conditionType>&#xA;    &lt;rules>&#xA;      &lt;com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;        &lt;tenantId>0&lt;/tenantId>&#xA;        &lt;version>0&lt;/version>&#xA;        &lt;sequence>9&lt;/sequence>&#xA;        &lt;expressionOrder>2&lt;/expressionOrder>&#xA;        &lt;ruleOrder>1&lt;/ruleOrder>&#xA;        &lt;field>faltaAprovador&lt;/field>&#xA;        &lt;value>nao&lt;/value>&#xA;        &lt;operator>1&lt;/operator>&#xA;        &lt;valueType>1&lt;/valueType>&#xA;      &lt;/com.totvs.tds.ecm.workflow.model.ConditionProcessAutomaticRules>&#xA;    &lt;/rules>&#xA;  &lt;/org.eclipse.bpmn2.impl.ConditionImpl>&#xA;&lt;/list>"/>
+  <bpmn2:BpmnTask id="servicetask7" name="Avisar reprova&#xe7;&#xe3;o" incoming="flow21 flow35" outgoing="flow23" type="82" extendedFields="&lt;list/>" managerMechanism="" loopType="0" authNotify="true" serviceName="" scriptFileName="contratacao.servicetask7.js" expediente="" selecionaColaboradores="1" esforcoCalculo="0" attachedEvents="intermediateerror31" executionType="1" executionAttempts="0" executionSucessfulMessage="Integration performed successfully" frequency="0"/>
+  <bpmn2:BpmnEndEvent id="endevent8" name="Reprovada" incoming="flow23" type="60" extendedFields="&lt;list/>" signalId="0"/>
+  <bpmn2:BpmnIntermediateEvent id="intermediateerror12" name="Erro ao obter al&#xe7;adas" outgoing="flow27" type="43" extendedFields="&lt;list/>" sequenceAttached="3" signalId="0" parentTask="servicetask3"/>
+  <bpmn2:BpmnIntermediateEvent id="intermediateerror14" name="Erro ao avisar aprovador" outgoing="flow29" type="43" extendedFields="&lt;list/>" sequenceAttached="4" signalId="0" parentTask="servicetask4"/>
+  <bpmn2:BpmnIntermediateEvent id="intermediateerror31" name="Erro ao avisar reprova&#xe7;&#xe3;o" outgoing="flow33" type="43" extendedFields="&lt;list/>" sequenceAttached="7" signalId="0" parentTask="servicetask7"/>
+  <bpmn2:BpmnIntermediateEvent id="intermediateerror32" name="Erro ao avisar aprova&#xe7;&#xe3;o" outgoing="flow34" type="43" extendedFields="&lt;list/>" sequenceAttached="10" signalId="0" parentTask="servicetask10"/>
+  <bpmn2:BpmnTask id="task35" name="Tratar erro de reprova&#xe7;&#xe3;o" incoming="flow33" outgoing="flow35" type="80" extendedFields="&lt;list/>" managerMechanism="Pool Grupo" managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>&#xA;  &lt;groupId>suporte_processos&lt;/groupId>&#xA;  &lt;mechanismName>Pool Grupo&lt;/mechanismName>&#xA;&lt;/org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>" loopType="0" authNotify="true" expediente="" selecionaColaboradores="1" esforcoCalculo="0" executionAttempts="0" frequency="0" instrucoes="Ocorreu erro ao avisar a reprova&#xe7;&#xe3;o. O suporte deve corrigir a causa e concluir esta atividade para repetir Avisar reprova&#xe7;&#xe3;o."/>
+  <bpmn2:BpmnTask id="task36" name="Tratar erro de aprova&#xe7;&#xe3;o" incoming="flow34" outgoing="flow36" type="80" extendedFields="&lt;list/>" managerMechanism="Pool Grupo" managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>&#xA;  &lt;groupId>suporte_processos&lt;/groupId>&#xA;  &lt;mechanismName>Pool Grupo&lt;/mechanismName>&#xA;&lt;/org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>" loopType="0" authNotify="true" expediente="" selecionaColaboradores="1" esforcoCalculo="0" executionAttempts="0" frequency="0" instrucoes="Ocorreu erro ao avisar a aprova&#xe7;&#xe3;o. O suporte deve corrigir a causa e concluir esta atividade para repetir Avisar aprova&#xe7;&#xe3;o."/>
+  <bpmn2:BpmnProcess id="contratacao" name="Contrata&#xe7;&#xe3;o de Colaborador" serverId="fluig-localdev" version="1" author="" extendedFields="&lt;list/>" cardIndex="16" formSource="server" category="Recursos Humanos" volume="Default" expedient="Default" instruction="" complementsLevel="1" notifyResponsibleComplements="true" notifyRequisitionerComplements="true"/>
+  <bpmn2:SequenceFlow id="flow16" name="" sourceRef="startevent1" targetRef="task2" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow17" name="" sourceRef="task2" targetRef="servicetask3" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow18" name="" sourceRef="servicetask3" targetRef="servicetask4" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow19" name="" sourceRef="servicetask4" targetRef="task5" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow20" name="" sourceRef="task5" targetRef="exclusivegateway6" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow21" name="Reprovada" sourceRef="exclusivegateway6" targetRef="servicetask7" atividadeFluxo="" atividadeRetorno="Reprovada" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow22" name="Aprovada" sourceRef="exclusivegateway6" targetRef="exclusivegateway9" atividadeFluxo="" atividadeRetorno="Aprovada" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow23" name="" sourceRef="servicetask7" targetRef="endevent8" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow24" name="Sim" sourceRef="exclusivegateway9" targetRef="servicetask4" atividadeFluxo="" atividadeRetorno="Sim" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow25" name="N&#xe3;o" sourceRef="exclusivegateway9" targetRef="servicetask10" atividadeFluxo="" atividadeRetorno="N&#xe3;o" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow26" name="" sourceRef="servicetask10" targetRef="endevent11" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow27" name="" sourceRef="intermediateerror12" targetRef="task13" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow28" name="" sourceRef="task13" targetRef="servicetask3" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow29" name="" sourceRef="intermediateerror14" targetRef="task15" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow30" name="" sourceRef="task15" targetRef="servicetask4" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow33" name="" sourceRef="intermediateerror31" targetRef="task35" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow34" name="" sourceRef="intermediateerror32" targetRef="task36" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow35" name="" sourceRef="task35" targetRef="servicetask7" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+  <bpmn2:SequenceFlow id="flow36" name="" sourceRef="task36" targetRef="servicetask10" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>
+</xmi:XMI>

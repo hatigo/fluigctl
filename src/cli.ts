@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -13,6 +14,7 @@ import {
 } from './config.js';
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { serverUi } from './commands/server-ui.js';
+import { checarDiagrama } from './diagram/check.js';
 import { estado as estadoDaSkill, instalarSkill, origensDasSkills, removerSkill } from './commands/skill.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushDiagram } from './commands/push-diagram.js';
@@ -66,6 +68,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl diagram open <arquivo.process> [--no-open] [--foreground]
       abre no navegador um visualizador local que acompanha mudanças no arquivo
   fluigctl diagram close <arquivo.process>
+  fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json]
+      confere um .process editado fora do Studio: referências do Graphiti,
+      fluxos x formas, e o padrão de recuperação das service tasks
       encerra o visualizador desse arquivo
 
   fluigctl changed [--since <ref>] [--server <nome>]
@@ -1012,7 +1017,34 @@ async function comandoDiagram(argv: string[]): Promise<void> {
   const sub = argv[0];
   const uso =
     'uso: fluigctl diagram open <arquivo.process> [--no-open] [--foreground]\n' +
-    '     fluigctl diagram close <arquivo.process>';
+    '     fluigctl diagram close <arquivo.process>\n' +
+    '     fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json]';
+
+  if (sub === 'check') {
+    const { values, positionals } = parseArgs({
+      args: argv.slice(1),
+      allowPositionals: true,
+      options: {
+        except: { type: 'string', multiple: true },
+        group: { type: 'string' },
+        json: { type: 'boolean', default: false },
+      },
+    });
+    const arquivo = positionals[0];
+    if (!arquivo || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+    const achados = checarDiagrama(readFileSync(arquivo, 'utf8'), {
+      excecoes: values.except ?? [],
+      ...(values.group === undefined ? {} : { grupo: values.group }),
+    });
+    const erros = achados.filter((a) => a.nivel === 'erro').length;
+    if (values.json) console.log(JSON.stringify(achados, null, 2));
+    else {
+      for (const a of achados) console.log(`${a.nivel === 'erro' ? 'erro ' : 'aviso'}  ${a.grupo === 'estrutura' ? 'estrutura' : 'padrão   '}  ${a.onde}: ${a.mensagem}`);
+      console.log(`${achados.length === 0 ? 'ok: ' : ''}${erros} erro(s), ${achados.length - erros} aviso(s) em ${arquivo}`);
+    }
+    if (erros > 0) throw new ErroFluigctl(`${arquivo}: ${erros} erro(s)`, 6);
+    return;
+  }
 
   if (sub === 'open') {
     const { values, positionals } = parseArgs({

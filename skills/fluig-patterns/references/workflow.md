@@ -12,11 +12,9 @@ templates_email/<template>.html
 
 - **Service task ids are the Studio's** (`servicetask39`). The XML wires each
   task to its script with `scriptFileName="<processId>.servicetask39.js"`.
-- **Do not hand-edit the `.process` XMI.** It has EMF indices. Change it in
-  Studio or with `fluigctl diagram`. The one exception is a re-layout that
-  touches geometry only (see "Re-laying out an existing diagram"). For a big
-  model, write a step-by-step
-  specification first, as Medição does in
+- **The agent edits the `.process` XMI directly. Studio is not needed.** Every
+  edit ends with the same three checks (see "Editing a diagram" below). For a
+  big model, write a step-by-step specification first, as Medição does in
   `docs/especificacao-diagrama-*.md`. It lists:
   - lanes;
   - nodes by type (human, service, gateway, end);
@@ -216,22 +214,73 @@ renamed something from the viewer.
   - Or open `fluigctl diagram open`.
 - check that no line crosses a card, that every circle sits on its corner and
   that every end segment is straight;
-- then run `fluigctl push diagram … --dry-run`.
+- then run `fluigctl diagram check` and `fluigctl push diagram … --dry-run`.
 
 A re-layout is visual only. List what the pattern check found (missing
 mechanisms, a gateway branch with no exit, names like "Erro Envia E-mail"
 repeated) and leave the fixes to the human.
 
-### Checking a diagram against the pattern
+### Editing a diagram
 
-For each `type="82"` task, confirm:
-- `executionType="1"`;
-- exactly one `type="43"` event with `parentTask` pointing at it;
-- that event's outgoing flow ends at a `type="80"` task with `Pool Grupo` and the
-  support `groupId`;
-- that task's outgoing flow ends at the same service task.
+The `.process` has two layers, and an edit has to keep both in step:
+- **The model.** The `bpmn2:*` lines, one per element or flow. Flows are tied to
+  their ends twice: `sourceRef`/`targetRef` on the flow, and `outgoing`/`incoming`
+  on each end.
+- **The pictogram.** `<children>` shapes and `<connections>`. These point at one
+  another **by position**: `/0/@children.8/@anchors.0`, `/0/@connections.12`.
+  - Each shape's anchor lists its `outgoingConnections` and
+    `incomingConnections`.
+  - Each connection names its `start` and `end` anchors.
+  - Each shape or connection carries a `<link businessObjects="<id>">` to its
+    model object.
 
-A service task that fails any of these is a defect, not a style choice.
+Edit it like this:
+1. **Copy the original to the scratchpad first.** Process repos are not always
+   under git.
+2. **Prefer appending to inserting.** A new shape or connection goes at the end
+   of its list, so the positions of the existing ones do not move.
+   - If you must insert or remove, renumber every `/0/@children.N` and
+     `/0/@connections.N` reference after that point.
+   - Update both directions of every link: both ends of a flow, and both ends of
+     a connection.
+3. **When a flow changes its source or target,** remove it from the old end's
+   `outgoing`/`incoming`. A stale entry is how `task5` kept `flow30` in the
+   contratação diagram.
+4. **Run the three checks, in order:**
+
+```sh
+fluigctl diagram check workflow/diagrams/<processo>.process --group suporte_processos
+node scripts/render.mjs workflow/diagrams/<processo>.process /tmp/x.svg   # then look at the PNG
+fluigctl push diagram workflow/diagrams/<processo>.process --server <servidor> --dry-run
+```
+
+**`diagram check`** reads the file and changes nothing. It exits 6 when it finds
+an error.
+- **Structure:**
+  - every reference by position resolves;
+  - what `pictogramLinks` lists is a `<link>`;
+  - anchors and connections agree in both directions;
+  - each connection joins the shapes of its flow's `sourceRef`/`targetRef`;
+  - each flow is drawn once;
+  - `outgoing`/`incoming` agree with the flows.
+  - A broken style, colour or font reference is only a warning: Studio writes
+    some and still opens the file.
+- **Pattern,** for each service task:
+  - `executionType="1"`;
+  - exactly one attached error event;
+  - that event leads to a human handling task in `Pool Grupo` (and in the
+    `--group`, when given);
+  - the handling task returns only to the same service task;
+  - it sits in the same lane;
+  - layout warnings: the circle off its corner, the handling task not right
+    below.
+- **Exceptions:** `--except <id>` releases a service task, and only when the
+  human made that exception explicitly. A human task with no mechanism is a
+  warning, because the user who moves the request picks the assignee by hand.
+
+`push diagram --dry-run` checks the model against what the server accepts. It
+does not look at the pictogram, so a diagram can pass the dry-run, publish, and
+still fail to open in Studio. That is what `diagram check` is for.
 
 ## Which events
 
