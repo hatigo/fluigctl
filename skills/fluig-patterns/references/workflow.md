@@ -111,9 +111,15 @@ service task and `d` as the event's diameter:
 Rows and lanes:
 - **`C = lane top + 90`.** Leave room above the tallest task for the loop
   corridor.
-- **Size the lane height to fit the tallest pair.** That is the tallest service
-  task, the 33 px gap and the tallest handling task, plus a margin. With 92 px
-  tasks it is 270. Every lane gets the same height.
+- **Size each lane to its own content.** Lanes need not share a height.
+  - A lane with error pairs fits its tallest pair: the tallest service task,
+    the 33 px gap and the tallest handling task, plus a margin. With 92 px tasks
+    it is 270.
+  - A lane with a branch row also fits that row's pair.
+  - A lane with only a main row and no pairs is about 160: the corridor above
+    and the row.
+  - Do not stretch a short lane to match a tall one. A lane that is mostly empty
+    only pushes the rest of the process off the screen.
 - **The pool's height is the sum of the lanes.** Lane width is the pool width
   minus 30. Each lane's rotated label (`al:Text`) takes the lane height, and the
   pool's label takes the pool height.
@@ -160,9 +166,12 @@ Flows:
 python3 -I scripts/relayout.py <entrada.process> <spec.json> <saida.process>
 ```
 
-- The spec says the lane order, the lane height, the pool width, the centre x
+- The spec says the lane order, the lane heights, the pool width, the centre x
   and lane of each main-row node, and the route bendpoints. In the bendpoints,
   `"C<n>"` is the row centre and `"L<n>"` the return corridor of lane n.
+- **`laneHeight`** is either a list, one height per lane in the order of
+  `lanes` (`[160, 400]`), or a single number when every lane fits the same
+  height.
 - **A branch row.** A node may take a third value: how many px below the
   lane's main row it sits (`"servicetask7": [1090, 1, 160]`). This puts a
   branch such as "Reprovada" on its own row, with its pair below it. Size the

@@ -18,7 +18,9 @@ proprio modelo (parentTask e o fluxo do evento) e nao precisa ir no spec:
 
 Spec (JSON), exemplo em validacao_minutas.json:
     lanes      ids das raias, de cima para baixo
-    laneHeight altura de cada raia (cabe service task + 33 + tratamento + margem)
+    laneHeight altura das raias: um numero vale para todas, uma lista da a de
+               cada raia na ordem de "lanes"; cada uma cabe o que tem dentro
+               (service task + 33 + tratamento + margem, se houver par)
     poolWidth  largura da pool
     rowOffset  centro da linha principal em relacao ao topo da raia (90)
     nodes      { id: [centro x, indice da raia] } para tudo que esta na linha principal;
@@ -53,9 +55,13 @@ def main(entrada, spec_path, saida):
     texto = open(entrada, encoding='ascii').read()
     src = texto.split('\n')
     spec = json.load(open(spec_path, encoding='utf-8'))
-    H = spec['laneHeight']
-    pool_w = spec['poolWidth']
     lanes = spec['lanes']
+    H = spec['laneHeight']
+    alturas = list(H) if isinstance(H, list) else [H] * len(lanes)
+    if len(alturas) != len(lanes):
+        sys.exit('erro: laneHeight tem %d alturas para %d raias' % (len(alturas), len(lanes)))
+    inicio = [sum(alturas[:i]) for i in range(len(lanes))]  # topo de cada raia, relativo a pool
+    pool_w = spec['poolWidth']
 
     # modelo: elementos e fluxos (uma linha por elemento no .process do Studio)
     modelo = {}
@@ -78,7 +84,7 @@ def main(entrada, spec_path, saida):
 
     # as raias sao relativas a pool; o Studio a poe em (6, 6), outros geradores em outro lugar
     pool_y = int(attr(src[shapes[pool][0]], 'y') or 0)
-    tops = [pool_y + i * H for i in range(len(lanes))]
+    tops = [pool_y + y for y in inicio]
     C = [t + spec.get('rowOffset', 90) for t in tops]
 
     boxes = {}
@@ -135,21 +141,21 @@ def main(entrada, spec_path, saida):
 
     # pool, raias e rotulos
     pga, pfim, _, _ = shapes[pool]
-    src[pga] = put(put(src[pga], 'width', pool_w), 'height', len(lanes) * H)
+    src[pga] = put(put(src[pga], 'width', pool_w), 'height', sum(alturas))
     for k in range(pga, pfim):
         if src[k].startswith('      <children xsi:type="pi:ContainerShape"'):
             idx = lanes.index(attr(src[k + 2], 'businessObjects'))
-            linha = put(put(src[k + 1], 'width', pool_w - 30), 'height', H)
+            linha = put(put(src[k + 1], 'width', pool_w - 30), 'height', alturas[idx])
             linha = re.sub(r' y="\d+"', '', linha)
             if idx:
-                linha = linha.replace(' x="30"', ' x="30" y="%d"' % (idx * H))
+                linha = linha.replace(' x="30"', ' x="30" y="%d"' % inicio[idx])
             src[k + 1] = linha
             t = k
             while 'al:Text' not in src[t]:
                 t += 1
-            src[t] = put(src[t], 'height', H)
+            src[t] = put(src[t], 'height', alturas[idx])
         if src[k].startswith('      <children visible="true">') and 'al:Text' in src[k + 1]:
-            src[k + 1] = put(src[k + 1], 'height', len(lanes) * H)
+            src[k + 1] = put(src[k + 1], 'height', sum(alturas))
 
     # conexoes: troca as dobras; sem entrada no spec, sem dobras
     out, atual = [], None
