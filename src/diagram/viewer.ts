@@ -571,6 +571,11 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 .conflict{margin-top:12px;padding:11px 12px;border:1px solid #fca5a5;background:#fef2f2;border-radius:9px;color:#991b1b;font-size:13px}
 .conflict dl{margin:8px 0 0}.conflict dt{color:#b91c1c}.conflict .row{display:flex;gap:8px;margin-top:11px}
 #notice .row{display:flex;align-items:center;gap:10px;justify-content:space-between}#notice button{padding:4px 9px}
+.save{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;padding:4px 9px;border-radius:999px;border:1px solid transparent}
+.save::before{content:"";width:8px;height:8px;border-radius:50%;background:#94a3b8}.save.ok{color:#15803d;background:#f0fdf4;border-color:#bbf7d0}.save.ok::before{background:#16a34a}
+.save.busy{color:#1e40af;background:#eff6ff}.save.busy::before{background:transparent;border:2px solid #93c5fd;border-top-color:#1d4ed8;width:6px;height:6px;animation:gira .7s linear infinite}
+.save.pending{color:#b45309;background:#fffbeb;border-color:#fde68a}.save.pending::before{background:#f59e0b}.save.err{color:#b91c1c;background:#fef2f2;border-color:#fecaca}.save.err::before{background:#dc2626}
+.save.pulso{animation:pulso .9s ease-out}@keyframes gira{to{transform:rotate(360deg)}}@keyframes pulso{0%{box-shadow:0 0 0 0 #16a34a66}100%{box-shadow:0 0 0 10px #16a34a00}}
 .edit-toggle[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}.edit-toggle[aria-pressed="true"]:hover{background:#1d47b3}
 #edit-tools{display:flex;gap:6px}#edit-tools[hidden]{display:none}.mode{font-size:12px;font-weight:700;color:#1e40af;background:#dbeafe;border-radius:999px;padding:4px 9px;white-space:nowrap}
 body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cursor:move}.fluig-hit.moving{fill:#2457d61f;stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none}
@@ -581,7 +586,7 @@ body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cu
 .props .row{display:flex;gap:8px;align-items:center;margin-top:10px}.cond{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:10px}.cond strong{display:block;font-size:13px}.regra{display:grid;grid-template-columns:104px 1fr auto;gap:6px;margin-top:8px}.regra input:first-child{grid-column:1/-1}.regra button{padding:5px 8px}.note{font-size:12px;color:var(--muted);margin:6px 0 0}.warn{color:var(--warn)}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
-<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
+<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><span id="save-state" class="save" role="status" aria-live="polite" title="As edições são gravadas no .process assim que você as faz">Tudo salvo</span><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
 <div id="error" class="banner" role="alert"></div><div id="notice" class="banner" role="status"></div>
 <div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div>
 <form id="name-form" class="name-form" hidden><label for="name-input">Nome</label><input id="name-input" type="text" autocomplete="off" spellcheck="false" maxlength="200"><div class="row"><button id="save-name" type="submit">Salvar</button><button id="cancel-name" type="button">Cancelar</button><span id="dirty" class="dirty" hidden>Alteração não salva</span></div><p class="hint">Vazio deixa o elemento <strong>Sem nome</strong>. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva.</p></form>
@@ -626,7 +631,7 @@ function limparConflito(){conflict.hidden=true;conflict.replaceChildren()}
 function clearSelection(){const pb=document.querySelector('#props');delete pb.dataset.sujo;pb.hidden=true;svg?.querySelector('[data-layer=handles]')?.remove();selectedId=undefined;editando=undefined;inspector.classList.remove('open');svg?.querySelectorAll('.fluig-hit.selected').forEach(x=>x.classList.remove('selected'))}
 function text(el,value){el.textContent=value}
 function sujo(){return Boolean(editando)&&input.value!==editando.baseline}
-function atualizarSujo(){dirty.hidden=!sujo()}
+function atualizarSujo(){dirty.hidden=!sujo();if(editMode)atualizarSelo()}
 input.addEventListener('input',()=>{limparConflito();atualizarSujo()});
 function renderPanel(element){
   text(document.querySelector('#kind'),element.tipoAmigavel);text(document.querySelector('#element-name'),element.nome||'Sem nome');text(document.querySelector('#element-id'),element.id);
@@ -661,11 +666,25 @@ function addInteractions(){
   layer.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('.fluig-hit')){e.preventDefault();select(e.target.dataset.id)}});
   svg.append(layer);if(selectedId)select(selectedId);
 }
+// Toda escrita grava no .process na hora. O selo da barra diz o que aconteceu com a última.
+const saveState=document.querySelector('#save-state');let ultimoSalvo='Tudo salvo';
+function selo(classe,texto,titulo){saveState.className='save'+(classe?' '+classe:'');saveState.textContent=texto;saveState.title=titulo||'As edições são gravadas no .process assim que você as faz'}
+function pendencias(){const nome=Boolean(editando)&&sujo(),props=Boolean(document.querySelector('#props').dataset.sujo);return nome||props}
+function atualizarSelo(){if(saveState.classList.contains('busy')||saveState.classList.contains('err'))return;if(pendencias())selo('pending','Alterações não salvas','Há um campo do painel alterado e ainda não salvo: use o botão Salvar dele');else selo('ok',ultimoSalvo)}
 async function pedir(rota,corpo){
-  const r=await fetch(rota,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});
-  const dados=await r.json().catch(()=>({ok:false,mensagem:'resposta ilegível do visualizador'}));
+  selo('busy','Salvando…');
+  let r,dados;
+  try{r=await fetch(rota,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(corpo)});dados=await r.json().catch(()=>({ok:false,mensagem:'resposta ilegível do visualizador'}))}
+  catch{selo('err','Não salvo: sem conexão','O visualizador não respondeu; a edição não foi gravada');return {status:0,dados:{ok:false,mensagem:'sem conexão com o visualizador'}}}
+  if(dados.ok){
+    const hora=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    ultimoSalvo=(rota==='undo'?'Desfeito e salvo às ':rota==='redo'?'Refeito e salvo às ':'Salvo às ')+hora;
+    selo('ok',ultimoSalvo);void saveState.offsetWidth;saveState.classList.add('pulso');setTimeout(atualizarSelo,0);
+  }else if(dados.mensagem==='nada mudou'||dados.motivo==='sem-desfazer'||dados.motivo==='sem-refazer'){selo('ok',ultimoSalvo);setTimeout(atualizarSelo,0)}
+  else selo('err','Não salvo','A edição não foi gravada: '+(dados.mensagem||'erro'));
   return {status:r.status,dados};
 }
+addEventListener('beforeunload',e=>{if(editMode&&pendencias()){e.preventDefault();e.returnValue=''}});
 function mostrarConflito(dados,digitado){
   conflict.replaceChildren();conflict.hidden=false;
   const p=document.createElement('p');p.textContent=dados.mensagem;conflict.append(p);
@@ -766,10 +785,12 @@ async function gravarProps(rota,corpo,ok){
 function renderProps(el){
   const box=document.querySelector('#props'),p=el.propriedades;
   if(box.dataset.sujo&&box.dataset.id===el.id&&editMode)return; // não apaga o que está sendo digitado
-  box.replaceChildren();delete box.dataset.sujo;box.dataset.id=el.id;
+  box.replaceChildren();delete box.dataset.sujo;box.dataset.id=el.id;atualizarSelo();
   if(!editMode||!p){box.hidden=true;return}
   box.hidden=false;
-  const marcar=()=>{box.dataset.sujo='1'};
+  const avisoSujo=no('p',{class:'note warn',hidden:true,text:'Alterações não salvas neste painel: use o botão Salvar abaixo.'});
+  const marcar=()=>{box.dataset.sujo='1';avisoSujo.hidden=false;atualizarSelo()};
+  box.append(avisoSujo);
   box.oninput=marcar;
   if(p.execucao!==undefined){
     box.append(no('h3',{text:'Execução'}));

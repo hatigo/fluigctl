@@ -250,6 +250,11 @@ test('a interface tem o modo de edição: ligar, desfazer, refazer e mover', asy
     assert.match(html, /id="redo"/);
     assert.match(html, /pedir\('move'/);
     assert.match(html, /Arraste no diagrama para mover/);
+    // Salva sozinho: o selo da barra diz se gravou, se está gravando ou se falhou.
+    assert.match(html, /id="save-state"[^>]*role="status"/);
+    assert.match(html, /Salvando…/);
+    assert.match(html, /Alterações não salvas/);
+    assert.match(html, /beforeunload/);
   } finally {
     await v.fechar();
     p.limpar();
