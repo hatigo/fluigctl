@@ -53,6 +53,25 @@ test('o cliente SOAP lê e escreve grupos e membros no formato do WSDL', async (
   }
 });
 
+test('grupo sem membros: a falha do Fluig vira lista vazia, mas só se o grupo existe', async () => {
+  const falha = env('<soap:Fault><faultcode>soap:Server</faultcode><faultstring>Grupo não encontrado.</faultstring></soap:Fault>');
+  const fluig = await fakeFluig({
+    '/webdesk/ECMGroupService': (req) => (req.method === 'GET'
+      ? { headers: { 'content-type': 'text/xml' }, body: WSDL_GRUPO }
+      : { headers: { 'content-type': 'text/xml' }, body: env('<ns1:getGroupsResponse xmlns:ns1="http://ws.foundation.ecm.technology.totvs.com/"><result><item><companyId>1</companyId><groupId>vazio</groupId></item></result></ns1:getGroupsResponse>') }),
+    '/webdesk/ECMColleagueGroupService': (req) => (req.method === 'GET'
+      ? { headers: { 'content-type': 'text/xml' }, body: WSDL_MEMBRO }
+      : { status: 500, headers: { 'content-type': 'text/xml' }, body: falha }),
+  });
+  try {
+    const c = await groupClient(fluig.url, 1, 'admin', 'segredo');
+    assert.deepEqual(await c.members('vazio'), []);
+    await assert.rejects(c.members('nao_existe'), /Grupo não encontrado/);
+  } finally {
+    await fluig.close();
+  }
+});
+
 /** Grupo em memória: o que se cria aparece na lista (ou não, se `ignorar`). */
 function emMemoria(opcoes: { ignorar?: boolean } = {}): GroupClient & { chamadas: string[] } {
   const grupos = new Map<string, string[]>([['existente', ['admin']]]);
