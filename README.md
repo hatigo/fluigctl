@@ -297,6 +297,16 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
   `Ctrl+Shift+Z`. Salvar sem mudança não grava nem ocupa o histórico.
 
+Não há botão de salvar para o diagrama: cada edição é gravada no `.process` na
+hora. O selo na barra do modo de edição diz o que aconteceu:
+- **Salvando…** enquanto grava;
+- **Salvo às 10:42:15**, em verde, quando gravou;
+- **Não salvo**, em vermelho, quando a edição foi recusada (passe o mouse para
+  ver o motivo);
+- **Alterações não salvas**, em amarelo, quando um campo do painel (nome,
+  atribuição, condições) foi alterado e ainda falta o botão Salvar dele. Fechar
+  a aba nesse estado pede confirmação.
+
 Toda edição passa pelo mesmo caminho:
 1. **Hash da tela.** A edição só vale sobre o texto que a tela desenhou. Se o
    arquivo mudou nesse meio-tempo, ela é recusada e a tela se atualiza.
