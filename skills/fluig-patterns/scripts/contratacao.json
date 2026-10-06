@@ -1,0 +1,17 @@
+{
+  "lanes": ["bpmnswimlane2", "bpmnswimlane3"],
+  "laneHeight": 400,
+  "poolWidth": 1700,
+  "rowOffset": 90,
+  "nodes": {
+    "startevent1": [100, 0], "task2": [250, 0],
+    "servicetask3": [520, 1], "servicetask4": [720, 1], "task5": [920, 1],
+    "exclusivegateway6": [1090, 1], "exclusivegateway9": [1260, 1],
+    "servicetask10": [1430, 1], "endevent11": [1600, 1],
+    "servicetask7": [1090, 1, 160], "endevent8": [1250, 1, 160]
+  },
+  "bends": {
+    "flow17": [[390, "C0"], [390, "C1"]],
+    "flow24": [[1260, "L1"], [720, "L1"]]
+  }
+}

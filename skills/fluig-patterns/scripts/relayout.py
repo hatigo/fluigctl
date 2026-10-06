@@ -21,7 +21,9 @@ Spec (JSON), exemplo em validacao_minutas.json:
     laneHeight altura de cada raia (cabe service task + 33 + tratamento + margem)
     poolWidth  largura da pool
     rowOffset  centro da linha principal em relacao ao topo da raia (90)
-    nodes      { id: [centro x, indice da raia] } para tudo que esta na linha principal
+    nodes      { id: [centro x, indice da raia] } para tudo que esta na linha principal;
+               um terceiro valor opcional desce o no para a linha de um ramo
+               ("Reprovada"), em px abaixo do centro da linha principal
     bends      { flowId: [[x, y], ...] }; y pode ser numero, "C<n>" (centro da
                linha da raia n) ou "L<n>" (corredor de retorno da raia n, 20 px
                acima da tarefa mais alta)
@@ -32,7 +34,6 @@ import sys
 
 GAP = 33           # service task -> tarefa de tratamento
 LOOP_ABOVE = 20    # corredor de retorno acima da tarefa mais alta
-POOL_Y = 6         # a pool do Studio comeca em (6, 6)
 INTOCAVEL = re.compile(r'bpmn2:|al:MultiText|al:RoundedRectangle')
 
 
@@ -55,8 +56,6 @@ def main(entrada, spec_path, saida):
     H = spec['laneHeight']
     pool_w = spec['poolWidth']
     lanes = spec['lanes']
-    tops = [POOL_Y + i * H for i in range(len(lanes))]
-    C = [t + spec.get('rowOffset', 90) for t in tops]
 
     # modelo: elementos e fluxos (uma linha por elemento no .process do Studio)
     modelo = {}
@@ -77,13 +76,20 @@ def main(entrada, spec_path, saida):
             shapes[bo] = (i + 1, fim, int(attr(src[i + 1], 'width')), int(attr(src[i + 1], 'height')))
     pool = next(bo for bo in shapes if modelo.get(bo, '').startswith('<bpmn2:BpmnPool'))
 
+    # as raias sao relativas a pool; o Studio a poe em (6, 6), outros geradores em outro lugar
+    pool_y = int(attr(src[shapes[pool][0]], 'y') or 0)
+    tops = [pool_y + i * H for i in range(len(lanes))]
+    C = [t + spec.get('rowOffset', 90) for t in tops]
+
     boxes = {}
-    for bo, (cx, lane) in spec['nodes'].items():
+    for bo, no in spec['nodes'].items():
+        cx, lane = no[0], no[1]
+        cy = C[lane] + (no[2] if len(no) > 2 else 0)
         _, _, w, h = shapes[bo]
         if modelo[bo].startswith('<bpmn2:BpmnGateway'):
-            boxes[bo] = (cx - 30, C[lane] - 30, w, h)   # losango = 60x60 do topo; rotulo pendurado embaixo
+            boxes[bo] = (cx - 30, cy - 30, w, h)   # losango = 60x60 do topo; rotulo pendurado embaixo
         else:
-            boxes[bo] = (cx - w // 2, C[lane] - (h + 1) // 2, w, h)
+            boxes[bo] = (cx - w // 2, cy - (h + 1) // 2, w, h)
 
     # pares de erro, a partir do modelo
     sem_dobra = set()

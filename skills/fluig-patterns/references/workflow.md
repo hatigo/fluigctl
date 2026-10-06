@@ -163,11 +163,20 @@ python3 -I scripts/relayout.py <entrada.process> <spec.json> <saida.process>
 - The spec says the lane order, the lane height, the pool width, the centre x
   and lane of each main-row node, and the route bendpoints. In the bendpoints,
   `"C<n>"` is the row centre and `"L<n>"` the return corridor of lane n.
+- **A branch row.** A node may take a third value: how many px below the
+  lane's main row it sits (`"servicetask7": [1090, 1, 160]`). This puts a
+  branch such as "Reprovada" on its own row, with its pair below it. Size the
+  lane height to fit that row's pair as well.
+- **Lane positions** are computed from the pool's own `y`: 6 in Studio files,
+  whatever another generator wrote elsewhere.
 - The script finds each service task's error event and handling task in the
   model, and places them by the recipe.
 - It refuses to write when anything outside geometry would change.
-- `scripts/validacao_minutas.json` is the spec of the approved diagram. Run on
-  the original, it rebuilds that diagram byte for byte.
+- **Example specs:**
+  - `scripts/validacao_minutas.json` is the spec of the approved diagram. Run
+    on the original, it rebuilds that diagram byte for byte.
+  - `scripts/contratacao.json` is a two-lane example. It has a "Reprovada"
+    branch row, and a loop "Tem mais? → Sim" in the corridor.
 
 A re-layout done by hand or by another script follows the same limit, and
 touches geometry only:
