@@ -9,6 +9,7 @@ import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
 import { adicionarNoXml, ligarNoXml, scriptsDasCriadas, type TipoNovo } from './add.js';
+import { redimensionarPoolNoXml, redimensionarRaiaNoXml } from './lanes.js';
 import { removerNoXml } from './remove.js';
 import { rotaOrtogonal } from './route.js';
 import { ConflitoEdicao, EdicaoInvalida, aplicarEdicao, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras, trocarDobrasNoXml } from './edit.js';
@@ -70,6 +71,9 @@ export interface Propriedades {
   /** Gateway: as condições e as saídas a que elas podem apontar. */
   condicoes?: CondicoesGateway;
   saidas?: Saida[];
+  /** Raia: a altura dela e a pool em que mora. Pool: a largura. */
+  raia?: { altura: number; pool: string; larguraPool: number };
+  pool?: { largura: number };
 }
 
 export interface EstadoVisualizador {
@@ -217,6 +221,11 @@ export function elementosDoDiagrama(diagrama: Diagrama): ElementoVisual[] {
         .join(', ');
       if (detalhe) candidatos.push(campo('Atribuído a', detalhe));
     }
+    if (objeto.tipo === 'BpmnSwimLane' && caixa?.pai) {
+      const pool = diagrama.caixas.get(caixa.pai);
+      if (pool) propriedades = { raia: { altura: caixa.altura, pool: caixa.pai, larguraPool: pool.largura } };
+    }
+    if (objeto.tipo === 'BpmnPool' && caixa) propriedades = { pool: { largura: caixa.largura } };
     if (objeto.tipo === 'BpmnGateway') {
       const saidas: Saida[] = diagrama.objetos
         .filter((f) => f.tipo === 'SequenceFlow' && f.attrs['sourceRef'] === id)
@@ -546,6 +555,14 @@ async function tratarEdicao(
       respostaJson(res, 200, { ok: true, removidos: feito.removidos, scripts: feito.scripts, avisos: r.avisos });
       return;
     }
+    if (rota === 'lane-height' || rota === 'pool-width') {
+      const id = texto('id');
+      const valor = corpo['valor'];
+      if (typeof valor !== 'number') throw new EdicaoInvalida('o campo valor é obrigatório');
+      const r = aplicarEdicao(arquivo, undoDir, (t) => (rota === 'lane-height' ? redimensionarRaiaNoXml(t, id, valor) : redimensionarPoolNoXml(t, id, valor)), texto('hash'));
+      respostaJson(res, 200, { ok: true, avisos: r.avisos });
+      return;
+    }
     if (rota === 'execution') {
       const id = texto('id');
       const r = aplicarEdicao(arquivo, undoDir, (t) => tornarAutomaticaNoXml(t, id), texto('hash'));
@@ -637,7 +654,8 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 .edit-toggle[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}.edit-toggle[aria-pressed="true"]:hover{background:#1d47b3}
 #edit-tools{display:flex;gap:6px}#edit-tools[hidden]{display:none}.mode{font-size:12px;font-weight:700;color:#1e40af;background:#dbeafe;border-radius:999px;padding:4px 9px;white-space:nowrap}
 body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cursor:move}.fluig-hit.moving{fill:#2457d61f;stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none}
-.fluig-hit.flow.moving{fill:none;stroke-width:3}.conector{fill:var(--brand);stroke:#fff;stroke-width:2;cursor:crosshair;vector-effect:non-scaling-stroke}.conector:hover{fill:#1d47b3}.previa-ligacao{stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;fill:none;pointer-events:none;vector-effect:non-scaling-stroke}
+.fluig-hit.flow.moving{fill:none;stroke-width:3}.alca-raia{fill:var(--brand);stroke:#fff;stroke-width:2;cursor:ns-resize;vector-effect:non-scaling-stroke}.previa-raia{stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none;vector-effect:non-scaling-stroke}
+.conector{fill:var(--brand);stroke:#fff;stroke-width:2;cursor:crosshair;vector-effect:non-scaling-stroke}.conector:hover{fill:#1d47b3}.previa-ligacao{stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;fill:none;pointer-events:none;vector-effect:non-scaling-stroke}
 .handle{fill:#fff;stroke:var(--brand);stroke-width:2;cursor:move;vector-effect:non-scaling-stroke}.handle:hover{fill:#dbeafe}
 #view-actions{display:flex;gap:8px;margin-top:14px}#view-actions[hidden]{display:none}
 #edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}#edit-actions[hidden]{display:none}
@@ -681,6 +699,7 @@ function hitsDe(ids){return [...svg.querySelectorAll('.fluig-hit')].filter(n=>id
 function soltarPrevia(){svg?.querySelectorAll('.fluig-hit.moving').forEach(n=>{n.classList.remove('moving');n.removeAttribute('transform')})}
 canvas.addEventListener('pointerdown',e=>{if(!svg||e.button!==0)return;if(editMode&&colocando){e.preventDefault();void colocarEm(e);return}
   if(editMode&&ligando){e.preventDefault();const alvo=alvoSob(e),origem=ligando.origem;pararDeLigar();if(!alvo||alvo.id===origem){flash('Ligação cancelada: clique numa tarefa, evento ou gateway diferente da origem.');return}void ligar(origem,alvo.id);return}
+  if(editMode&&e.target.closest?.('.alca-raia')&&!ocupado){const el=elements.find(x=>x.id===selectedId);if(el&&el.propriedades&&el.propriedades.raia){canvas.setPointerCapture(e.pointerId);const c=el.geometria.caixa;const linha=document.createElementNS(NS,'line');linha.classList.add('previa-raia');linha.setAttribute('x1',c.x);linha.setAttribute('x2',c.x+c.largura);linha.setAttribute('y1',c.y+c.altura);linha.setAttribute('y2',c.y+c.altura);svg.append(linha);drag={modo:'raia',el,linha,x:e.clientX,y:e.clientY,moved:false,altura:c.altura};return}}
   if(editMode&&e.target.closest?.('.conector')&&!ocupado){const el=elements.find(x=>x.id===selectedId);if(el){canvas.setPointerCapture(e.pointerId);const c=el.geometria.caixa;const linha=document.createElementNS(NS,'line');linha.classList.add('previa-ligacao');const cx=c.x+c.largura/2,cy=c.y+(el.tipo==='BpmnGateway'?Math.min(c.largura,c.altura):c.altura)/2;linha.setAttribute('x1',cx);linha.setAttribute('y1',cy);linha.setAttribute('x2',cx);linha.setAttribute('y2',cy);svg.append(linha);drag={modo:'ligar',origem:el.id,linha,x:e.clientX,y:e.clientY,moved:false};return}}const hit=e.target.closest?.('.fluig-hit');const el=hit&&elements.find(x=>x.id===hit.dataset.id);canvas.setPointerCapture(e.pointerId);
   const alca=e.target.closest?.('.handle');
   if(editMode&&alca&&!ocupado){const fl=elements.find(x=>x.id===selectedId);if(fl&&fl.dobras){drag={modo:'dobra',x:e.clientX,y:e.clientY,el:fl,indice:Number(alca.dataset.indice),dobras:fl.dobras.map(p=>({...p})),moved:false};return}}
@@ -688,6 +707,7 @@ canvas.addEventListener('pointerdown',e=>{if(!svg||e.button!==0)return;if(editMo
   drag={modo:'pan',x:e.clientX,y:e.clientY,box:{...box},hitId:hit?.dataset.id,moved:false};canvas.classList.add('drag')});
 let lastPointer={clientX:0,clientY:0};
 canvas.addEventListener('pointermove',e=>{lastPointer={clientX:e.clientX,clientY:e.clientY};if(!drag||!svg)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.hypot(dx,dy)>3)drag.moved=true;if(!drag.moved)return;
+  if(drag.modo==='raia'){const c=drag.el.geometria.caixa,q=pontoDoDiagrama(e);drag.altura=Math.max(60,Math.round((q.y-c.y)/10)*10);const y=c.y+drag.altura;drag.linha.setAttribute('y1',y);drag.linha.setAttribute('y2',y);return}
   if(drag.modo==='ligar'){const q=pontoDoDiagrama(e);drag.linha.setAttribute('x2',q.x);drag.linha.setAttribute('y2',q.y);return}
   if(drag.modo==='dobra'){const q=pontoDoDiagrama(e);drag.dobras[drag.indice]={x:grade(q.x),y:grade(q.y)};const a=svg.querySelector('.handle[data-indice="'+drag.indice+'"]');if(a){a.setAttribute('x',drag.dobras[drag.indice].x-5);a.setAttribute('y',drag.dobras[drag.indice].y-5)}previaDoFluxo(drag.el,drag.dobras);return}
   if(drag.modo==='mover'){const k=escala();drag.dx=Math.round(dx*k/10)*10;drag.dy=Math.round(dy*k/10)*10;for(const n of hitsDe(drag.ids)){n.classList.add('moving');n.setAttribute('transform','translate('+drag.dx+' '+drag.dy+')')}return}
@@ -695,6 +715,7 @@ canvas.addEventListener('pointermove',e=>{lastPointer={clientX:e.clientX,clientY
 canvas.addEventListener('pointerup',()=>{if(!drag)return;const d=drag;drag=undefined;canvas.classList.remove('drag');
   if(d.modo==='mover'&&d.moved&&(d.dx||d.dy)){void moverPara(d.hitId,d.dx,d.dy);return}
   if(d.modo==='dobra'){if(d.moved)void gravarDobras(d.el.id,d.dobras);return}
+  if(d.modo==='raia'){d.linha.remove();if(d.moved&&d.altura!==d.el.geometria.caixa.altura)void gravarProps('lane-height',{id:d.el.id,valor:d.altura},'Altura da raia alterada.');return}
   if(d.modo==='ligar'){d.linha.remove();const alvo=alvoSob(lastPointer);if(!d.moved)return;if(!alvo||alvo.id===d.origem){flash('Solte a ligação sobre uma tarefa, evento ou gateway.');return}void ligar(d.origem,alvo.id);return}
   soltarPrevia();if(!d.moved){if(d.hitId)select(d.hitId);else clearSelection()}});
 canvas.addEventListener('pointercancel',()=>{drag=undefined;soltarPrevia();canvas.classList.remove('drag')});
@@ -805,6 +826,12 @@ function desenharAlcas(){
   svg?.querySelector('[data-layer=handles]')?.remove();
   const el=selectedId&&elements.find(x=>x.id===selectedId);
   if(!svg||!editMode||!el)return;
+  if(el.propriedades&&el.propriedades.raia){
+    // Raia: a alça de altura, no meio da borda de baixo.
+    const c=el.geometria.caixa,g=document.createElementNS(NS,'g');g.setAttribute('data-layer','handles');
+    const a=document.createElementNS(NS,'rect');a.classList.add('alca-raia');a.setAttribute('x',c.x+c.largura/2-24);a.setAttribute('y',c.y+c.altura-5);a.setAttribute('width','48');a.setAttribute('height','10');a.setAttribute('rx','4');
+    const t=document.createElementNS(NS,'title');t.textContent='Arraste para mudar a altura da raia';a.append(t);g.append(a);svg.append(g);return;
+  }
   if(!el.dobras){
     // Nó: a alça de ligar, no meio da borda direita.
     if(!podeLigarDe(el))return;
@@ -890,6 +917,14 @@ function renderProps(el){
   const marcar=()=>{box.dataset.sujo='1';avisoSujo.hidden=false;atualizarSelo()};
   box.append(avisoSujo);
   box.oninput=marcar;
+  if(p.raia||p.pool){
+    const campo=(rotulo,id,valor,rota,alvo,ok)=>{const i=no('input',{id,type:'number',min:'60',step:'10',value:String(valor)});box.append(no('label',{for:id,text:rotulo}),no('div',{class:'row'},i,no('button',{type:'button',text:'Aplicar',onclick:()=>{const v=Math.round(Number(i.value));if(!Number.isFinite(v))return;void gravarProps(rota,{id:alvo,valor:v},ok)}})))};
+    box.append(no('h3',{text:'Tamanho'}));
+    if(p.raia){campo('Altura da raia (px)','raia-altura',p.raia.altura,'lane-height',el.id,'Altura da raia alterada.');campo('Largura da pool (px)','pool-largura',p.raia.larguraPool,'pool-width',p.raia.pool,'Largura da pool alterada.');
+      box.append(no('p',{class:'note',text:'Ou arraste a alça na borda de baixo da raia. O que está abaixo dela desce junto, e a pool acompanha.'}))}
+    if(p.pool)campo('Largura da pool (px)','pool-largura',p.pool.largura,'pool-width',el.id,'Largura da pool alterada.');
+    return;
+  }
   if(p.execucao!==undefined){
     box.append(no('h3',{text:'Execução'}));
     if(p.execucao==='1')box.append(no('p',{class:'note',text:'Automática (executionType 1), como o padrão pede.'}));

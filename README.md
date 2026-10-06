@@ -62,7 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
-| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, remover, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação), ligar e remover |
+| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, remover, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação), ligar, remover e tamanho de raias e pool |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -362,6 +362,17 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
   - **Validação:** removi, um de cada vez, cada um dos 4.815 elementos e fluxos
     dos 105 `.process` dos workspaces. Foram 150 recusas com motivo, nenhum erro
     de estrutura e nenhuma piora na conversão do `push`;
+- **tamanho de raias e da pool**: com uma raia selecionada, o painel mostra a
+  altura dela e a largura da pool, e há uma alça na borda de baixo da raia para
+  arrastar.
+  - **Altura da raia:** o que está abaixo dela (raias, elementos e dobras)
+    desce ou sobe junto, e a pool acompanha.
+  - **Largura da pool:** as raias acompanham.
+  - **Encolher** é recusado se cortaria um elemento que hoje cabe inteiro, ou
+    deixaria um de fora da pool.
+  - **Validação:** nos 105 `.process`, aumentar e voltar cada uma das 296 raias
+    e a largura das 93 pools devolve o arquivo idêntico, sem erro de estrutura
+    nem piora na conversão do `push`;
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
   `Ctrl+Shift+Z`. Salvar sem mudança não grava nem ocupa o histórico.
 
