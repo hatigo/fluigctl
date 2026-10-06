@@ -1,6 +1,6 @@
 ---
 name: fluig-patterns
-description: Use when writing or changing code for a TOTVS Fluig project - datasets, forms (HTML, main.js, displayFields, validateForm), workflow scripts (servicetask, beforeStateEntry, beforeTaskSave, afterProcessCreate), attribution mechanisms, e-mail templates or the RM integration behind them - "cria um dataset", "consulta no RM", "sentença", "campo pai-filho", "esconde o painel na atividade", "service task que integra com o RM", "mecanismo de atribuição", "valida o formulário", "trava o campo". The team's project patterns, taken from the Strategi projects: naming, Rhino ES5 limits, the STATUS/MESSAGE error row, async dataset calls with a concurrency cap, locking fields without disabled, error tasks for service tasks, idempotent retries, environment switches. Not for publishing - that is fluig-deploy.
+description: Use when writing or changing code for a TOTVS Fluig project, or modelling or laying out a process diagram - datasets, forms (HTML, main.js, displayFields, validateForm), workflow scripts (servicetask, beforeStateEntry, beforeTaskSave, afterProcessCreate), attribution mechanisms, e-mail templates or the RM integration behind them - "cria um dataset", "consulta no RM", "sentença", "campo pai-filho", "esconde o painel na atividade", "service task que integra com o RM", "mecanismo de atribuição", "valida o formulário", "trava o campo", "desenha o processo", "ajusta o diagrama", "tarefa de erro da service task". The team's project patterns, taken from the Strategi projects: naming, Rhino ES5 limits, the STATUS/MESSAGE error row, async dataset calls with a concurrency cap, locking fields without disabled, the mandatory service-task recovery pattern (error event, support task, retry) and its layout, idempotent retries, environment switches. Not for publishing - that is fluig-deploy.
 ---
 
 # Fluig project patterns
@@ -53,9 +53,22 @@ and `MESSAGE`. An empty list must mean "no rows", never "the RM failed". The
 form retries and warns on the error row. An empty list leaves the select silently
 empty.
 
-**A service task throws on purpose.** Every service task has an error boundary
-event that leads to an "Erro ao …" human task (group `suporte_processos`), which
-loops back to retry. Throw a Portuguese message the support person can act on.
+**Every service task gets the recovery pattern, in every workflow.** Unless the
+human makes an explicit exception:
+- the task is automatic (`executionType="1"`);
+- it has its own error event, whose circle overlaps the task's lower-right
+  corner;
+- a short diagonal leads to a handling task right below it, in the same lane
+  (no support lane);
+- the handling task is assigned with `Pool Grupo` to the support group
+  (`suporte_processos`, never `admin`);
+- the handling task flows back to the same service task, to retry. Never end
+  the process or move it forward after an automation failure.
+
+The details and the layout recipe are in
+[references/workflow.md](references/workflow.md#service-task-recovery-pattern-always).
+The service task throws on purpose: throw a Portuguese message the support
+person can act on.
 
 **`beforeStateEntry`, `beforeTaskSave` and `afterProcessCreate` never throw.**
 A throw there blocks the user's move. Catch everything, then `log.error`.

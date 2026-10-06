@@ -34,12 +34,89 @@ templates_email/<template>.html
 - **Gateway conditions are form-field rules** (field, value, operator), not
   scripts. Scripts and the form write the routing values into control fields:
   `decisaoAprovacao`, `faltaAprovador`, `nfValida`, `temTudoEmEstoque`.
-- **Every service task has an error boundary event.** It leads to an "Erro ao
-  …" human task in the `suporte_processos` group, which flows back into the
-  service task so support can retry.
+- **Every service task follows the recovery pattern below.**
 - **Every human task has an assignee.** A task with no mechanism never reaches
   anyone: approval task 34 in Medição stalled this way until it got
   `MEC_STG_ALCADAS`.
+
+## Service-task recovery pattern (always)
+
+Every workflow follows this pattern, for every service task. The only exception
+is one the human calls out explicitly for a specific task.
+
+1. **The service task is automatic:** `executionType="1"`. Synchronous
+   (`executionType="0"`) is the rare exception; record why in the task
+   instruction or the commit.
+2. **It has its own intermediate error event attached.**
+   - On the event: `type="43"`, with `parentTask` and `sequenceAttached`.
+   - On the task: `attachedEvents`.
+   - One event per service task. Never share one between tasks.
+3. **The error circle overlaps the task's lower-right corner.** It is not a
+   loose node below the flow.
+4. **The flow from the circle to the handling task is a short diagonal**, with no
+   bendpoints.
+5. **The handling task sits right below the service task, in the same functional
+   lane.** Do not create a lane just for support. Name it after what failed:
+   "Tratar erro de alçada", "Erro ao enviar e-mail".
+6. **The handling task is assigned to the support group:**
+
+   ```xml
+   managerMechanism="Pool Grupo"
+   managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>
+     &lt;groupId>suporte_processos&lt;/groupId>
+     &lt;mechanismName>Pool Grupo&lt;/mechanismName>
+   &lt;/org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>"
+   ```
+
+   - `suporte_processos` is the group in the Strategi projects. When the
+     process or the human names another one, use that.
+   - If the group does not exist on the target server, it has to be created
+     there before publishing.
+   - **Never** substitute `admin`, the requester or any other user. An error
+     task assigned to the wrong person is worse than a failed release.
+7. **The handling task flows back to the same service task, to retry.**
+   - Never end the process after an automation failure.
+   - Never advance it to a later state.
+   - The retry only works because the service task is idempotent (see "A
+     service task that integrates").
+
+### Layout recipe
+
+These are the measurements the contratação diagram uses (tasks 140×67, events
+35×35, grid 10):
+
+| Element | Position |
+|---|---|
+| service task | `(x, y)` on the main row |
+| error circle | `(x + w − 17, y + h − 17)`: centred on the lower-right corner |
+| handling task | `(x, y + 100)`: same column, one row down, same size |
+| circle → handling task | straight, no bendpoints: the short diagonal |
+| handling task → service task | straight, no bendpoints: a vertical up from the top of the handling task |
+
+Other layout rules:
+- **The main flow runs horizontally** along one row per lane. Each service
+  task/handling task pair is a compact column.
+- **A branch that leaves the main row** (e.g. "Reprovada") drops from the
+  gateway to its own row below, and keeps its own pair beneath it.
+- **A loop back** (e.g. "Tem mais? → Sim") leaves the gateway from the top, runs
+  about 20 px above the row and drops into the target from above. It never
+  passes under the row or through the error pairs.
+- **Check the result rendered,** not only the XML:
+  - render with `lerDiagrama` + `gerarSvg` from the fluigctl build, or open
+    `fluigctl diagram open`;
+  - check that no line crosses a card, and that every circle sits on its corner;
+  - then run `fluigctl push diagram … --dry-run`.
+
+### Checking a diagram against the pattern
+
+For each `type="82"` task, confirm:
+- `executionType="1"`;
+- exactly one `type="43"` event with `parentTask` pointing at it;
+- that event's outgoing flow ends at a `type="80"` task with `Pool Grupo` and the
+  support `groupId`;
+- that task's outgoing flow ends at the same service task.
+
+A service task that fails any of these is a defect, not a style choice.
 
 ## Which events
 

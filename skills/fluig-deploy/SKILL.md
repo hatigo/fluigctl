@@ -284,36 +284,22 @@ line.
 
 ## Service-task error handling pattern
 
-Unless the human explicitly calls out an exception, model every service task as
-an automatic/posterior task (`executionType="1"`) with this complete recovery
-loop:
+A diagram you publish must follow the recovery pattern. The full rule and its
+layout recipe live in the `fluig-patterns` skill
+(`references/workflow.md`, "Service-task recovery pattern"). In short, unless
+the human explicitly makes an exception:
+- every service task is automatic (`executionType="1"`);
+- it has its own attached error event, whose circle overlaps the task's
+  lower-right corner;
+- a short diagonal leads to a handling task right below it, in the same lane;
+- that task is assigned with `Pool Grupo` to the support group
+  (`suporte_processos`, unless the process names another) and flows back to the
+  same service task, to retry.
 
-1. attach one `intermediateerror` to the service task (`attachedEvents` on the
-   task; `parentTask` and `sequenceAttached` on the event);
-2. draw the error-event circle **overlapping the task's lower-right corner**,
-   not as an unrelated node below the flow;
-3. route the event to a user task, normally directly below the service task,
-   assigned to the support group with `Pool Grupo` / `AssignmentControllerPoolGroup`;
-4. after support resolves the cause, route that user task **back to the same
-   service task** to retry it. Do not silently end the process or continue to a
-   later state after an automation failure.
-
-The group is data, not a convention: use the explicit `groupId` supplied for
-that server/process. Never invent a support group or substitute the requester
-or `admin`; an unassigned error task is worse than a release failure.
-
-An error task assigned to a group has this shape (with a real group id):
-
-```xml
-managerMechanism="Pool Grupo"
-managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>
-  &lt;groupId>suporte_processos&lt;/groupId>
-  &lt;mechanismName>Pool Grupo&lt;/mechanismName>
-&lt;/org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>"
-```
-
-`executionType="0"` is the rare exception and must be intentional: record why
-it is synchronous in the task instruction or accompanying change.
+Before a push, check that the support group exists on the target server. If it
+does not, the release fails or the task goes unassigned. Stop and ask the human,
+who may create the group on that server. **Never substitute `admin`, the
+requester or any other user.**
 
 ## Pulling from a server
 
