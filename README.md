@@ -63,6 +63,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
 | `diagram open` + painel (inspeção de elementos e renomear com desfazer) | pronto, inspeção e renomear; o resto é somente leitura |
+| `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
 | `push dataset` | pronto |
