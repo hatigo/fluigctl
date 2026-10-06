@@ -13,7 +13,9 @@ templates_email/<template>.html
 - **Service task ids are the Studio's** (`servicetask39`). The XML wires each
   task to its script with `scriptFileName="<processId>.servicetask39.js"`.
 - **Do not hand-edit the `.process` XMI.** It has EMF indices. Change it in
-  Studio or with `fluigctl diagram`. For a big model, write a step-by-step
+  Studio or with `fluigctl diagram`. The one exception is a re-layout that
+  touches geometry only (see "Re-laying out an existing diagram"). For a big
+  model, write a step-by-step
   specification first, as Medição does in
   `docs/especificacao-diagrama-*.md`. It lists:
   - lanes;
@@ -82,30 +84,125 @@ is one the human calls out explicitly for a specific task.
 
 ### Layout recipe
 
-These are the measurements the contratação diagram uses (tasks 140×67, events
-35×35, grid 10):
+`validacao_minutas` (Cetenco, approved 2026-10-06) is the reference. It has 5
+lanes, 9 service tasks and flows across lanes. Positions are absolute. Lanes are
+relative to the pool.
+
+**Keep the sizes Studio gave each element.** Tasks there are 106×76, or 106×92
+when the name is long. Error events are 30×30, though other diagrams use 35×35.
+The width of a task decides where its name wraps. Resizing every task to a
+standard (140×67) changed the text layout, and the human asked for it back.
+Never touch the `al:MultiText` or `al:RoundedRectangle` inside a task, nor the
+font.
+
+With `C` as the centre line of the lane's main row, `(x, y, w, h)` as the
+service task and `d` as the event's diameter:
 
 | Element | Position |
 |---|---|
-| service task | `(x, y)` on the main row |
-| error circle | `(x + w − 17, y + h − 17)`: centred on the lower-right corner |
-| handling task | `(x, y + 100)`: same column, one row down, same size |
-| circle → handling task | straight, no bendpoints: the short diagonal |
-| handling task → service task | straight, no bendpoints: a vertical up from the top of the handling task |
+| task | `(cx − w/2, C − h/2)`: tasks on a row line up by centre, not by top |
+| gateway | `(cx − 30, C − 30)`: the diamond is the top 60×60 of the shape, and the label hangs below it |
+| start/end event | `(cx − d/2, C − d/2)` |
+| error circle | `(x + w − d/2, y + h − d/2)`: centred on the lower-right corner |
+| handling task | `(x + w/2 − w'/2, y + h + 33)`: same column, the same gap below every service task, at its own size |
+| circle → handling task | no bendpoints: the short diagonal |
+| handling task → service task | no bendpoints: a vertical, both centred on the same x |
 
-Other layout rules:
-- **The main flow runs horizontally** along one row per lane. Each service
-  task/handling task pair is a compact column.
+Rows and lanes:
+- **`C = lane top + 90`.** Leave room above the tallest task for the loop
+  corridor.
+- **Size the lane height to fit the tallest pair.** That is the tallest service
+  task, the 33 px gap and the tallest handling task, plus a margin. With 92 px
+  tasks it is 270. Every lane gets the same height.
+- **The pool's height is the sum of the lanes.** Lane width is the pool width
+  minus 30. Each lane's rotated label (`al:Text`) takes the lane height, and the
+  pool's label takes the pool height.
+- **Keep Studio's lane order and keep every element in its lane.** A lane is a
+  role. Moving a task to another lane changes the meaning, not the look.
+
+Flows:
+- **The process reads left to right in chronological order.** Each lane's main
+  flow is one horizontal row, and each service/handling pair is a compact
+  column. Leave about 200 px between column centres.
+- **Every flow is orthogonal.** The line is drawn from the source border, through
+  the bendpoints, to the target border, and each end aims at the centre of its
+  shape (chopbox). So the first bendpoint shares x or y with the source centre,
+  and the last one with the target centre. Otherwise the end segment comes out
+  diagonal.
+- **A flow to another lane runs its vertical through a column that is empty in
+  every lane it crosses.** It then turns into the target from the left on the
+  row, or drops into it from above at its centre.
+- **Gateway exits:**
+  - to the lane above, or a loop: from the top;
+  - next on the same row: from the right;
+  - to a lane below: from the right, with a bend a few dozen px out, when that
+    keeps the vertical clear. The bottom exit crosses the gateway's label, so it
+    is the last choice.
 - **A branch that leaves the main row** (e.g. "Reprovada") drops from the
   gateway to its own row below, and keeps its own pair beneath it.
-- **A loop back** (e.g. "Tem mais? → Sim") leaves the gateway from the top, runs
-  about 20 px above the row and drops into the target from above. It never
-  passes under the row or through the error pairs.
-- **Check the result rendered,** not only the XML:
-  - render with `lerDiagrama` + `gerarSvg` from the fluigctl build, or open
-    `fluigctl diagram open`;
-  - check that no line crosses a card, and that every circle sits on its corner;
-  - then run `fluigctl push diagram … --dry-run`.
+- **A loop back** (e.g. "Tem mais? → Sim") leaves the gateway from the top. It
+  runs in the corridor 20 px above the tallest task of the target's row, and
+  drops into the target from above, at its centre.
+  - It never passes under the row or through the error pairs.
+  - Several loops into the same target share the corridor.
+  - A flow from a gateway that climbs from its own row to a target further right
+    uses the same pattern: up out of the top, along the corridor, down into the
+    target.
+- **No line crosses a card.** Lines may cross lanes, and other lines when there
+  is no way around.
+
+### Re-laying out an existing diagram
+
+`fluigctl diagram` has no layout command. The skill ships one script for this,
+`scripts/relayout.py`:
+
+```sh
+python3 -I scripts/relayout.py <entrada.process> <spec.json> <saida.process>
+```
+
+- The spec says the lane order, the lane height, the pool width, the centre x
+  and lane of each main-row node, and the route bendpoints. In the bendpoints,
+  `"C<n>"` is the row centre and `"L<n>"` the return corridor of lane n.
+- The script finds each service task's error event and handling task in the
+  model, and places them by the recipe.
+- It refuses to write when anything outside geometry would change.
+- `scripts/validacao_minutas.json` is the spec of the approved diagram. Run on
+  the original, it rebuilds that diagram byte for byte.
+
+A re-layout done by hand or by another script follows the same limit, and
+touches geometry only:
+- the `x`/`y` of each top-level shape's first `graphicsAlgorithm`;
+- the size of the pool and lanes, and the heights of their label texts;
+- the `<bendpoints>` at the end of each `<connections>`.
+
+Do not create or remove shapes, connections, anchors or ids, and keep the
+`bpmn2:` model untouched.
+
+Before writing:
+- copy the original to the scratchpad;
+- run the script on a copy;
+- confirm `diff <(grep -E 'bpmn2:|al:MultiText|al:RoundedRectangle' antes) <(grep … depois)`
+  is empty.
+
+When the human has the diagram open in `fluigctl diagram open`, check that the
+file still matches what the script read before replacing it. They may have
+renamed something from the viewer.
+
+**Check the result rendered,** not only the XML:
+- render it with the same generator as the viewer and the push:
+  `node scripts/render.mjs <arquivo.process> saida.svg`, then
+  `rsvg-convert -b white -w 2400 saida.svg -o saida.png`, and look at the PNG.
+  - The script needs the fluigctl build; `FLUIGCTL_DIR` points it at another
+    checkout.
+  - The `<svg>` already carries a `style`, so do not add another one.
+  - Or open `fluigctl diagram open`.
+- check that no line crosses a card, that every circle sits on its corner and
+  that every end segment is straight;
+- then run `fluigctl push diagram … --dry-run`.
+
+A re-layout is visual only. List what the pattern check found (missing
+mechanisms, a gateway branch with no exit, names like "Erro Envia E-mail"
+repeated) and leave the fixes to the human.
 
 ### Checking a diagram against the pattern
 
