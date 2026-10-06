@@ -1,6 +1,6 @@
 {
   "lanes": ["bpmnswimlane2", "bpmnswimlane3"],
-  "laneHeight": 400,
+  "laneHeight": [160, 400],
   "poolWidth": 1700,
   "rowOffset": 90,
   "nodes": {
