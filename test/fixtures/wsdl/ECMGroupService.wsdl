@@ -1,0 +1,309 @@
+<?xml version='1.0' encoding='UTF-8'?><wsdl:definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:tns="http://ws.foundation.ecm.technology.totvs.com/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:ns1="http://schemas.xmlsoap.org/soap/http" name="ECMGroupServiceService" targetNamespace="http://ws.foundation.ecm.technology.totvs.com/">
+  <wsdl:types>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="http://ws.foundation.ecm.technology.totvs.com/" attributeFormDefault="unqualified" elementFormDefault="unqualified" targetNamespace="http://ws.foundation.ecm.technology.totvs.com/">
+  <xs:complexType name="groupDto">
+    <xs:sequence>
+      <xs:element name="companyId" type="xs:long"/>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="foo" nillable="true" type="xs:string"/>
+      <xs:element minOccurs="0" name="groupDescription" type="xs:string"/>
+      <xs:element minOccurs="0" name="groupId" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType final="#all" name="groupDtoArray">
+    <xs:sequence>
+      <xs:element maxOccurs="unbounded" minOccurs="0" name="item" nillable="true" type="tns:groupDto"/>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:element name="Exception" type="tns:Exception"/>
+  <xs:complexType name="Exception">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="message" type="xs:string"/>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>
+  </wsdl:types>
+  <wsdl:message name="getGroup">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="GroupId" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getOcurrenceByKey">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="pIdiAtribuic" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="pDesValAtribuic" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getOcurrenceByKeyResponse">
+    <wsdl:part name="groups" type="xsd:boolean">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getGroups">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="createGroupResponse">
+    <wsdl:part name="resultXML" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="deleteGroup">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="GroupId" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="updateGroupResponse">
+    <wsdl:part name="resultXML" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="deleteGroupResponse">
+    <wsdl:part name="return" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getGroupsByDescription">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="description" type="xsd:string">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getGroupResponse">
+    <wsdl:part name="colab" type="tns:groupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getGroupsByDescriptionResponse">
+    <wsdl:part name="groups" type="tns:groupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="createGroup">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="groups" type="tns:groupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getGroupsResponse">
+    <wsdl:part name="result" type="tns:groupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="Exception">
+    <wsdl:part element="tns:Exception" name="Exception">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getGroupsCompressedDataResponse">
+    <wsdl:part name="result" type="xsd:base64Binary">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="getGroupsCompressedData">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:message name="updateGroup">
+    <wsdl:part name="username" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="password" type="xsd:string">
+    </wsdl:part>
+    <wsdl:part name="companyId" type="xsd:int">
+    </wsdl:part>
+    <wsdl:part name="groups" type="tns:groupDtoArray">
+    </wsdl:part>
+  </wsdl:message>
+  <wsdl:portType name="GroupService">
+    <wsdl:operation name="getGroup">
+      <wsdl:input message="tns:getGroup" name="getGroup">
+    </wsdl:input>
+      <wsdl:output message="tns:getGroupResponse" name="getGroupResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getOcurrenceByKey">
+      <wsdl:input message="tns:getOcurrenceByKey" name="getOcurrenceByKey">
+    </wsdl:input>
+      <wsdl:output message="tns:getOcurrenceByKeyResponse" name="getOcurrenceByKeyResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="createGroup">
+      <wsdl:input message="tns:createGroup" name="createGroup">
+    </wsdl:input>
+      <wsdl:output message="tns:createGroupResponse" name="createGroupResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getGroups">
+      <wsdl:input message="tns:getGroups" name="getGroups">
+    </wsdl:input>
+      <wsdl:output message="tns:getGroupsResponse" name="getGroupsResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="deleteGroup">
+      <wsdl:input message="tns:deleteGroup" name="deleteGroup">
+    </wsdl:input>
+      <wsdl:output message="tns:deleteGroupResponse" name="deleteGroupResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getGroupsCompressedData">
+      <wsdl:input message="tns:getGroupsCompressedData" name="getGroupsCompressedData">
+    </wsdl:input>
+      <wsdl:output message="tns:getGroupsCompressedDataResponse" name="getGroupsCompressedDataResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getGroupsByDescription">
+      <wsdl:input message="tns:getGroupsByDescription" name="getGroupsByDescription">
+    </wsdl:input>
+      <wsdl:output message="tns:getGroupsByDescriptionResponse" name="getGroupsByDescriptionResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="updateGroup">
+      <wsdl:input message="tns:updateGroup" name="updateGroup">
+    </wsdl:input>
+      <wsdl:output message="tns:updateGroupResponse" name="updateGroupResponse">
+    </wsdl:output>
+      <wsdl:fault message="tns:Exception" name="Exception">
+    </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="ECMGroupServiceServiceSoapBinding" type="tns:GroupService">
+    <soap:binding style="rpc" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="getGroup">
+      <soap:operation soapAction="getGroup" style="rpc"/>
+      <wsdl:input name="getGroup">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getGroupResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getOcurrenceByKey">
+      <soap:operation soapAction="getOcurrenceByKey" style="rpc"/>
+      <wsdl:input name="getOcurrenceByKey">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getOcurrenceByKeyResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="createGroup">
+      <soap:operation soapAction="createCollegue" style="rpc"/>
+      <wsdl:input name="createGroup">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="createGroupResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getGroups">
+      <soap:operation soapAction="getGroups" style="rpc"/>
+      <wsdl:input name="getGroups">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getGroupsResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="deleteGroup">
+      <soap:operation soapAction="deleteGroup" style="rpc"/>
+      <wsdl:input name="deleteGroup">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="deleteGroupResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getGroupsCompressedData">
+      <soap:operation soapAction="getGroupsCompressedData" style="rpc"/>
+      <wsdl:input name="getGroupsCompressedData">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getGroupsCompressedDataResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="getGroupsByDescription">
+      <soap:operation soapAction="getGroupsByDescription" style="rpc"/>
+      <wsdl:input name="getGroupsByDescription">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="getGroupsByDescriptionResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+    <wsdl:operation name="updateGroup">
+      <soap:operation soapAction="updateGroup" style="rpc"/>
+      <wsdl:input name="updateGroup">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:input>
+      <wsdl:output name="updateGroupResponse">
+        <soap:body namespace="http://ws.foundation.ecm.technology.totvs.com/" use="literal"/>
+      </wsdl:output>
+      <wsdl:fault name="Exception">
+        <soap:fault name="Exception" use="literal"/>
+      </wsdl:fault>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="ECMGroupServiceService">
+    <wsdl:port binding="tns:ECMGroupServiceServiceSoapBinding" name="GroupServicePort">
+      <soap:address location="http://100.90.132.16:8080/webdesk/ECMGroupService"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

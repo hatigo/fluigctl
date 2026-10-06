@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { fakeFluig } from './helpers/fake-fluig.js';
-import { bpmnVersionDe, conferirCadastros, pushDiagram, resolverFormId } from '../src/commands/push-diagram.js';
+import { bpmnVersionDe, conferirCadastros, gruposDoDiagrama, pushDiagram, resolverFormId } from '../src/commands/push-diagram.js';
 import type { WorkflowEngineClient } from '../src/fluig/workflow-service.js';
 import type { FormNoServidor } from '../src/fluig/cardindex-service.js';
 import type { CadastroClient } from '../src/fluig/cadastro-service.js';
@@ -963,7 +963,7 @@ test('"Associado" com controlador não conferido, aninhado ou tipo desconhecido 
 
 /** Servidor em memória: registra cada chamada; o export devolve uma definição com bpmnVersion 1. */
 function servidorDeTeste(opcoes: {
-  processos?: string[]; respostaImport?: string; liberacao?: string; volumes?: string[]; expedientes?: string[];
+  processos?: string[]; respostaImport?: string; liberacao?: string; volumes?: string[]; expedientes?: string[]; grupos?: string[];
 } = {}) {
   const chamadas: string[] = [];
   const importados: { xml: string; novo: boolean }[] = [];
@@ -992,21 +992,23 @@ function servidorDeTeste(opcoes: {
     async listVolumes() { chamadas.push('volumes'); return opcoes.volumes ?? ['Default']; },
     async listExpedientes() { chamadas.push('expedientes'); return opcoes.expedientes ?? ['Default']; },
   };
-  return { cliente, formularios, cadastros, chamadas, importados };
+  // Por padrão, existem todos os grupos que o processoTeste usa.
+  const grupos = async (): Promise<string[]> => { chamadas.push('grupos'); return opcoes.grupos ?? gruposDoDiagrama(lerDiagrama(readFileSync(ARQUIVO, 'utf8'))); };
+  return { cliente, formularios, cadastros, grupos, chamadas, importados };
 }
 
 const ARQUIVO = join(FIXTURES, 'processoTeste.process');
 const publicar = (s: ReturnType<typeof servidorDeTeste>, extra: Record<string, unknown> = {}) =>
   pushDiagram({
     server: SERVER, arquivo: ARQUIVO, senha: 's', prompt: async () => '',
-    cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros, ...extra,
+    cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros, grupos: s.grupos, ...extra,
   });
 
 test('publica processo existente: nova versão, import sobrescrevendo, liberação; bpmnVersion do servidor', async () => {
   const s = servidorDeTeste();
   const r = await publicar(s);
 
-  assert.deepEqual(s.chamadas, ['list', 'volumes', 'expedientes', 'export', 'createVersion', 'import', 'release']);
+  assert.deepEqual(s.chamadas, ['list', 'volumes', 'expedientes', 'grupos', 'export', 'createVersion', 'import', 'release']);
   assert.equal(r.publicado, true);
   assert.equal(r.criado, false);
   assert.equal(r.liberado, true);
@@ -1023,7 +1025,7 @@ test('processo que não existe: recusa sem --create, cria com ele (import novo, 
 
   const com = servidorDeTeste({ processos: [] });
   const r = await publicar(com, { criar: true });
-  assert.deepEqual(com.chamadas, ['list', 'volumes', 'expedientes', 'import-novo', 'release']);
+  assert.deepEqual(com.chamadas, ['list', 'volumes', 'expedientes', 'grupos', 'import-novo', 'release']);
   assert.equal(r.criado, true);
   assert.equal(texto(filhosDaRaiz(com.importados[0]!.xml)[1]!, 'bpmnVersion'), '2');
 });
@@ -1073,7 +1075,7 @@ test('em produção, senha digitada errada não escreve nada', async () => {
   const s = servidorDeTeste();
   const r = pushDiagram({
     server: { ...SERVER, prod: true }, arquivo: ARQUIVO, senha: 'certa', prompt: async () => 'errada',
-    cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros,
+    cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros, grupos: s.grupos,
   });
   assert.equal(await codigoDe(r), 5);
   assert.ok(!s.chamadas.some((c) => c.startsWith('import') || c === 'createVersion'));
@@ -1136,13 +1138,13 @@ test('o .processimage.svg do Studio vai no import quando desenha os mesmos estad
   const importar = s.cliente.importProcess;
   s.cliente.importProcess = async (id, xml, novo, imagem) => { if (imagem) capturadas.push(imagem); return importar(id, xml, novo); };
 
-  const r1 = await pushDiagram({ server: SERVER, arquivo: projeto(doStudio), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros });
+  const r1 = await pushDiagram({ server: SERVER, arquivo: projeto(doStudio), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros, grupos: s.grupos });
   assert.equal(r1.imagem.origem, 'studio');
   assert.equal(capturadas[0]!.nome, 'processoTeste.processimage.svg');
   assert.equal(capturadas[0]!.svg.toString('utf8'), doStudio.replace('\r\n', '\n'), 'linhas com \\n, como o Studio manda');
 
   const deOutraVersao = doStudio.replace('<g sequence="7"/>', '');
-  const r2 = await pushDiagram({ server: SERVER, arquivo: projeto(deOutraVersao), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros });
+  const r2 = await pushDiagram({ server: SERVER, arquivo: projeto(deOutraVersao), senha: 's', prompt: async () => '', cliente: s.cliente, formularios: s.formularios, cadastros: s.cadastros, grupos: s.grupos });
   assert.equal(r2.imagem.origem, 'gerada');
   assert.match(r2.avisos.join('\n'), /não desenha os mesmos estados/);
   assert.deepEqual([...sequenciasDoSvg(capturadas[1]!.svg.toString('utf8'))].sort((a, b) => a - b), [4, 5, 6, 7]);
@@ -1295,7 +1297,7 @@ test('subprocesso cujo processo-alvo não existe no destino é recusado com cód
     ];
     return { s, publicar: () => pushDiagram({
       server: SERVER, arquivo: join(FIXTURES, 'subprocessoTeste.process'), senha: 's', prompt: async () => '',
-      cliente: s.cliente, formularios, cadastros: s.cadastros,
+      cliente: s.cliente, formularios, cadastros: s.cadastros, grupos: s.grupos,
     }) };
   };
   const sem = comAlvo(['teste_fluigctl']);
@@ -1618,4 +1620,21 @@ test('tarefa de script (87): scriptFileName vale com o nome do arquivo ou o id d
   // Em tarefa de usuário o atributo não existe no Studio: segue recusado.
   const naTarefa80 = PROCESSO.replace(/(<bpmn2:BpmnTask id="task5"[^\n]*?)type="80"/, '$1type="80" scriptFileName="processoTeste.task5.js"');
   assert.match(erroDe(() => converterDiagrama(naTarefa80, { companyId: 1 })).message, /atributo scriptFileName em task5/);
+});
+
+test('grupo usado no diagrama que não existe no destino recusa antes de criar a versão', async () => {
+  const usados = gruposDoDiagrama(lerDiagrama(readFileSync(ARQUIVO, 'utf8')));
+  assert.ok(usados.length > 0, 'o processoTeste atribui a grupos');
+  const s = servidorDeTeste({ grupos: usados.slice(1) });
+  const erro = await publicar(s, { nomeServidor: 'fluig-localdev' }).then(() => undefined, (e: unknown) => e as ErroFluigctl);
+  assert.ok(erro instanceof ErroFluigctl);
+  assert.equal(erro.codigo, 6);
+  assert.match(erro.message, new RegExp(`"${usados[0]}"`));
+  assert.match(erro.message, new RegExp(`fluigctl group add ${usados[0]} --server fluig-localdev`));
+  assert.ok(!s.chamadas.includes('createVersion') && !s.chamadas.includes('import'), 'nada foi escrito');
+});
+
+test('o dry-run diz quais grupos o diagrama usa, sem abrir sessão', async () => {
+  const r = await pushDiagram({ server: SERVER, arquivo: ARQUIVO, dryRun: true, nomeServidor: 'hml' });
+  assert.ok(r.avisos.some((a) => /atribui tarefas aos grupos .*fluigctl group ls --server hml/.test(a)));
 });

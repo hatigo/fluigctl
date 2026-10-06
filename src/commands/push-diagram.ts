@@ -8,6 +8,8 @@ import { cardIndexClient, type FormNoServidor } from '../fluig/cardindex-service
 import { workflowEngineClient, type WorkflowEngineClient } from '../fluig/workflow-service.js';
 import { confirmProduction, type PromptSenha } from '../guard.js';
 import { gerarEcm30, type ResultadoConversao } from '../push/diagram/ecm30.js';
+import { lerAtribuicao } from '../diagram/props.js';
+import { groupClient } from '../fluig/group-service.js';
 import { lerDiagrama, type Diagrama } from '../push/diagram/modelo.js';
 import { gerarSvg, sequenciasDoSvg } from '../push/diagram/svg.js';
 import { lerXml } from '../push/diagram/xml.js';
@@ -49,6 +51,25 @@ export interface OpcoesPushDiagram {
   cliente?: WorkflowEngineClient;
   formularios?: () => Promise<FormNoServidor[]>;
   cadastros?: CadastroClient;
+  /** Para testes: os grupos que existem no servidor. */
+  grupos?: () => Promise<string[]>;
+  /** O nome cadastrado do servidor, para as mensagens sugerirem o comando certo. */
+  nomeServidor?: string;
+}
+
+/**
+ * Os grupos a que o diagrama atribui tarefas (Pool Grupo e Grupo). Um grupo que
+ * não existe no destino faz a liberação falhar depois do import, e a versão nova
+ * fica presa em edição — foi o que aconteceu com a v5 da contratação no localdev.
+ */
+export function gruposDoDiagrama(diagrama: Diagrama): string[] {
+  const grupos = new Set<string>();
+  for (const o of diagrama.objetos) {
+    if (o.tipo !== 'BpmnTask') continue;
+    const g = lerAtribuicao(o).campos['groupId'];
+    if (g) grupos.add(g);
+  }
+  return [...grupos].sort();
 }
 
 export interface ResultadoPushDiagram extends ResultadoConversao {
@@ -233,8 +254,15 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
   exigirFormulario(previa.cardIndex, processId);
   const avisoScripts = semScripts ? `${semScripts}; o XML sai sem os scripts do processo (WorkflowProcessEvent)` : undefined;
 
+  const gruposUsados = gruposDoDiagrama(diagrama);
   if (opcoes.dryRun) {
     if (avisoScripts) previa.avisos.push(avisoScripts);
+    if (gruposUsados.length > 0) {
+      previa.avisos.push(
+        `o diagrama atribui tarefas aos grupos ${gruposUsados.join(', ')}; o push confere se existem no servidor ` +
+          `(o dry-run não abre sessão — veja com: fluigctl group ls --server ${opcoes.nomeServidor ?? '<servidor>'})`,
+      );
+    }
     const imagem = await imagemDoDiagrama(opcoes.arquivo, diagrama, previa.avisos);
     if (opcoes.salvarXml) await writeFile(opcoes.salvarXml, previa.xml, 'utf8');
     return { ...previa, imagem: resumo(imagem), publicado: false, criado: false, liberado: null };
@@ -283,6 +311,23 @@ export async function pushDiagram(opcoes: OpcoesPushDiagram): Promise<ResultadoP
     ...(previa.volume ? { volumes: await cadastros.listVolumes() } : {}),
     ...(previa.expedientes.length > 0 ? { expedientes: await cadastros.listExpedientes() } : {}),
   });
+
+  if (gruposUsados.length > 0) {
+    const existentes = new Set(
+      opcoes.grupos
+        ? await opcoes.grupos()
+        : (await (await groupClient(url, opcoes.server.companyId, opcoes.server.username, opcoes.senha)).list()).map((g) => g.groupId),
+    );
+    const faltam = gruposUsados.filter((g) => !existentes.has(g));
+    if (faltam.length > 0) {
+      throw new ErroFluigctl(
+        `o diagrama atribui tarefas ${faltam.length > 1 ? 'aos grupos' : 'ao grupo'} ${faltam.map((g) => `"${g}"`).join(', ')}, ` +
+          `que não existe${faltam.length > 1 ? 'm' : ''} em ${url}. Sem ${faltam.length > 1 ? 'eles' : 'ele'}, a versão nova ficaria presa em edição. ` +
+          `Crie antes: ${faltam.map((g) => `fluigctl group add ${g} --server ${opcoes.nomeServidor ?? '<servidor>'}`).join(' ; ')}`,
+        6,
+      );
+    }
+  }
 
   const formId = resolverFormId(previa.cardIndex, await listarFormularios());
   const bpmnVersion = existe ? bpmnVersionDe(await cliente.exportProcess(processId)) : undefined;

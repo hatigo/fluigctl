@@ -366,6 +366,30 @@ does not, the release fails or the task goes unassigned. Stop and ask the human,
 who may create the group on that server. **Never substitute `admin`, the
 requester or any other user.**
 
+## Groups and process versions
+
+What used to need the Fluig admin panel:
+
+```sh
+fluigctl group ls --server <servidor>
+fluigctl group show <grupo> --server <servidor>
+fluigctl group add <grupo> --server <servidor> [--description D] [--dry-run]
+fluigctl group add-member <grupo> <login> --server <servidor> [--dry-run]
+fluigctl process versions <processId> --server <servidor>
+fluigctl process release <processId> --server <servidor> [--dry-run]
+```
+
+- **Writes change the server.** Creating a group, adding a member and
+  releasing a version are server changes. Ask the human before each one, even
+  on a disposable server. Production goes through the same guard as pushes.
+- **Never swap the group.** When `push diagram` refuses because a group used by
+  the diagram does not exist, the answer is to create that group (with the
+  human's go-ahead). Never point the task at another group, at `admin` or at
+  the requester.
+- **Versions.** `process versions` shows which version runs and which ones were
+  left in edition by a failed release. The Fluig has no operation to discard
+  one; `process release` releases the newest one in edition.
+
 ## Pulling from a server
 
 When someone published straight to the server and the repository is behind,

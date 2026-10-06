@@ -15,6 +15,8 @@ import {
 import { addServer, listServers, removeServer, setProd } from './commands/server.js';
 import { serverUi } from './commands/server-ui.js';
 import { checarDiagrama } from './diagram/check.js';
+import { adicionarMembro, criarGrupo, listarGrupos, verGrupo } from './commands/group.js';
+import { liberarVersao, versoesDoProcesso } from './commands/process-versions.js';
 import { estado as estadoDaSkill, instalarSkill, origensDasSkills, removerSkill } from './commands/skill.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushDiagram } from './commands/push-diagram.js';
@@ -68,6 +70,16 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl diagram open <arquivo.process> [--no-open] [--foreground]
       abre no navegador um visualizador local que acompanha mudanças no arquivo
   fluigctl diagram close <arquivo.process>
+  fluigctl group ls --server <nome>
+  fluigctl group show <grupo> --server <nome>
+  fluigctl group add <grupo> --server <nome> [--description D] [--dry-run]
+  fluigctl group add-member <grupo> <login> --server <nome> [--dry-run]
+      grupos sem o painel do Fluig: listar, ver os membros, criar e pôr alguém
+
+  fluigctl process versions <processId> --server <nome>
+  fluigctl process release <processId> --server <nome> [--dry-run]
+      as versões do processo (qual roda, quais ficaram em edição) e liberar a em edição
+
   fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json]
       confere um .process editado fora do Studio: referências do Graphiti,
       fluxos x formas, e o padrão de recuperação das service tasks
@@ -760,6 +772,7 @@ async function pushDiagramCli(argv: string[]): Promise<void> {
 
   const r = await pushDiagram({
     server: servidor,
+    nomeServidor: values.server,
     arquivo,
     dryRun: values['dry-run'],
     ...(values['save-xml'] === undefined ? {} : { salvarXml: values['save-xml'] }),
@@ -1013,6 +1026,89 @@ function comandoSkill(argv: string[]): void {
   if (values['dry-run']) console.log('[dry-run] Nada foi removido.');
 }
 
+async function comandoGroup(argv: string[]): Promise<void> {
+  const sub = argv[0];
+  const uso =
+    'uso: fluigctl group ls --server <nome>\n' +
+    '     fluigctl group show <grupo> --server <nome>\n' +
+    '     fluigctl group add <grupo> --server <nome> [--description D] [--dry-run]\n' +
+    '     fluigctl group add-member <grupo> <login> --server <nome> [--dry-run]';
+  const { values, positionals } = parseArgs({
+    args: argv.slice(1),
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      description: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+  if (!values.server || !sub) throw new ErroFluigctl(uso, 2);
+  const servidor = resolveServer(loadConfig(), values.server);
+  const o = { server: servidor, senha: resolvePassword(servidor), prompt: promptPassword };
+  const alvo = `${values.server} (${serverUrl(servidor)})`;
+  const dry = values['dry-run'];
+
+  if (sub === 'ls') {
+    const grupos = await listarGrupos(o);
+    if (grupos.length === 0) console.log(`nenhum grupo em ${alvo}`);
+    for (const g of grupos.sort((a, b) => a.groupId.localeCompare(b.groupId))) console.log(`${g.groupId}${g.descricao && g.descricao !== g.groupId ? `  ${g.descricao}` : ''}`);
+    return;
+  }
+  const grupo = positionals[0];
+  if (!grupo) throw new ErroFluigctl(uso, 2);
+  if (sub === 'show') {
+    const r = await verGrupo(o, grupo);
+    console.log(`${r.grupo.groupId}  ${r.grupo.descricao}`);
+    console.log(r.membros.length ? r.membros.map((m) => `  ${m}`).join('\n') : '  (sem membros)');
+    return;
+  }
+  if (sub === 'add') {
+    const r = await criarGrupo(o, grupo, values.description ?? grupo, dry);
+    if (r.jaExistia) console.log(`o grupo ${grupo} já existe em ${alvo}; nada foi feito`);
+    else if (dry) console.log(`[dry-run] o grupo ${grupo} seria criado em ${alvo}. Nada foi enviado.`);
+    else console.log(`grupo ${grupo} criado em ${alvo} (conferido na lista do servidor)`);
+    return;
+  }
+  if (sub === 'add-member') {
+    const usuario = positionals[1];
+    if (!usuario) throw new ErroFluigctl(uso, 2);
+    const r = await adicionarMembro(o, grupo, usuario, dry);
+    if (r.jaEstava) console.log(`${usuario} (${r.colleagueId}) já está no grupo ${grupo}; nada foi feito`);
+    else if (dry) console.log(`[dry-run] ${usuario} (${r.colleagueId}) entraria no grupo ${grupo} em ${alvo}. Nada foi enviado.`);
+    else console.log(`${usuario} (${r.colleagueId}) entrou no grupo ${grupo} (conferido no servidor)`);
+    return;
+  }
+  throw new ErroFluigctl(uso, 2);
+}
+
+async function comandoProcess(argv: string[]): Promise<void> {
+  const sub = argv[0];
+  const uso =
+    'uso: fluigctl process versions <processId> --server <nome>\n' +
+    '     fluigctl process release <processId> --server <nome> [--dry-run]';
+  const { values, positionals } = parseArgs({
+    args: argv.slice(1),
+    allowPositionals: true,
+    options: { server: { type: 'string', short: 's' }, 'dry-run': { type: 'boolean', default: false } },
+  });
+  const processId = positionals[0];
+  if (!values.server || !processId || (sub !== 'versions' && sub !== 'release')) throw new ErroFluigctl(uso, 2);
+  const servidor = resolveServer(loadConfig(), values.server);
+  const o = { server: servidor, senha: resolvePassword(servidor), prompt: promptPassword };
+  if (sub === 'versions') {
+    const versoes = await versoesDoProcesso(o, processId);
+    if (versoes.length === 0) throw new ErroFluigctl(`o processo "${processId}" não existe em ${serverUrl(servidor)}`, 6);
+    for (const v of versoes) {
+      const estado = v.emUso ? 'em uso (liberada)' : v.emEdicao ? 'em edição' : v.ativa ? 'liberada' : 'antiga';
+      console.log(`v${v.versao}  ${estado}${v.bloqueada ? ', bloqueada' : ''}`);
+    }
+    return;
+  }
+  const r = await liberarVersao(o, processId, values['dry-run']);
+  if (values['dry-run']) console.log(`[dry-run] a versão ${r.versao} de ${processId} seria liberada. Nada foi enviado.`);
+  else console.log(`versão ${r.versao} de ${processId} liberada${r.mensagem ? ` — ${r.mensagem.slice(0, 200)}` : ''}`);
+}
+
 async function comandoDiagram(argv: string[]): Promise<void> {
   const sub = argv[0];
   const uso =
@@ -1111,6 +1207,8 @@ async function main(argv: string[]): Promise<void> {
   if (comando === 'server') return comandoServer(argv.slice(1));
   if (comando === 'skill') return comandoSkill(argv.slice(1));
   if (comando === 'diagram') return comandoDiagram(argv.slice(1));
+  if (comando === 'group') return comandoGroup(argv.slice(1));
+  if (comando === 'process') return comandoProcess(argv.slice(1));
   if (comando === 'changed') return comandoChanged(argv.slice(1));
   if (comando === 'push') return comandoPush(argv.slice(1));
   if (comando === 'pull') return comandoPull(argv.slice(1));

@@ -16,7 +16,9 @@ export async function fluigSoapClient(
     | 'ECMCardIndexService'
     | 'ECMWorkflowEngineService'
     | 'ECMGlobalParamService'
-    | 'ECMBusinessPeriodService',
+    | 'ECMBusinessPeriodService'
+    | 'ECMGroupService'
+    | 'ECMColleagueGroupService',
 ): Promise<Client> {
   const endpoint = `${baseUrl}/webdesk/${servico}`;
   const cliente = await createClientAsync(`${endpoint}?wsdl`, { endpoint });
