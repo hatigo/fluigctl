@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { lerDiagrama } from '../push/diagram/modelo.js';
+import { lerDiagrama, type Caixa } from '../push/diagram/modelo.js';
 import { decodificarEntidades, escaparTexto } from '../push/diagram/xml.js';
+import { checarDiagrama, type Achado } from './check.js';
 
-export type MotivoConflito = 'elemento-removido' | 'nome-alterado' | 'arquivo-alterado' | 'sem-desfazer';
+export type MotivoConflito = 'elemento-removido' | 'nome-alterado' | 'arquivo-alterado' | 'sem-desfazer' | 'sem-refazer';
 
 export class ConflitoEdicao extends Error {
   constructor(
@@ -25,14 +26,32 @@ export class EdicaoInvalida extends Error {
   }
 }
 
-interface RegistroDesfazer {
+/**
+ * Histórico de edições do visualizador, por arquivo, fora do workspace.
+ *
+ * Desfazer guarda o texto de antes e o hash de depois: só desfaz enquanto o
+ * arquivo for exatamente o que a edição deixou. Refazer é o espelho. Uma edição
+ * nova esvazia o refazer, como em qualquer editor.
+ */
+interface Historico {
+  version: 2;
+  arquivo: string;
+  desfazer: { antes: string; hashDepois: string }[];
+  refazer: { depois: string; hashAntes: string }[];
+}
+
+/** A versão 1 guardava um único desfazer. */
+interface HistoricoV1 {
   version: 1;
   arquivo: string;
   hashDepois: string;
   antes: string;
 }
 
-const hash = (texto: string): string => createHash('sha256').update(texto).digest('hex');
+/** Arquivos grandes chegam a ~370 KB; 30 níveis cabem sem pesar no disco. */
+const NIVEIS = 30;
+
+export const hash = (texto: string): string => createHash('sha256').update(texto).digest('hex');
 
 /** XML 1.0: permite tab, LF e CR; rejeita controles, não caracteres Unicode normais. */
 export function validarNome(nome: string): void {
@@ -115,12 +134,87 @@ function caminhoDesfazer(arquivo: string, dir: string): string {
   return join(dir, `${createHash('sha256').update(resolve(arquivo)).digest('hex').slice(0, 24)}.undo.json`);
 }
 
-function salvarDesfazer(registro: RegistroDesfazer, dir: string): void {
+function salvarHistorico(registro: Historico, dir: string): void {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const caminho = caminhoDesfazer(registro.arquivo, dir);
   const tmp = `${caminho}.${process.pid}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(registro)}\n`, { encoding: 'utf8', mode: 0o600 });
   renameSync(tmp, caminho);
+}
+
+function lerHistorico(arquivo: string, dir: string): Historico {
+  const vazio: Historico = { version: 2, arquivo, desfazer: [], refazer: [] };
+  let bruto: Historico | HistoricoV1;
+  try {
+    bruto = JSON.parse(readFileSync(caminhoDesfazer(arquivo, dir), 'utf8')) as Historico | HistoricoV1;
+  } catch {
+    return vazio;
+  }
+  if (resolve(bruto.arquivo) !== arquivo) return vazio;
+  if (bruto.version === 1) return { ...vazio, desfazer: [{ antes: bruto.antes, hashDepois: bruto.hashDepois }] };
+  if (bruto.version !== 2 || !Array.isArray(bruto.desfazer) || !Array.isArray(bruto.refazer)) return vazio;
+  return bruto;
+}
+
+/** Erros de estrutura de um texto, como chaves comparáveis. */
+function errosDeEstrutura(texto: string): Set<string> {
+  return new Set(
+    checarDiagrama(texto)
+      .filter((a) => a.grupo === 'estrutura' && a.nivel === 'erro')
+      .map((a) => `${a.onde}: ${a.mensagem}`),
+  );
+}
+
+const chave = (a: Achado) => `${a.nivel} ${a.grupo} ${a.onde}: ${a.mensagem}`;
+
+export interface ResultadoAplicacao {
+  arquivo: string;
+  hash: string;
+  /** Achados do diagram check que a edição fez aparecer (desenho fora da receita, raia trocada...). */
+  avisos: Achado[];
+}
+
+/**
+ * O caminho de toda edição do visualizador.
+ *
+ * 1. Com `hashBase`, o arquivo tem de ser o que a tela mostrava; senão é conflito.
+ * 2. A edição é uma troca de texto: nada é reserializado.
+ * 3. O resultado precisa ser relido, e não pode ter erro de estrutura que o
+ *    arquivo não tinha antes (o `diagram check`); senão nada é gravado.
+ * 4. O arquivo é conferido de novo logo antes da escrita atômica, e a versão de
+ *    antes vai para o histórico.
+ */
+export function aplicarEdicao(
+  arquivoInformado: string,
+  undoDir: string,
+  transformar: (texto: string) => string,
+  hashBase?: string,
+): ResultadoAplicacao {
+  const arquivo = caminhoReal(arquivoInformado);
+  const antes = readFileSync(arquivo, 'utf8');
+  if (hashBase !== undefined && hash(antes) !== hashBase) {
+    throw new ConflitoEdicao('arquivo-alterado', 'o arquivo mudou desde que a tela foi desenhada; a tela já foi atualizada, tente de novo');
+  }
+  const depois = transformar(antes);
+  lerDiagrama(depois); // nunca grava um XML que o próprio visualizador não consiga reler
+
+  const errosAntes = errosDeEstrutura(antes);
+  const novos = [...errosDeEstrutura(depois)].filter((e) => !errosAntes.has(e));
+  if (novos.length > 0) {
+    throw new EdicaoInvalida(`a edição deixaria o arquivo inconsistente, e nada foi gravado: ${novos.slice(0, 3).join('; ')}`);
+  }
+  const achadosAntes = new Set(checarDiagrama(antes).map(chave));
+  const avisos = checarDiagrama(depois).filter((a) => a.grupo === 'padrao' && !achadosAntes.has(chave(a)));
+
+  if (readFileSync(arquivo, 'utf8') !== antes) {
+    throw new ConflitoEdicao('arquivo-alterado', 'o arquivo mudou durante o salvamento; tente novamente');
+  }
+  const historico = lerHistorico(arquivo, undoDir);
+  historico.desfazer = [...historico.desfazer, { antes, hashDepois: hash(depois) }].slice(-NIVEIS);
+  historico.refazer = [];
+  salvarHistorico(historico, undoDir);
+  gravarAtomico(arquivo, depois, statSync(arquivo).mode);
+  return { arquivo, hash: hash(depois), avisos };
 }
 
 export interface PedidoRenomear {
@@ -136,52 +230,200 @@ export interface ResultadoEdicao {
   id: string;
   nome: string;
   hash: string;
+  avisos: Achado[];
 }
 
 export function renomearElemento(pedido: PedidoRenomear): ResultadoEdicao {
-  const arquivo = caminhoReal(pedido.arquivo);
-  const antes = readFileSync(arquivo, 'utf8');
   // A leitura completa valida a estrutura e garante que o id é um objeto BPMN,
   // não um id homônimo de estilo ou Graphiti.
-  const diagrama = lerDiagrama(antes);
-  const objeto = diagrama.objetos.find((o) => o.attrs['id'] === pedido.id);
-  if (!objeto) throw new ConflitoEdicao('elemento-removido', `o elemento ${pedido.id} não existe mais`);
-  if (!Object.prototype.hasOwnProperty.call(objeto.attrs, 'name')) {
-    throw new EdicaoInvalida(`o elemento ${pedido.id} não possui atributo name`);
-  }
-  if (objeto.attrs['name'] !== pedido.nomeOriginal) {
-    throw new ConflitoEdicao('nome-alterado', `o nome de ${pedido.id} mudou enquanto você editava`, objeto.attrs['name']);
-  }
-
-  const depois = trocarNomeNoXml(antes, pedido.id, pedido.nomeOriginal, pedido.nomeNovo);
-  lerDiagrama(depois); // nunca grava um XML que o próprio visualizador não consiga reler
-  if (readFileSync(arquivo, 'utf8') !== antes) {
-    throw new ConflitoEdicao('arquivo-alterado', 'o arquivo mudou durante o salvamento; tente novamente');
-  }
-
-  salvarDesfazer({ version: 1, arquivo, hashDepois: hash(depois), antes }, pedido.undoDir);
-  gravarAtomico(arquivo, depois, statSync(arquivo).mode);
-  return { arquivo, id: pedido.id, nome: pedido.nomeNovo, hash: hash(depois) };
+  const verificar = (texto: string) => {
+    const objeto = lerDiagrama(texto).objetos.find((o) => o.attrs['id'] === pedido.id);
+    if (!objeto) throw new ConflitoEdicao('elemento-removido', `o elemento ${pedido.id} não existe mais`);
+    if (!Object.prototype.hasOwnProperty.call(objeto.attrs, 'name')) {
+      throw new EdicaoInvalida(`o elemento ${pedido.id} não possui atributo name`);
+    }
+    if (objeto.attrs['name'] !== pedido.nomeOriginal) {
+      throw new ConflitoEdicao('nome-alterado', `o nome de ${pedido.id} mudou enquanto você editava`, objeto.attrs['name']);
+    }
+    return trocarNomeNoXml(texto, pedido.id, pedido.nomeOriginal, pedido.nomeNovo);
+  };
+  const r = aplicarEdicao(pedido.arquivo, pedido.undoDir, verificar);
+  return { arquivo: r.arquivo, id: pedido.id, nome: pedido.nomeNovo, hash: r.hash, avisos: r.avisos };
 }
 
 export function desfazerUltimaEdicao(arquivoInformado: string, undoDir: string): ResultadoEdicao {
   const arquivo = caminhoReal(arquivoInformado);
-  const caminho = caminhoDesfazer(arquivo, undoDir);
-  let registro: RegistroDesfazer;
-  try {
-    registro = JSON.parse(readFileSync(caminho, 'utf8')) as RegistroDesfazer;
-  } catch {
-    throw new ConflitoEdicao('sem-desfazer', 'não há edição do visualizador para desfazer');
-  }
-  if (registro.version !== 1 || resolve(registro.arquivo) !== arquivo) {
-    throw new ConflitoEdicao('sem-desfazer', 'o registro de desfazer não pertence a este arquivo');
-  }
+  const historico = lerHistorico(arquivo, undoDir);
+  const passo = historico.desfazer.at(-1);
+  if (!passo) throw new ConflitoEdicao('sem-desfazer', 'não há edição do visualizador para desfazer');
   const atual = readFileSync(arquivo, 'utf8');
-  if (hash(atual) !== registro.hashDepois) {
+  if (hash(atual) !== passo.hashDepois) {
     throw new ConflitoEdicao('arquivo-alterado', 'o arquivo mudou depois da edição; desfazer apagaria essas mudanças');
   }
-  lerDiagrama(registro.antes);
-  gravarAtomico(arquivo, registro.antes, statSync(arquivo).mode);
-  rmSync(caminho, { force: true });
-  return { arquivo, id: '', nome: '', hash: hash(registro.antes) };
+  lerDiagrama(passo.antes);
+  historico.desfazer.pop();
+  historico.refazer.push({ depois: atual, hashAntes: hash(passo.antes) });
+  salvarHistorico(historico, undoDir);
+  gravarAtomico(arquivo, passo.antes, statSync(arquivo).mode);
+  return { arquivo, id: '', nome: '', hash: hash(passo.antes), avisos: [] };
+}
+
+export function refazerEdicao(arquivoInformado: string, undoDir: string): ResultadoEdicao {
+  const arquivo = caminhoReal(arquivoInformado);
+  const historico = lerHistorico(arquivo, undoDir);
+  const passo = historico.refazer.at(-1);
+  if (!passo) throw new ConflitoEdicao('sem-refazer', 'não há edição desfeita para refazer');
+  const atual = readFileSync(arquivo, 'utf8');
+  if (hash(atual) !== passo.hashAntes) {
+    throw new ConflitoEdicao('arquivo-alterado', 'o arquivo mudou depois do desfazer; refazer apagaria essas mudanças');
+  }
+  lerDiagrama(passo.depois);
+  historico.refazer.pop();
+  historico.desfazer.push({ antes: atual, hashDepois: hash(passo.depois) });
+  salvarHistorico(historico, undoDir);
+  gravarAtomico(arquivo, passo.depois, statSync(arquivo).mode);
+  return { arquivo, id: '', nome: '', hash: hash(passo.depois), avisos: [] };
+}
+
+/** Uma forma de topo do pictograma: onde está a tag do seu primeiro graphicsAlgorithm. */
+interface FormaNoTexto {
+  inicio: number;
+  tag: string;
+}
+
+const TOKEN = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*"[^"]*")*)\s*(\/?)>/g;
+
+/**
+ * Acha, sem reserializar, a tag `graphicsAlgorithm` de cada forma de topo do
+ * `pi:Diagram` (filho direto), pelo id do objeto no `<link>`. Formas aninhadas
+ * (raias dentro da pool) ficam de fora: as coordenadas delas são relativas.
+ */
+export function formasDeTopo(xml: string): Map<string, FormaNoTexto> {
+  const formas = new Map<string, FormaNoTexto>();
+  const pilha: string[] = [];
+  let nivelDiagrama = -1;
+  let atual: { ga?: FormaNoTexto; id?: string | undefined } | undefined;
+  for (const m of xml.matchAll(TOKEN)) {
+    const [inteiro, fecha, nome] = m;
+    if (nome === undefined) continue; // comentário ou declaração
+    const vazia = m[4] === '/';
+    if (fecha) {
+      pilha.pop();
+      if (atual && nome === 'children' && pilha.length === nivelDiagrama + 1) {
+        if (atual.id && atual.ga) formas.set(atual.id, atual.ga);
+        atual = undefined;
+      }
+      if (nome === 'pi:Diagram') nivelDiagrama = -1;
+      continue;
+    }
+    const profundidade = pilha.length;
+    if (nome === 'pi:Diagram') nivelDiagrama = profundidade;
+    else if (nivelDiagrama >= 0 && profundidade === nivelDiagrama + 1 && nome === 'children') atual = {};
+    else if (atual && profundidade === nivelDiagrama + 2) {
+      if (nome === 'graphicsAlgorithm' && !atual.ga) atual.ga = { inicio: m.index, tag: inteiro };
+      if (nome === 'link') atual.id = /\sbusinessObjects="([^"]*)"/.exec(inteiro)?.[1];
+    }
+    if (!vazia) pilha.push(nome);
+  }
+  return formas;
+}
+
+/** O Studio omite x/y quando valem 0; o resto vai logo depois de height. */
+function trocarCoordenada(tag: string, attr: 'x' | 'y', valor: number): string {
+  const existente = new RegExp(`\\s${attr}="-?\\d+"`);
+  if (valor === 0) return tag.replace(existente, '');
+  if (existente.test(tag)) return tag.replace(existente, ` ${attr}="${valor}"`);
+  if (attr === 'y' && / x="-?\d+"/.test(tag)) return tag.replace(/( x="-?\d+")/, `$1 y="${valor}"`);
+  if (/ height="\d+"/.test(tag)) return tag.replace(/( height="\d+")/, `$1 ${attr}="${valor}"`);
+  return tag.replace(/\s*(\/?)>$/, ` ${attr}="${valor}"$1>`);
+}
+
+const TIPOS_FIXOS = new Set(['BpmnPool', 'BpmnSwimLane']);
+
+export interface PedidoMover {
+  arquivo: string;
+  id: string;
+  dx: number;
+  dy: number;
+  /** Hash do texto que a tela mostrava. */
+  hashBase: string;
+  undoDir: string;
+}
+
+export interface ResultadoMover extends ResultadoAplicacao {
+  /** Ids que andaram: o elemento e os eventos de erro presos a ele. */
+  movidos: string[];
+  raiaAntes?: string | undefined;
+  raiaDepois?: string | undefined;
+}
+
+function raiaEm(caixas: Map<string, Caixa>, raias: string[], c: Caixa): string | undefined {
+  const cy = c.absY + c.altura / 2;
+  return raias.find((r) => {
+    const l = caixas.get(r);
+    return l !== undefined && cy >= l.absY && cy < l.absY + l.altura;
+  });
+}
+
+/** Desloca uma forma de topo (e os eventos de erro anexados a ela) por dx/dy, sem tocar no resto. */
+export function moverNoXml(xml: string, id: string, dx: number, dy: number): { xml: string; movidos: string[] } {
+  if (![dx, dy].every((d) => Number.isInteger(d) && Math.abs(d) <= 20000)) {
+    throw new EdicaoInvalida('o deslocamento precisa ser um número inteiro de pixels');
+  }
+  const diagrama = lerDiagrama(xml);
+  const objeto = diagrama.objetos.find((o) => o.attrs['id'] === id);
+  if (!objeto) throw new ConflitoEdicao('elemento-removido', `o elemento ${id} não existe mais`);
+  if (TIPOS_FIXOS.has(objeto.tipo)) throw new EdicaoInvalida('pool e raias não se movem por aqui');
+  const formas = formasDeTopo(xml);
+  if (!formas.has(id)) throw new EdicaoInvalida(`o elemento ${id} não é uma forma solta no diagrama, e não se move por aqui`);
+
+  const anexados = diagrama.objetos
+    .filter((o) => o.tipo === 'BpmnIntermediateEvent' && o.attrs['parentTask'] === id && o.attrs['id'] && formas.has(o.attrs['id']))
+    .map((o) => o.attrs['id']!);
+  const movidos = [id, ...anexados];
+
+  const pool = diagrama.objetos.find((o) => o.tipo === 'BpmnPool')?.attrs['id'];
+  const limites = pool ? diagrama.caixas.get(pool) : undefined;
+  for (const m of movidos) {
+    const c = diagrama.caixas.get(m)!;
+    const x = c.absX + dx;
+    const y = c.absY + dy;
+    if (x < 0 || y < 0) throw new EdicaoInvalida('o elemento sairia da área do diagrama');
+    // Evento de erro pode sobrar para fora da borda do card; o card em si fica dentro da pool.
+    if (limites && m === id && (x < limites.absX || y < limites.absY || x + c.largura > limites.absX + limites.largura || y + c.altura > limites.absY + limites.altura)) {
+      throw new EdicaoInvalida('o elemento sairia da pool; aumente a pool ou escolha outra posição');
+    }
+  }
+
+  // Do fim para o começo, para os índices do texto continuarem válidos.
+  const trocas = movidos
+    .map((m) => ({ forma: formas.get(m)!, caixa: diagrama.caixas.get(m)! }))
+    .sort((a, b) => b.forma.inicio - a.forma.inicio);
+  let novo = xml;
+  for (const { forma, caixa } of trocas) {
+    const tag = trocarCoordenada(trocarCoordenada(forma.tag, 'x', caixa.x + dx), 'y', caixa.y + dy);
+    novo = novo.slice(0, forma.inicio) + tag + novo.slice(forma.inicio + forma.tag.length);
+  }
+  return { xml: novo, movidos };
+}
+
+export function moverElemento(pedido: PedidoMover): ResultadoMover {
+  let movidos: string[] = [];
+  let raiaAntes: string | undefined;
+  let raiaDepois: string | undefined;
+  const r = aplicarEdicao(pedido.arquivo, pedido.undoDir, (texto) => {
+    const feito = moverNoXml(texto, pedido.id, pedido.dx, pedido.dy);
+    movidos = feito.movidos;
+    const raias = (t: string) => {
+      const d = lerDiagrama(t);
+      const ids = d.objetos.filter((o) => o.tipo === 'BpmnSwimLane').map((o) => o.attrs['id']!).filter(Boolean);
+      const c = d.caixas.get(pedido.id);
+      const nome = (rid: string | undefined) => (rid ? d.objetos.find((o) => o.attrs['id'] === rid)?.attrs['name'] ?? rid : undefined);
+      return c ? nome(raiaEm(d.caixas, ids, c)) : undefined;
+    };
+    raiaAntes = raias(texto);
+    raiaDepois = raias(feito.xml);
+    return feito.xml;
+  }, pedido.hashBase);
+  return { ...r, movidos, raiaAntes, raiaDepois };
 }

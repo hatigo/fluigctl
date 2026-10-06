@@ -51,7 +51,7 @@ test('renomear pelo endpoint grava no arquivo aberto e o estado acompanha', asyn
   try {
     const r = await postar(v.url, 'rename', { id: 'task5', nomeOriginal: 'Preencher > revisar', nomeNovo: 'Preencher e revisar' });
     assert.equal(r.status, 200);
-    assert.deepEqual(r.dados, { ok: true, nome: 'Preencher e revisar' });
+    assert.deepEqual(r.dados, { ok: true, nome: 'Preencher e revisar', avisos: [] });
     assert.equal(nomeNoArquivo(p.arquivo, 'task5'), 'Preencher e revisar');
     await esperar(() => v.estado().elementos.find((x) => x.id === 'task5')?.nome === 'Preencher e revisar');
     assert.match(readFileSync(p.arquivo, 'utf8'), /name="Preencher e revisar"/);

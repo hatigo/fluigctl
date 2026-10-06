@@ -107,15 +107,27 @@ session, but do not publish it in logs, issues or commits. When they ask to stop
 fluigctl diagram close workflow/diagrams/<processo>.process
 ```
 
-The human can also rename an element from the property panel, which writes the
-`.process` directly. That is the only edit the viewer makes. If they do it, expect
-the file to change under you: re-read it before your next write, so you do not
-overwrite their rename. Concurrency is handled per element name — the viewer
-refuses to save when the name it started from is no longer there — but your own
-writes have no such protection.
+The viewer has an **edit mode** that the human turns on with **Editar**. In it
+they can rename an element from the property panel and move tasks, events and
+gateways, by dragging or with the arrow keys. An attached error event moves with
+its task. Every edit writes the `.process` directly and goes through the same
+safeguards:
+- **Hash check.** The edit only applies to the text the screen was drawn from.
+  If the file changed, the edit is refused and the screen refreshes.
+- **Text patch.** The change touches only the attribute being edited (`name`, or
+  a shape's `x`/`y`). Nothing else in the file is rewritten.
+- **Structure check.** `diagram check` must find no structural error that the
+  file did not already have.
+- **Atomic write.**
+- **Undo and redo** (`Ctrl+Z` / `Ctrl+Shift+Z`), up to 30 levels. They refuse
+  once someone else has written to the file.
 
-This viewer is read-only except for renaming an element from the property panel.
-Do not claim that the human can otherwise edit the diagram in this version.
+If the human edits, expect the file to change under you. Re-read it before your
+next write, so you do not overwrite their edit. Your own writes have none of
+these protections. Outside edit mode the viewer is read-only.
+
+Do not claim the viewer can do more than this. Adding, connecting or removing
+elements, routing flows and editing properties are not built yet.
 
 ## Pushing
 
