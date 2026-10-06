@@ -27,13 +27,16 @@ import { blobDeAtribuicao, codificarAtributo, estiloDoArquivo, trocarAtributosNa
  * novo no diagram check.
  */
 
-export type TipoNovo = 'humana' | 'servico' | 'gateway' | 'fim' | 'recuperacao';
+export type TipoNovo = 'humana' | 'servico' | 'gateway' | 'fim' | 'inicio' | 'paralelo' | 'juncao' | 'recuperacao';
 
 const TIPOS: Record<Exclude<TipoNovo, 'recuperacao'> | 'erro', { tipo: string; type: string; prefixo: string; nome: string }> = {
   humana: { tipo: 'BpmnTask', type: '80', prefixo: 'task', nome: 'Nova tarefa' },
   servico: { tipo: 'BpmnTask', type: '82', prefixo: 'servicetask', nome: 'Nova service task' },
   gateway: { tipo: 'BpmnGateway', type: '120', prefixo: 'exclusivegateway', nome: 'Decisão?' },
   fim: { tipo: 'BpmnEndEvent', type: '60', prefixo: 'endevent', nome: 'Fim' },
+  inicio: { tipo: 'BpmnStartEvent', type: '10', prefixo: 'startevent', nome: 'Início' },
+  paralelo: { tipo: 'BpmnGateway', type: '126', prefixo: 'parallelgateway', nome: 'Paralelo' },
+  juncao: { tipo: 'BpmnGateway', type: '127', prefixo: 'joingateway', nome: 'Junção' },
   erro: { tipo: 'BpmnIntermediateEvent', type: '43', prefixo: 'intermediateerror', nome: 'Erro' },
 };
 
@@ -219,7 +222,7 @@ export function criarNoXml(xml: string, c: Criacao): { xml: string; id: string }
     ...(c.tipo === 'servico'
       ? { scriptFileName: `${idDoProcesso(d)}.${id}.js`, attachedEvents: null, executionType: '1', managerMechanism: '', managerAssignmentControllerString: null }
       : {}),
-    ...(c.tipo === 'gateway' ? { condition: '<list/>' } : {}),
+    ...(c.tipo === 'gateway' || c.tipo === 'paralelo' || c.tipo === 'juncao' ? { condition: '<list/>' } : {}),
     ...(c.tipo === 'erro' ? { parentTask: null, linkId: null, sequenceAttached: null } : {}),
     ...(c.atributos ?? {}),
   };
@@ -335,7 +338,7 @@ export interface PedidoAdicionar {
  */
 export function adicionarNoXml(xml: string, p: PedidoAdicionar): { xml: string; criados: string[] } {
   if (![p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n < 100000)) throw new EdicaoInvalida('posição inválida');
-  if (!['humana', 'servico', 'gateway', 'fim', 'recuperacao'].includes(p.tipo)) throw new EdicaoInvalida(`tipo desconhecido: ${p.tipo}`);
+  if (!['humana', 'servico', 'gateway', 'fim', 'inicio', 'paralelo', 'juncao', 'recuperacao'].includes(p.tipo)) throw new EdicaoInvalida(`tipo desconhecido: ${p.tipo}`);
   const d = lerDiagrama(xml);
   const nome = (p.nome ?? '').trim() || (p.tipo === 'recuperacao' ? TIPOS.servico.nome : TIPOS[p.tipo].nome);
 
@@ -348,7 +351,8 @@ export function adicionarNoXml(xml: string, p: PedidoAdicionar): { xml: string; 
   const { w, h } = tamanho(modeloPara(xml, d, tipoBase).forma);
   // No gateway, o (x, y) é o centro do losango, que é o quadrado de cima da forma.
   const x = Math.round(p.x - w / 2);
-  const y = Math.round(p.y - (tipoBase === 'gateway' ? w / 2 : h / 2));
+  const ehGateway = tipoBase === 'gateway' || tipoBase === 'paralelo' || tipoBase === 'juncao';
+  const y = Math.round(p.y - (ehGateway ? w / 2 : h / 2));
   if (!dentro(x, y, w, h)) throw new EdicaoInvalida('o elemento ficaria fora da pool; escolha um ponto dentro dela');
 
   let r = criarNoXml(xml, { tipo: tipoBase, nome, x, y });

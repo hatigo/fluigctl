@@ -125,7 +125,8 @@ they can:
 
   Assignment and condition blobs are only rewritten in Studio's exact format.
   When the panel cannot round-trip one, it shows it read-only.
-- add elements from the "+ Adicionar…" menu: human task, gateway, end, a lone
+- add elements from the "+ Adicionar…" menu: human task, exclusive gateway,
+  parallel gateway and parallel join, start, end, a lone
   service task, or a **service task with recovery**. The last one creates the
   whole recovery pattern at once: the task, the error event, the handling task
   in `suporte_processos`, and both flows. A new service task gets its script at
