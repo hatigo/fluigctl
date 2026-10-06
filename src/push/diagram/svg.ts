@@ -87,11 +87,22 @@ const CONTORNO: Record<string, string> = {
 };
 
 /** Ponto onde a reta do centro de `c` até `alvo` sai da caixa (âncora "chopbox"). */
-function borda(c: Caixa, alvo: Ponto): Ponto {
+function borda(c: Caixa, alvo: Ponto, forma?: Forma): Ponto {
   const m = centro(c);
   const dx = alvo.x - m.x;
   const dy = alvo.y - m.y;
   if (dx === 0 && dy === 0) return m;
+
+  // Um evento é visualmente circular. Usar o chopbox retangular dele faz a
+  // conexão diagonal começar no canto invisível da caixa e parecer solta da
+  // bolinha. A interseção com a elipse prende a linha na circunferência.
+  if (forma === 'inicio' || forma === 'fim' || forma === 'intermediario') {
+    const rx = c.largura / 2;
+    const ry = c.altura / 2;
+    const s = Math.min(1, 1 / Math.sqrt((dx / rx) ** 2 + (dy / ry) ** 2));
+    return { x: Math.round(m.x + dx * s), y: Math.round(m.y + dy * s) };
+  }
+
   const sx = dx === 0 ? Infinity : c.largura / 2 / Math.abs(dx);
   const sy = dy === 0 ? Infinity : c.altura / 2 / Math.abs(dy);
   const s = Math.min(sx, sy, 1);
@@ -185,11 +196,13 @@ export function pontosDoFluxo(diagrama: Diagrama, fluxo: ObjetoBpmn): Ponto[] | 
   const caixaOrigem = diagrama.caixas.get(fluxo.attrs['sourceRef'] ?? '');
   const caixaDestino = diagrama.caixas.get(fluxo.attrs['targetRef'] ?? '');
   if (!caixaOrigem || !caixaDestino) return undefined;
-  const origem = figura(objeto(fluxo.attrs['sourceRef']), caixaOrigem);
-  const destino = figura(objeto(fluxo.attrs['targetRef']), caixaDestino);
+  const objetoOrigem = objeto(fluxo.attrs['sourceRef']);
+  const objetoDestino = objeto(fluxo.attrs['targetRef']);
+  const origem = figura(objetoOrigem, caixaOrigem);
+  const destino = figura(objetoDestino, caixaDestino);
   const meio = diagrama.dobras.get(fluxo.attrs['id'] ?? '') ?? [];
-  const inicio = borda(origem, meio[0] ?? centro(destino));
-  const fim = borda(destino, meio.at(-1) ?? centro(origem));
+  const inicio = borda(origem, meio[0] ?? centro(destino), formaDe(objetoOrigem ?? { tipo: '', attrs: {} }));
+  const fim = borda(destino, meio.at(-1) ?? centro(origem), formaDe(objetoDestino ?? { tipo: '', attrs: {} }));
   return [inicio, ...meio, fim];
 }
 
