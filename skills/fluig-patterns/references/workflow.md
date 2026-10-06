@@ -274,6 +274,13 @@ an error.
     and shows only a red icon. Shape labels use `<fonts name="Arial" size="8"
     bold="true"/>`, flow labels `<fonts name="Arial" size="8"/>`, both at the
     end of `pi:Diagram`. `diagram check --fix` adds what is missing.
+  - every `al:Polygon` has `<points>`. A gateway is drawn as Studio draws it:
+    an invisible `al:Rectangle` (`filled="false" lineVisible="false"`) whose
+    child is the 60x60 diamond, `<points y="30"/> <points x="30"/> <points
+    x="60" y="30"/> <points x="30" y="60"/> <points y="30"/>`, with the label
+    below it at `y="60"`. A polygon without points opens as a blank editor: the
+    flow anchor asks for the shape's outline and throws IndexOutOfBoundsException.
+    `diagram check --fix` redraws it.
   - A broken style or colour reference is only a warning: Studio writes some
     and still opens the file.
 - **Elements:** every element has an outgoing flow (except end events and link

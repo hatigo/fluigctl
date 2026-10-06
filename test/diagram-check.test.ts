@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { checarDiagrama, type Achado } from '../src/diagram/check.js';
 import { removerNoXml } from '../src/diagram/remove.js';
 import { garantirFontes, textosSemFonte } from '../src/diagram/fonts.js';
+import { garantirLosangos, poligonosSemPontos } from '../src/diagram/gateways.js';
 
 /**
  * O `diagram check` existe porque o agente edita o `.process` direto. Cada teste
@@ -146,4 +147,24 @@ test('texto sem fonte é erro de estrutura, e garantirFontes acerta como o Studi
   // Fonte quebrada também impede o Studio de abrir.
   const quebrada = trocar(CONTRATACAO, ' font="/0/@fonts.0" value="Aprovar"', ' font="/0/@fonts.7" value="Aprovar"');
   assert.match(erros(checarDiagrama(quebrada))[0]!.mensagem, /font aponta para \/0\/@fonts\.7/);
+});
+
+test('losango sem pontos é erro de estrutura, e garantirLosangos o redesenha como o Studio grava', () => {
+  // Como a contratação nasceu: o polígono era a própria forma e não tinha pontos.
+  const semPontos = CONTRATACAO.replace(
+    /<graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" filled="false" lineVisible="false" transparency="0.0" (width="\d+" height="\d+" x="\d+" y="\d+")>\n(\s*)<graphicsAlgorithmChildren xsi:type="al:Polygon" lineWidth="1" filled="true" transparency="0.0" width="60" height="60">(?:\n\s*<points[^>]*\/>)+\n\s*<\/graphicsAlgorithmChildren>/g,
+    '<graphicsAlgorithm xsi:type="al:Polygon" lineWidth="1" $1>\n$2<graphicsAlgorithmChildren xsi:type="al:Polygon" lineWidth="1"/>',
+  );
+  assert.equal(poligonosSemPontos(semPontos), 4);
+  assert.deepEqual(
+    [...new Set(erros(checarDiagrama(semPontos)).map((a) => a.mensagem.split(':')[0]))],
+    ['polígono sem pontos'],
+  );
+  // O reparo devolve exatamente o arquivo bom, e sem nada a fazer não mexe.
+  assert.equal(garantirLosangos(semPontos), CONTRATACAO);
+  assert.equal(garantirLosangos(CONTRATACAO), CONTRATACAO);
+  // Os diagramas do Studio passam: os pontos dos gateways paralelos ficam depois das polilinhas.
+  for (const f of ['studioTeste.process', 'processoTeste.process', 'subprocessoTeste.process']) {
+    assert.equal(poligonosSemPontos(fixture(f)), 0, f);
+  }
 });

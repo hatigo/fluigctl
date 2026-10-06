@@ -1,4 +1,5 @@
 import { garantirFontes } from './fonts.js';
+import { garantirLosangos } from './gateways.js';
 import { basename, dirname, join } from 'node:path';
 
 import { lerDiagrama, type Diagrama, type ObjetoBpmn } from '../push/diagram/modelo.js';
@@ -235,9 +236,9 @@ export function criarNoXml(xml: string, c: Criacao): { xml: string; id: string }
   novo = acrescentarAoDiagrama(novo, `/0/@children.${indice}/@link`);
   const doArquivo = d.objetos.some((o) => o.attrs['id'] === modelo.id);
   novo = inserirModelo(novo, tag, doArquivo ? modelo.id : undefined, false);
-  // Texto sem fonte impede o Studio de abrir: o que entra sai com fonte, e o
-  // arquivo inteiro é acertado junto (veja fonts.ts).
-  return { xml: garantirFontes(novo), id };
+  // Texto sem fonte e losango sem pontos impedem o Studio de abrir: o que entra
+  // sai certo, e o arquivo inteiro é acertado junto (veja fonts.ts e gateways.ts).
+  return { xml: garantirLosangos(garantirFontes(novo)), id };
 }
 
 function anexarALista(xml: string, id: string, attr: 'incoming' | 'outgoing', valor: string): string {
@@ -319,9 +320,9 @@ export function ligarNoXml(xml: string, origem: string, destino: string, nome = 
   novo = inserirModelo(novo, tag, ultimoFluxo, true);
   novo = anexarALista(novo, origem, 'outgoing', id);
   novo = anexarALista(novo, destino, 'incoming', id);
-  // Texto sem fonte impede o Studio de abrir: o que entra sai com fonte, e o
-  // arquivo inteiro é acertado junto (veja fonts.ts).
-  return { xml: garantirFontes(novo), id };
+  // Texto sem fonte e losango sem pontos impedem o Studio de abrir: o que entra
+  // sai certo, e o arquivo inteiro é acertado junto (veja fonts.ts e gateways.ts).
+  return { xml: garantirLosangos(garantirFontes(novo)), id };
 }
 
 const GAP = 33;

@@ -51,6 +51,7 @@ import { ErroFluigctl } from './errors.js';
 import { abrirVisualizador, diretorioDeEstado, executarServidor, fecharVisualizador } from './diagram/viewer.js';
 import { aplicarEdicao } from './diagram/edit.js';
 import { garantirFontes, textosSemFonte } from './diagram/fonts.js';
+import { garantirLosangos, poligonosSemPontos } from './diagram/gateways.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -88,8 +89,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
 
   fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]
       confere um .process editado fora do Studio: referências do Graphiti,
-      fluxos x formas, textos sem fonte, elementos sem saída ou sem entrada, e o
-      padrão de recuperação das service tasks; --fix acrescenta as fontes que faltam
+      fluxos x formas, textos sem fonte, losangos sem pontos, elementos sem saída
+      ou sem entrada, e o padrão de recuperação das service tasks; --fix acrescenta
+      as fontes e os pontos que faltam
 
   fluigctl dataset run <nome> --server <nome> [--where campo=valor]... [--fields a,b]
                               [--order a,b] [--limit N] [--json]
@@ -1260,13 +1262,17 @@ async function comandoDiagram(argv: string[]): Promise<void> {
     const arquivo = positionals[0];
     if (!arquivo || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
     if (values.fix) {
-      // Só o reparo seguro: as fontes que faltam. Passa pelo histórico do
+      // Só os reparos seguros, que não mudam o desenho de ninguém: as fontes
+      // que faltam e os losangos sem pontos. Passa pelo histórico do
       // visualizador, então o Desfazer de lá volta o arquivo.
-      const faltam = textosSemFonte(readFileSync(arquivo, 'latin1'));
-      if (faltam === 0) console.log(`--fix: nenhum texto sem fonte em ${arquivo}`);
+      const antes = readFileSync(arquivo, 'latin1');
+      const fontes = textosSemFonte(antes);
+      const losangos = poligonosSemPontos(antes);
+      if (fontes === 0 && losangos === 0) console.log(`--fix: nada a reparar em ${arquivo}`);
       else {
-        aplicarEdicao(arquivo, join(diretorioDeEstado(), 'edicoes'), garantirFontes);
-        console.log(`--fix: fonte acrescentada em ${faltam} texto(s) de ${arquivo} (desfaz pelo visualizador)`);
+        aplicarEdicao(arquivo, join(diretorioDeEstado(), 'edicoes'), (xml) => garantirLosangos(garantirFontes(xml)));
+        const feito = [fontes ? `fonte em ${fontes} texto(s)` : '', losangos ? `pontos em ${losangos} polígono(s)` : ''].filter(Boolean).join(', ');
+        console.log(`--fix: ${feito} de ${arquivo} (desfaz pelo visualizador)`);
       }
     }
     const achados = checarDiagrama(readFileSync(arquivo, 'utf8'), {

@@ -100,6 +100,15 @@ function conferirEstrutura(raiz: No, diagrama: No, objetos: Map<string, ObjetoBp
     }
   }
 
+  // 0b. Todo polígono tem pontos. Sem eles o Studio abre o editor em branco: a
+  //     âncora do fluxo pede o contorno da forma e dá IndexOutOfBoundsException.
+  //     Nos 3.190 polígonos do acervo, todos têm.
+  for (const [no, caminho] of caminhoDe) {
+    if (/^graphicsAlgorithm(Children)?$/.test(no.nome) && no.attrs['xsi:type'] === 'al:Polygon' && filhos(no, 'points').length === 0) {
+      erro(caminho, 'polígono sem pontos: o Studio não desenha o diagrama (IndexOutOfBoundsException); fluigctl diagram check --fix redesenha o losango');
+    }
+  }
+
   // 1. Toda referência por caminho resolve.
   for (const [no, caminho] of caminhoDe) {
     for (const [attr, valor] of Object.entries(no.attrs)) {
