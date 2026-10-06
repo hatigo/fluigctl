@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, watch, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { homedir, platform } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -8,7 +8,18 @@ import { spawn } from 'node:child_process';
 import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
-import { ConflitoEdicao, EdicaoInvalida, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras } from './edit.js';
+import { ConflitoEdicao, EdicaoInvalida, aplicarEdicao, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras } from './edit.js';
+import {
+  MECANISMOS,
+  lerAtribuicao,
+  lerCondicoes,
+  tornarAutomaticaNoXml,
+  trocarAtribuicaoNoXml,
+  trocarCondicoesNoXml,
+  type Atribuicao,
+  type Condicao,
+  type CondicoesGateway,
+} from './props.js';
 
 export interface CampoAmigavel {
   rotulo: string;
@@ -36,7 +47,26 @@ export interface ElementoVisual {
   dobras?: Ponto[];
   /** Quantos fluxos entram ou saem: o "endireitar ligações" só aparece com ligação. */
   ligacoes: number;
+  /** O que o painel edita no modo de edição. */
+  propriedades?: Propriedades;
   geometria: GeometriaElemento;
+}
+
+export interface Saida {
+  fluxo: string;
+  destino: string;
+  nomeDestino: string;
+  rotulo: string;
+}
+
+export interface Propriedades {
+  /** Service task: o executionType gravado. */
+  execucao?: string;
+  /** Tarefa humana. */
+  atribuicao?: Atribuicao;
+  /** Gateway: as condições e as saídas a que elas podem apontar. */
+  condicoes?: CondicoesGateway;
+  saidas?: Saida[];
 }
 
 export interface EstadoVisualizador {
@@ -49,6 +79,14 @@ export interface EstadoVisualizador {
   revisao: number;
   /** Hash do texto desenhado: a edição só vale sobre o que a tela mostra. */
   hash: string;
+  /** Sugestões para o painel: atividades (Executor Atividade), mecanismos customizados e grupos já usados. */
+  sugestoes: Sugestoes;
+}
+
+export interface Sugestoes {
+  atividades: { id: string; nome: string }[];
+  mecanismos: string[];
+  grupos: string[];
 }
 
 export interface RegistroVisualizador {
@@ -161,6 +199,34 @@ export function elementosDoDiagrama(diagrama: Diagrama): ElementoVisual[] {
     }
     if (objeto.tipo === 'BpmnDocument') candidatos.push(campo('Documento', objeto.attrs['documentId']));
 
+    let propriedades: Propriedades | undefined;
+    const nomeDe = (alvo: string | undefined) => diagrama.objetos.find((o) => o.attrs['id'] === alvo)?.attrs['name'] || alvo || '';
+    if (objeto.tipo === 'BpmnTask' && objeto.attrs['type'] === '82') {
+      propriedades = { execucao: objeto.attrs['executionType'] ?? '' };
+      candidatos.push(campo('Execução', objeto.attrs['executionType'] === '1' ? 'Automática' : `executionType ${objeto.attrs['executionType'] ?? 'ausente'} (fora do padrão)`));
+    }
+    if (objeto.tipo === 'BpmnTask' && objeto.attrs['type'] === '80') {
+      const atribuicao = lerAtribuicao(objeto);
+      propriedades = { atribuicao };
+      const detalhe = Object.entries(atribuicao.campos)
+        .map(([k, v]) => (k === 'idNode' ? nomeDe(v) : k === 'returns' ? ({ '0': 'primeiro executor', '1': 'último executor', '2': 'todos' })[v] ?? v : v))
+        .filter(Boolean)
+        .join(', ');
+      if (detalhe) candidatos.push(campo('Atribuído a', detalhe));
+    }
+    if (objeto.tipo === 'BpmnGateway') {
+      const saidas: Saida[] = diagrama.objetos
+        .filter((f) => f.tipo === 'SequenceFlow' && f.attrs['sourceRef'] === id)
+        .map((f) => ({ fluxo: f.attrs['id'] ?? '', destino: f.attrs['targetRef'] ?? '', nomeDestino: nomeDe(f.attrs['targetRef']), rotulo: f.attrs['name'] ?? '' }));
+      const condicoes = lerCondicoes(objeto);
+      propriedades = { condicoes, saidas };
+      const operador = (o: string) => ({ '1': '=', '2': '≠' })[o] ?? `operador ${o}`;
+      for (const c of condicoes.condicoes) {
+        const regra = c.tipo === 'regra' ? c.regras.map((r) => `${r.campo} ${operador(r.operador)} "${r.valor}"`).join(' e ') : c.expressao;
+        candidatos.push(campo(`Para ${nomeDe(c.destino)}`, regra));
+      }
+    }
+
     const geometria: GeometriaElemento = {};
     if (caixa) {
       geometria.caixa = { x: caixa.absX, y: caixa.absY, largura: caixa.largura, altura: caixa.altura };
@@ -185,6 +251,7 @@ export function elementosDoDiagrama(diagrama: Diagrama): ElementoVisual[] {
         .filter((o) => o.tipo === 'BpmnIntermediateEvent' && o.attrs['parentTask'] === id && o.attrs['id'])
         .map((o) => o.attrs['id']!),
       ...(ehFluxo ? { dobras: diagrama.dobras.get(id) ?? [] } : {}),
+      ...(propriedades ? { propriedades } : {}),
       ligacoes: diagrama.objetos.filter((o) => o.tipo === 'SequenceFlow' && (o.attrs['sourceRef'] === id || o.attrs['targetRef'] === id)).length,
       geometria,
     });
@@ -192,9 +259,39 @@ export function elementosDoDiagrama(diagrama: Diagrama): ElementoVisual[] {
   return elementos;
 }
 
-function renderizar(texto: string): { svg: string; elementos: ElementoVisual[] } {
+/** Mecanismos customizados do workspace: os `.js` de `mechanisms/` ao lado de `workflow/`. */
+function mecanismosDoWorkspace(arquivo: string): string[] {
+  let dir = dirname(resolve(arquivo));
+  for (let i = 0; i < 5; i++) {
+    const pasta = join(dir, 'mechanisms');
+    if (existsSync(pasta) && existsSync(join(dir, 'workflow'))) {
+      try {
+        return readdirSync(pasta).filter((n) => n.endsWith('.js')).map((n) => n.slice(0, -3));
+      } catch {
+        return [];
+      }
+    }
+    const pai = dirname(dir);
+    if (pai === dir) break;
+    dir = pai;
+  }
+  return [];
+}
+
+export function sugestoesDoDiagrama(diagrama: Diagrama, arquivo: string): Sugestoes {
+  const atividades = diagrama.objetos
+    .filter((o) => (o.tipo === 'BpmnTask' && o.attrs['type'] === '80') || o.tipo === 'BpmnStartEvent')
+    .map((o) => ({ id: o.attrs['id'] ?? '', nome: o.attrs['name'] ?? '' }))
+    .filter((a) => a.id);
+  const usados = diagrama.objetos.filter((o) => o.tipo === 'BpmnTask').map(lerAtribuicao);
+  const mecanismos = [...new Set([...mecanismosDoWorkspace(arquivo), ...usados.filter((a) => a.customizado).map((a) => a.mecanismo)])].sort();
+  const grupos = [...new Set(usados.flatMap((a) => (a.campos['groupId'] ? [a.campos['groupId']] : [])).concat('suporte_processos'))].sort();
+  return { atividades, mecanismos, grupos };
+}
+
+function renderizar(texto: string, arquivo: string): { svg: string; elementos: ElementoVisual[]; sugestoes: Sugestoes } {
   const diagrama = lerDiagrama(texto);
-  return { svg: gerarSvg(diagrama), elementos: elementosDoDiagrama(diagrama) };
+  return { svg: gerarSvg(diagrama), elementos: elementosDoDiagrama(diagrama), sugestoes: sugestoesDoDiagrama(diagrama, arquivo) };
 }
 
 /** Lê e renderiza antes de abrir qualquer porta. Arquivo inicial inválido é erro de uso. */
@@ -212,7 +309,7 @@ export function lerEstadoInicial(arquivo: string): EstadoVisualizador {
     throw new ErroFluigctl(`não consegui ler ${arquivo}: ${mensagem(erro)}`, 3);
   }
   try {
-    const renderizado = renderizar(texto);
+    const renderizado = renderizar(texto, arquivo);
     return {
       arquivo,
       nome: basename(arquivo, '.process'),
@@ -221,6 +318,7 @@ export function lerEstadoInicial(arquivo: string): EstadoVisualizador {
       atualizadoEm: new Date().toISOString(),
       revisao: 1,
       hash: hash(texto),
+      sugestoes: renderizado.sugestoes,
     };
   } catch (erro) {
     throw new ErroFluigctl(`não consegui abrir ${arquivo}: ${mensagem(erro)}`, 6);
@@ -386,6 +484,35 @@ async function tratarEdicao(
       respostaJson(res, 200, { ok: true, fluxos: resultado.fluxos, avisos: resultado.avisos });
       return;
     }
+    if (rota === 'execution') {
+      const id = texto('id');
+      const r = aplicarEdicao(arquivo, undoDir, (t) => tornarAutomaticaNoXml(t, id), texto('hash'));
+      respostaJson(res, 200, { ok: true, avisos: r.avisos });
+      return;
+    }
+    if (rota === 'assignment') {
+      const id = texto('id');
+      const mecanismo = texto('mecanismo');
+      const campos = corpo['campos'];
+      if (typeof campos !== 'object' || campos === null || Array.isArray(campos)) throw new EdicaoInvalida('o campo campos é obrigatório');
+      const limpos: Record<string, string> = {};
+      for (const [k, v] of Object.entries(campos)) {
+        if (typeof v !== 'string') throw new EdicaoInvalida(`campo ${k} inválido`);
+        limpos[k] = v;
+      }
+      const customizado = corpo['customizado'] === true;
+      const r = aplicarEdicao(arquivo, undoDir, (t) => trocarAtribuicaoNoXml(t, id, { mecanismo, customizado, campos: limpos }), texto('hash'));
+      respostaJson(res, 200, { ok: true, avisos: r.avisos });
+      return;
+    }
+    if (rota === 'conditions') {
+      const id = texto('id');
+      const condicoes = corpo['condicoes'];
+      if (!Array.isArray(condicoes)) throw new EdicaoInvalida('o campo condicoes é obrigatório');
+      const r = aplicarEdicao(arquivo, undoDir, (t) => trocarCondicoesNoXml(t, id, condicoes as Condicao[]), texto('hash'));
+      respostaJson(res, 200, { ok: true, avisos: r.avisos });
+      return;
+    }
     if (rota === 'undo') {
       desfazerUltimaEdicao(arquivo, undoDir);
       respostaJson(res, 200, { ok: true });
@@ -444,6 +571,9 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cursor:move}.fluig-hit.moving{fill:#2457d61f;stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none}
 .fluig-hit.flow.moving{fill:none;stroke-width:3}.handle{fill:#fff;stroke:var(--brand);stroke-width:2;cursor:move;vector-effect:non-scaling-stroke}.handle:hover{fill:#dbeafe}
 #edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}#edit-actions[hidden]{display:none}
+.props{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}.props[hidden]{display:none}.props h3{font-size:13px;margin:12px 0 8px}.props label{display:block;font-size:12px;color:var(--muted);margin:9px 0 4px}
+.props input,.props select,.props textarea{width:100%;padding:7px 9px;border:1px solid #c3cddd;border-radius:8px;font:13px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:#fff}.props textarea{min-height:64px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+.props .row{display:flex;gap:8px;align-items:center;margin-top:10px}.cond{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:10px}.cond strong{display:block;font-size:13px}.regra{display:grid;grid-template-columns:104px 1fr auto;gap:6px;margin-top:8px}.regra input:first-child{grid-column:1/-1}.regra button{padding:5px 8px}.note{font-size:12px;color:var(--muted);margin:6px 0 0}.warn{color:var(--warn)}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
 <header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
@@ -452,6 +582,7 @@ body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cu
 <form id="name-form" class="name-form" hidden><label for="name-input">Nome</label><input id="name-input" type="text" autocomplete="off" spellcheck="false" maxlength="200"><div class="row"><button id="save-name" type="submit">Salvar</button><button id="cancel-name" type="button">Cancelar</button><span id="dirty" class="dirty" hidden>Alteração não salva</span></div><p class="hint">Vazio deixa o elemento <strong>Sem nome</strong>. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva.</p></form>
 <p id="move-hint" class="hint" hidden>Arraste no diagrama para mover, ou use as setas (10 px; com <kbd>Shift</kbd>, 50 px). Os eventos de erro presos à tarefa vão junto.</p>
 <div id="edit-actions" hidden></div>
+<section id="props" class="props" hidden></section>
 <div id="conflict" class="conflict" role="alert" hidden></div>
 <dl id="fields"></dl><details><summary>Detalhes técnicos</summary><table><tbody id="technical"></tbody></table></details></aside></div>
 <script>
@@ -487,7 +618,7 @@ canvas.addEventListener('pointerup',()=>{if(!drag)return;const d=drag;drag=undef
 canvas.addEventListener('pointercancel',()=>{drag=undefined;soltarPrevia();canvas.classList.remove('drag')});
 function flash(texto,acao){clearTimeout(noticeTimer);notice.replaceChildren();const span=document.createElement('span');span.textContent=texto;notice.append(span);if(acao){const b=document.createElement('button');b.type='button';b.textContent=acao.rotulo;b.addEventListener('click',acao.aoClicar);const linha=document.createElement('span');linha.className='row';linha.append(b);notice.append(linha)}notice.classList.add('show');noticeTimer=setTimeout(()=>notice.classList.remove('show'),acao?12000:2800)}
 function limparConflito(){conflict.hidden=true;conflict.replaceChildren()}
-function clearSelection(){svg?.querySelector('[data-layer=handles]')?.remove();selectedId=undefined;editando=undefined;inspector.classList.remove('open');svg?.querySelectorAll('.fluig-hit.selected').forEach(x=>x.classList.remove('selected'))}
+function clearSelection(){const pb=document.querySelector('#props');delete pb.dataset.sujo;pb.hidden=true;svg?.querySelector('[data-layer=handles]')?.remove();selectedId=undefined;editando=undefined;inspector.classList.remove('open');svg?.querySelectorAll('.fluig-hit.selected').forEach(x=>x.classList.remove('selected'))}
 function text(el,value){el.textContent=value}
 function sujo(){return Boolean(editando)&&input.value!==editando.baseline}
 function atualizarSujo(){dirty.hidden=!sujo()}
@@ -507,6 +638,7 @@ function renderPanel(element){
   if(editMode&&element.dobras)moveHint.hidden=false,moveHint.textContent='Arraste os quadrados para mover as dobras. Clique duplo na linha cria uma dobra; clique duplo num quadrado a remove.';
   else moveHint.textContent='Arraste no diagrama para mover, ou use as setas (10 px; com Shift, 50 px). Os eventos de erro presos à tarefa vão junto.';
   renderAcoes(element);
+  renderProps(element);
   inspector.classList.add('open');
 }
 function select(id){const element=elements.find(x=>x.id===id);if(!element)return;selectedId=id;svg.querySelectorAll('.fluig-hit').forEach(x=>x.classList.toggle('selected',x.dataset.id===id));renderPanel(element);desenharAlcas()}
@@ -613,6 +745,85 @@ canvas.addEventListener('dblclick',e=>{
   for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((q.x-a.x)*dx+(q.y-a.y)*dy)/((dx*dx+dy*dy)||1))),d=Math.hypot(a.x+t*dx-q.x,a.y+t*dy-q.y);if(d<menor){menor=d;melhor=i}}
   const novas=[...el.dobras];novas.splice(melhor,0,{x:grade(q.x),y:grade(q.y)});void gravarDobras(el.id,novas);
 });
+const NATIVOS=${JSON.stringify(Object.fromEntries(Object.entries(MECANISMOS).map(([k, v]) => [k, v.campos]))).replaceAll('<', '\\u003c')};
+const ROTULOS={groupId:'Grupo',roleId:'Papel',colleagueId:'Usuário (login)',formField:'Campo do formulário',idNode:'Atividade de referência',returns:'Qual executor'};
+let sugestoes={atividades:[],mecanismos:[],grupos:[]};
+function no(tag,attrs,...filhos){const n=document.createElement(tag);for(const [k,v] of Object.entries(attrs||{})){if(v===undefined||v===false)continue;if(k==='text')n.textContent=v;else if(k.slice(0,2)==='on')n.addEventListener(k.slice(2),v);else n.setAttribute(k,v===true?'':v)}n.append(...filhos);return n}
+function opcoes(lista,atual){return lista.map(([valor,rotulo])=>no('option',{value:valor,selected:valor===atual,text:rotulo}))}
+function lista(id,valores){return no('datalist',{id},...valores.map(v=>no('option',{value:v})))}
+async function gravarProps(rota,corpo,ok){
+  if(ocupado)return;ocupado=true;
+  try{const {status,dados}=await pedir(rota,{...corpo,hash:hashAtual});
+    if(dados.ok){const box=document.querySelector('#props');delete box.dataset.sujo;if(selectedId)select(selectedId);flash((ok+' '+resumoAvisos(dados)).trim(),{rotulo:'Desfazer',aoClicar:desfazer});return}
+    flash(dados.mensagem||'não foi possível salvar.');if(status===409)void update()}
+  finally{ocupado=false}
+}
+function renderProps(el){
+  const box=document.querySelector('#props'),p=el.propriedades;
+  if(box.dataset.sujo&&box.dataset.id===el.id&&editMode)return; // não apaga o que está sendo digitado
+  box.replaceChildren();delete box.dataset.sujo;box.dataset.id=el.id;
+  if(!editMode||!p){box.hidden=true;return}
+  box.hidden=false;
+  const marcar=()=>{box.dataset.sujo='1'};
+  box.oninput=marcar;
+  if(p.execucao!==undefined){
+    box.append(no('h3',{text:'Execução'}));
+    if(p.execucao==='1')box.append(no('p',{class:'note',text:'Automática (executionType 1), como o padrão pede.'}));
+    else box.append(no('p',{class:'note warn',text:'executionType '+(p.execucao||'ausente')+': fora do padrão, que pede service task automática.'}),no('div',{class:'row'},no('button',{type:'button',text:'Tornar automática',onclick:()=>void gravarProps('execution',{id:el.id},'Service task automática.')})));
+  }
+  if(p.atribuicao){
+    const a=p.atribuicao;box.append(no('h3',{text:'Atribuição'}));
+    if(!a.editavel){box.append(no('p',{class:'note',text:a.motivo||'não editável pelo painel'}));return}
+    const valores={...a.campos};let escolha=a.customizado?'__custom':a.mecanismo,custom=a.customizado?a.mecanismo:'';
+    const campos=no('div');
+    const sel=no('select',{id:'mec-select',onchange:e=>{escolha=e.target.value;marcar();desenharCampos()}},...opcoes([['','Nenhum (quem movimenta escolhe)'],...Object.keys(NATIVOS).map(k=>[k,k]),['__custom','Mecanismo customizado']],escolha));
+    function desenharCampos(){
+      campos.replaceChildren();
+      if(escolha==='__custom'){campos.append(no('label',{for:'mec-custom',text:'Mecanismo (id)'}),no('input',{id:'mec-custom',list:'mec-lista',value:custom,placeholder:'MEC_STG_ALCADAS',oninput:e=>{custom=e.target.value}}),lista('mec-lista',sugestoes.mecanismos));return}
+      for(const c of NATIVOS[escolha]||[]){
+        const id='mec-'+c;campos.append(no('label',{for:id,text:ROTULOS[c]||c}));
+        if(c==='idNode')campos.append(no('select',{id,onchange:e=>{valores[c]=e.target.value}},...opcoes([['','Escolha a atividade'],...sugestoes.atividades.map(x=>[x.id,(x.nome||'Sem nome')+' ('+x.id+')'])],valores[c]||'')));
+        else if(c==='returns'){if(!valores[c])valores[c]='1';campos.append(no('select',{id,onchange:e=>{valores[c]=e.target.value}},...opcoes([['0','Primeiro executor'],['1','Último executor'],['2','Todos os executores']],valores[c])))}
+        else campos.append(no('input',{id,value:valores[c]||'',list:c==='groupId'?'grupo-lista':undefined,oninput:e=>{valores[c]=e.target.value}}),c==='groupId'?lista('grupo-lista',sugestoes.grupos):'');
+      }
+    }
+    desenharCampos();
+    box.append(no('label',{for:'mec-select',text:'Mecanismo'}),sel,campos,no('div',{class:'row'},no('button',{type:'button',text:'Salvar atribuição',onclick:()=>{
+      const custom_=escolha==='__custom',mecanismo=custom_?custom.trim():escolha,cs={};for(const c of NATIVOS[escolha]||[])cs[c]=valores[c]||'';
+      void gravarProps('assignment',{id:el.id,mecanismo,customizado:custom_,campos:cs},'Atribuição salva.')}})));
+  }
+  if(p.condicoes){
+    const g=p.condicoes;box.append(no('h3',{text:'Condições das saídas'}));
+    if(!g.editavel){box.append(no('p',{class:'note',text:g.motivo||'não editável pelo painel'}));return}
+    if(!p.saidas.length){box.append(no('p',{class:'note',text:'Este gateway ainda não tem saídas.'}));return}
+    const modelo=p.saidas.map(s=>{const c=g.condicoes.find(x=>x.destino===s.destino);return {saida:s,c:c?JSON.parse(JSON.stringify(c)):undefined}});
+    const lista_=no('div');
+    function desenhar(){
+      lista_.replaceChildren();
+      modelo.forEach((m,i)=>{
+        const tipo=m.c?m.c.tipo:'';
+        const bloco=no('div',{class:'cond'},no('strong',{text:'Para '+m.saida.nomeDestino+(m.saida.rotulo?' ('+m.saida.rotulo+')':'')}));
+        bloco.append(no('select',{'aria-label':'Tipo da condição',onchange:e=>{const v=e.target.value;marcar();if(!v)m.c=undefined;else{m.c=m.c||{destino:m.saida.destino,expressao:'',regras:[]};m.c.tipo=v;if(v==='regra'&&!m.c.regras.length)m.c.regras.push({campo:'',operador:'1',valor:''})}desenhar()}},...opcoes([['','Sem condição'],['regra','Regra (campo do formulário)'],['expressao','Expressão']],tipo)));
+        if(tipo==='regra'){
+          m.c.regras.forEach((r,j)=>{
+            const editavel=r.operador==='1'||r.operador==='2';
+            bloco.append(no('div',{class:'regra'},
+              no('input',{'aria-label':'Campo',placeholder:'campo',value:r.campo,oninput:e=>{r.campo=e.target.value}}),
+              no('select',{'aria-label':'Operador',onchange:e=>{r.operador=e.target.value;marcar()}},...opcoes(editavel?[['1','igual a'],['2','diferente de']]:[[r.operador,'operador '+r.operador]],r.operador)),
+              no('input',{'aria-label':'Valor',placeholder:'valor',value:r.valor,disabled:!editavel,oninput:e=>{r.valor=e.target.value}}),
+              no('button',{type:'button',title:'Remover regra',text:'×',onclick:()=>{m.c.regras.splice(j,1);marcar();if(!m.c.regras.length)m.c=undefined;desenhar()}})));
+          });
+          bloco.append(no('div',{class:'row'},no('button',{type:'button',text:'+ regra (e)',onclick:()=>{m.c.regras.push({campo:'',operador:'1',valor:''});marcar();desenhar()}})));
+        }
+        if(tipo==='expressao')bloco.append(no('textarea',{'aria-label':'Expressão',spellcheck:'false',placeholder:'hAPI.getCardValue("campo") == "valor"',oninput:e=>{m.c.expressao=e.target.value}},m.c.expressao));
+        lista_.append(bloco);
+      });
+    }
+    desenhar();
+    box.append(lista_,no('p',{class:'note',text:'Regra compara um campo do formulário. Os operadores sem valor do Studio (0 e 9) aparecem, mas não se criam por aqui.'}),
+      no('div',{class:'row'},no('button',{type:'button',text:'Salvar condições',onclick:()=>void gravarProps('conditions',{id:el.id,condicoes:modelo.filter(m=>m.c).map(m=>m.c)},'Condições salvas.')})));
+  }
+}
 function digitando(alvo){return alvo instanceof HTMLElement&&(alvo.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))}
 document.querySelector('#undo').addEventListener('click',()=>void desfazer());
 document.querySelector('#redo').addEventListener('click',()=>void refazer());
@@ -631,7 +842,7 @@ function cancelarEdicao(){limparConflito();if(editando)input.value=editando.base
 document.querySelector('#cancel-name').addEventListener('click',cancelarEdicao);
 document.querySelector('#close-panel').addEventListener('click',clearSelection);
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
-async function update(){try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();elements=s.elementos||[];hashAtual=s.hash;if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
+async function update(){try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();elements=s.elementos||[];hashAtual=s.hash;sugestoes=s.sugestoes||sugestoes;if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
 try{if(localStorage.getItem('fluigctl-edicao')==='1')setEditMode(true)}catch{}
 update();const events=new EventSource('events');events.addEventListener('change',update);events.onerror=()=>{dot.classList.add('bad');status.textContent='reconectando…'};
 </script></body></html>`;
@@ -665,7 +876,7 @@ export async function servirDiagrama(opcoes: OpcoesServidor): Promise<ServidorVi
     try {
       const texto = readFileSync(arquivo, 'utf8');
       if (texto === ultimoTexto && estado.erro === undefined) return;
-      const renderizado = renderizar(texto);
+      const renderizado = renderizar(texto, arquivo);
       ultimoTexto = texto;
       estado = {
         arquivo: estado.arquivo,
@@ -675,6 +886,7 @@ export async function servirDiagrama(opcoes: OpcoesServidor): Promise<ServidorVi
         atualizadoEm: new Date().toISOString(),
         revisao: estado.revisao + 1,
         hash: hash(texto),
+        sugestoes: renderizado.sugestoes,
       };
     } catch (erro) {
       // O último SVG válido fica na tela; só a faixa de erro muda.

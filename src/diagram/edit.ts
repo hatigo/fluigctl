@@ -197,6 +197,8 @@ export function aplicarEdicao(
     throw new ConflitoEdicao('arquivo-alterado', 'o arquivo mudou desde que a tela foi desenhada; a tela já foi atualizada, tente de novo');
   }
   const depois = transformar(antes);
+  // Salvar sem mudar nada não grava nem cria um passo vazio no desfazer.
+  if (depois === antes) throw new EdicaoInvalida('nada mudou');
   lerDiagrama(depois); // nunca grava um XML que o próprio visualizador não consiga reler
 
   const errosAntes = errosDeEstrutura(antes);

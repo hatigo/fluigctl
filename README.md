@@ -62,7 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
-| `diagram open` + modo de edição (renomear, mover, traçar e endireitar ligações, desfazer/refazer) | pronto: renomear, mover e traçar; adicionar, ligar, remover e propriedades ainda não |
+| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, desfazer/refazer) | pronto: renomear, mover, traçar, execução, atribuição e condições; adicionar, ligar e remover ainda não |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -266,14 +266,39 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
   - **Remover dobras**: deixa a linha reta de ponta a ponta.
   - **Endireitar ligações**: com uma tarefa, evento ou gateway selecionado,
     endireita todas as que entram e saem dele. É o passo natural depois de mover;
+- **propriedades** no painel:
+  - **Service task:** mostra o tipo de execução. Fora do padrão, oferece
+    **Tornar automática** (`executionType="1"`). O painel não grava `0` nem `2`:
+    nada no corpus diz o que o `2` significa.
+  - **Tarefa humana:** a atribuição.
+    - Mecanismos nativos: Pool Grupo, Grupo, Pool Papel, Usuário, Campo
+      Formulário e Executor Atividade, cada um com o seu campo.
+    - Mecanismo customizado, com sugestões da pasta `mechanisms/` do workspace.
+    - Nenhum.
+    - "Associado" aparece, mas não se edita.
+  - **Gateway:** a condição de cada saída.
+    - Por regra: campo do formulário, igual a ou diferente de, valor. Várias
+      regras se somam com "e".
+    - Ou por expressão.
+    - Os operadores sem valor do Studio (0 e 9) aparecem, mas não se criam.
+    - Gateway com atribuição por caminho fica somente leitura.
+
+  Atribuição e condição moram em blobs XStream dentro de um atributo. Elas só se
+  regravam no formato exato do Studio, e o painel as deixa somente leitura
+  quando a ida e volta não reproduz o blob. Nos 105 `.process` dos workspaces:
+  - regravar sem mudança devolve os 6.179 atributos idênticos;
+  - os metadados que o Studio deixa ficam preservados (expressão antiga,
+    `sequence`, ordem);
+  - o estilo de codificação do arquivo é respeitado (`&#xA;` ou `&#10;`, `>` ou
+    `&gt;`);
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
-  `Ctrl+Shift+Z`.
+  `Ctrl+Shift+Z`. Salvar sem mudança não grava nem ocupa o histórico.
 
 Toda edição passa pelo mesmo caminho:
 1. **Hash da tela.** A edição só vale sobre o texto que a tela desenhou. Se o
    arquivo mudou nesse meio-tempo, ela é recusada e a tela se atualiza.
-2. **Troca de texto.** Só o atributo editado muda (`name`, o `x`/`y` da forma
-   ou as `<bendpoints>` do fluxo), sem reserializar o XML.
+2. **Troca de texto.** Só o atributo editado muda (`name`, o `x`/`y` da forma,
+   as `<bendpoints>` do fluxo, ou o atributo da propriedade), sem reserializar o XML.
 3. **Conferência.** O resultado precisa ser relido, e o `diagram check` não pode
    acusar erro de estrutura que o arquivo não tinha.
 4. **Escrita atômica.**

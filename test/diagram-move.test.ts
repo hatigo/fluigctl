@@ -107,6 +107,16 @@ test('edição sobre uma tela velha é conflito, e o arquivo não muda', () => {
   }
 });
 
+test('edição que não muda nada é recusada, sem passo vazio no desfazer', () => {
+  const p = projeto();
+  try {
+    assert.throws(() => aplicarEdicao(p.arquivo, p.undo, (t) => t), /nada mudou/);
+    assert.throws(() => desfazerUltimaEdicao(p.arquivo, p.undo), /não há edição/);
+  } finally {
+    p.limpar();
+  }
+});
+
 test('edição que quebraria a estrutura é recusada sem gravar nada', () => {
   const p = projeto();
   try {
