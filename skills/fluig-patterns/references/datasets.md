@@ -153,6 +153,19 @@ Business values come from the RM, not from constants: a fixed `PRECOUNITARIO`
 once valued stock at R$ 1,00. Check stock balance before a write that consumes
 it.
 
+## Querying internal datasets
+
+`colleague`, `processTask` and the other internal datasets fail silently. A field
+name that does not exist, in `fields` or in a constraint, returns an empty
+dataset, not an error. The script then concludes that the user or the task does
+not exist. The `colleague` columns are `colleaguePK.colleagueId`, `login`,
+`colleagueName` (not `fullName`), `mail` and `active`.
+
+- Ask only for fields you have seen in a real row. Look first:
+  `fluigctl dataset run colleague --server <servidor> --where login=<login> --json`.
+- Never add a constraint with an empty value as a placeholder. An empty
+  `SHOULD` on `colleaguePK.colleagueId` emptied the result.
+
 ## Fluig services and the GED
 
 - **Cards:** `ServiceManager.getServiceInstance("ECMCardService")` → `updateCardData`.

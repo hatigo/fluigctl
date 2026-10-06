@@ -18,6 +18,7 @@ import { checarDiagrama } from './diagram/check.js';
 import { adicionarMembro, criarGrupo, listarGrupos, verGrupo } from './commands/group.js';
 import { liberarVersao, versoesDoProcesso } from './commands/process-versions.js';
 import { formatarTabela, lerRestricao, rodarDataset } from './commands/dataset-run.js';
+import { abrirSolicitacao, aguardar, cancelarSolicitacao, formatarSolicitacao, lerCampo, lerSolicitacao, moverSolicitacao } from './commands/request.js';
 import { estado as estadoDaSkill, instalarSkill, origensDasSkills, removerSkill } from './commands/skill.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushDiagram } from './commands/push-diagram.js';
@@ -92,6 +93,15 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
                               [--order a,b] [--limit N] [--json]
       roda o dataset no servidor e mostra as linhas; só lê. --where aceita
       campo=valor, campo!=valor, campo~valor (% é curinga) e campo=inicio..fim
+
+  fluigctl request start <processId> --server <nome> [--field campo=valor]... [--comment C] [--wait] [--dry-run]
+  fluigctl request show <número> --server <nome> [--form] [--wait] [--json]
+  fluigctl request move <número> --to <estado> --server <nome> [--field campo=valor]... [--comment C]
+                              [--from <estado>] [--wait] [--dry-run]
+  fluigctl request cancel <número> --server <nome> --comment <motivo> [--dry-run]
+      abre, mostra, movimenta e cancela solicitações sem a tela do Fluig. O show traz o histórico
+      com a mensagem de falha das service tasks; tarefa de pool é assumida antes do move;
+      --wait espera o job do servidor rodar as service tasks com execução posterior
 
   fluigctl changed [--since <ref>] [--server <nome>]
       lista o que mudou no git como artefatos do Fluig e sugere o comando de cada um; não envia nada
@@ -1160,6 +1170,73 @@ async function comandoDataset(argv: string[]): Promise<void> {
   console.log(`\n${r.linhas.length} linha(s)`);
 }
 
+async function comandoRequest(argv: string[]): Promise<void> {
+  const sub = argv[0];
+  const uso =
+    'uso: fluigctl request start <processId> --server <nome> [--field campo=valor]... [--comment C] [--wait] [--dry-run]\n' +
+    '     fluigctl request show <número> --server <nome> [--form] [--wait] [--json]\n' +
+    '     fluigctl request move <número> --to <estado> --server <nome> [--field campo=valor]... [--comment C] [--from <estado>] [--wait] [--dry-run]\n' +
+    '     fluigctl request cancel <número> --server <nome> --comment <motivo> [--dry-run]';
+  const { values, positionals } = parseArgs({
+    args: argv.slice(1),
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      field: { type: 'string', multiple: true },
+      comment: { type: 'string' },
+      to: { type: 'string' },
+      from: { type: 'string' },
+      form: { type: 'boolean', default: false },
+      wait: { type: 'boolean', default: false },
+      json: { type: 'boolean', default: false },
+      'dry-run': { type: 'boolean', default: false },
+    },
+  });
+  const alvo = positionals[0];
+  if (!values.server || !alvo || positionals.length !== 1 || !['start', 'show', 'move', 'cancel'].includes(sub ?? '')) throw new ErroFluigctl(uso, 2);
+  const inteiro = (v: string | undefined, nome: string) => {
+    const n = Number(v);
+    if (!Number.isInteger(n) || n <= 0) throw new ErroFluigctl(`${nome} "${v ?? ''}": use um número inteiro positivo`, 2);
+    return n;
+  };
+  const servidor = resolveServer(loadConfig(), values.server);
+  const o = { server: servidor, senha: resolvePassword(servidor), prompt: promptPassword };
+  const campos = Object.fromEntries((values.field ?? []).map(lerCampo));
+  const dry = values['dry-run'];
+  const mostrar = async (id: number) => {
+    const s = values.wait ? await aguardar(o, id) : await lerSolicitacao(o, id);
+    console.log(values.json ? JSON.stringify(s, null, 2) : formatarSolicitacao(s, values.form));
+  };
+
+  if (sub === 'show') return mostrar(inteiro(alvo, 'número'));
+  if (sub === 'start') {
+    const r = await abrirSolicitacao(o, alvo, campos, values.comment, dry);
+    if (dry) {
+      console.log(`[dry-run] abriria uma solicitação de ${alvo} em ${values.server} com ${Object.keys(campos).length} campo(s). Nada foi enviado.`);
+      return;
+    }
+    console.log(`solicitação ${r.id} aberta\n`);
+    return mostrar(r.id!);
+  }
+  if (sub === 'cancel') {
+    if (!values.comment) throw new ErroFluigctl(`request cancel pede --comment com o motivo, que fica no histórico\n${uso}`, 2);
+    const id = inteiro(alvo, 'número');
+    const s = await cancelarSolicitacao(o, id, values.comment, dry);
+    console.log(dry ? `[dry-run] a solicitação ${id} (${s.processId} v${s.versao}) seria cancelada. Nada foi enviado.` : `solicitação ${id} cancelada (conferido no servidor)`);
+    return;
+  }
+  if (!values.to) throw new ErroFluigctl(uso, 2);
+  const id = inteiro(alvo, 'número');
+  const r = await moverSolicitacao(o, id, inteiro(values.to, '--to'), campos, values.comment, dry, values.from === undefined ? undefined : inteiro(values.from, '--from'));
+  const de = `${r.de.estado} "${r.de.nomeEstado}"`;
+  if (dry) {
+    console.log(`[dry-run] a solicitação ${id} iria de ${de} para ${values.to}${r.assumida ? ', assumindo a tarefa do pool antes' : ''}. Nada foi enviado.`);
+    return;
+  }
+  console.log(`solicitação ${id} movimentada de ${de} para ${values.to}${r.assumida ? ' (tarefa do pool assumida antes)' : ''}\n`);
+  return mostrar(id);
+}
+
 async function comandoDiagram(argv: string[]): Promise<void> {
   const sub = argv[0];
   const uso =
@@ -1261,6 +1338,7 @@ async function main(argv: string[]): Promise<void> {
   if (comando === 'group') return comandoGroup(argv.slice(1));
   if (comando === 'process') return comandoProcess(argv.slice(1));
   if (comando === 'dataset') return comandoDataset(argv.slice(1));
+  if (comando === 'request') return comandoRequest(argv.slice(1));
   if (comando === 'changed') return comandoChanged(argv.slice(1));
   if (comando === 'push') return comandoPush(argv.slice(1));
   if (comando === 'pull') return comandoPull(argv.slice(1));

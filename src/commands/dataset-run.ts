@@ -70,6 +70,11 @@ export async function rodarDataset(o: OpcoesDatasetRun, nome: string): Promise<R
     throw new ErroFluigctl(`o dataset "${nome}" existe em ${url}, mas não devolveu colunas: o script falhou sem mensagem — veja o log do servidor`, 7);
   }
   if (o.limite !== undefined) resultado = { ...resultado, linhas: resultado.linhas.slice(0, o.limite) };
+  // O servidor devolve as colunas na ordem dele; quem pediu --fields quer a sua.
+  if (o.campos?.length) {
+    const pedidas = o.campos.filter((c) => resultado!.colunas.includes(c));
+    resultado = { ...resultado, colunas: [...pedidas, ...resultado.colunas.filter((c) => !pedidas.includes(c))] };
+  }
   return resultado;
 }
 

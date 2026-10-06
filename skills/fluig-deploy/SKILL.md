@@ -401,6 +401,31 @@ fluigctl process release <processId> --server <servidor> [--dry-run]
   left in edition by a failed release. The Fluig has no operation to discard
   one; `process release` releases the newest one in edition.
 
+## Testing a process: requests
+
+After publishing a process, run it. The push only proves the server accepted
+the files; script errors show only when a request moves.
+
+```sh
+fluigctl request start <processId> --server <servidor> --field campo=valor... --comment "teste"
+fluigctl request move <n> --to <estado> --server <servidor> [--field campo=valor]... --wait
+fluigctl request show <n> --server <servidor> [--form]
+fluigctl request cancel <n> --server <servidor> --comment "<motivo>"
+```
+
+- **Ask the human before the first write** (start, move, cancel). On a test
+  server, one go-ahead covers the test run. Never on production without the
+  human at the terminal.
+- **Read failures in `request show`.** A failed service task writes its message
+  into the task observation. Fix the script, publish, and open a **new** request:
+  a request keeps the scripts of the version it was opened on.
+- **Exercise every path:** the error path of each service task (make it fail on
+  purpose, then move the handling task back), each gateway branch, and every
+  loop until it ends.
+- **E-mails are real.** Service tasks that send notifications send them on a
+  test server too. Say so before running.
+- **Clean up:** cancel the test requests left open on old versions.
+
 ## Pulling from a server
 
 When someone published straight to the server and the repository is behind,

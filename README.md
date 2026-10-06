@@ -66,6 +66,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `group ls` / `show` / `add` / `add-member` (grupos sem o painel do Fluig) | pronto |
 | `process versions` / `release` (versões do processo e liberar a em edição) | pronto |
 | `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
+| `request start` / `show` / `move` / `cancel` (solicitações sem a tela do Fluig) | pronto, conferido no localdev com a contratação: recuperação, laço de aprovação e reprovação |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, elementos sem saída ou sem entrada e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -125,6 +126,37 @@ fluigctl dataset run dsContratacaoAlcadas --server hml --where UNIDADE=Fabrica -
   `fluigctl` consulta a lista do servidor e diz qual dos dois aconteceu. Foi
   assim que apareceu o `getConstraintValue` faltando nos datasets da
   contratação: o dataset estava publicado e falhava com `ReferenceError`.
+
+### Testando um processo: solicitações
+
+```sh
+fluigctl request start contratacao --server dev --field cargo=Analista --field salario=9000 --comment "teste"
+fluigctl request move 14 --to 3 --server dev --wait          # e espera o job rodar as service tasks
+fluigctl request show 14 --server dev --form                  # histórico, quem tem a tarefa, formulário
+fluigctl request move 14 --to 6 --server dev --field decisaoAprovacao=aprovado --wait
+fluigctl request cancel 11 --server dev --comment "teste encerrado"
+```
+
+- **`show`:** cada movimento com o estado, quem tinha a tarefa e a observação.
+  É na observação que o Fluig grava a mensagem de falha da service task, então
+  o `throw` do script aparece inteiro. `▶` marca a tarefa aberta.
+- **`move`:** consome a tarefa aberta. Se ela estiver num pool
+  (`Pool:Group:suporte_processos`), é assumida antes, senão o Fluig responde
+  "Tarefa não encontrada". Com duas tarefas abertas (paralelo), diga qual com
+  `--from <estado>`. A recusa do `validateForm` volta como texto.
+- **`--wait`:** service task com execução posterior fica com `System:Auto` até
+  o job do servidor rodar (uns 20 s no localdev). O `--wait` espera, até 180 s.
+- **Versão:** a solicitação usa os scripts da versão em que foi aberta. Depois
+  de corrigir um script e publicar, abra uma solicitação nova; a antiga continua
+  com o script velho.
+- **Escritas:** `start`, `move` e `cancel` passam pelo porteiro de produção e
+  têm `--dry-run`. `cancel` pede o motivo e confere o status depois.
+
+O que este teste achou na contratação, e que nenhum push acusava: o
+`getConstraintValue` que faltava nos dois datasets; a consulta ao `colleague`
+com o campo `fullName` (o nome é `colleagueName`) e uma restrição SHOULD vazia,
+que devolviam zero linhas; e o `beforeTaskSave(sequenceId)`, cujo primeiro
+parâmetro é o usuário, o que deixava o laço de aprovação sem fim.
 
 ## Instalação
 
