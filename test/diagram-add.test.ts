@@ -153,6 +153,8 @@ test('renomear a service task leva junto os nomes gerados, e só eles', async ()
 test('posição fora da pool e tipo desconhecido são recusados', () => {
   assert.throws(() => adicionarNoXml(CONTRATACAO, { tipo: 'humana', x: 5000, y: 300 }), /fora da pool/);
   assert.throws(() => adicionarNoXml(CONTRATACAO, { tipo: 'nada' as never, x: 300, y: 300 }), /tipo desconhecido/);
+  // Perto do fundo da raia Solicitante (até y=170): o tratamento cairia na raia de baixo.
+  assert.throws(() => adicionarNoXml(CONTRATACAO, { tipo: 'recuperacao', x: 700, y: 120 }), /tratamento cairia na raia Aprova/);
   // A service task cabe; o tratamento, 33 px abaixo, sairia pela borda de baixo.
   assert.throws(() => adicionarNoXml(CONTRATACAO, { tipo: 'recuperacao', x: 300, y: 480 }), /tratamento ficaria fora da pool/);
 });
@@ -246,4 +248,44 @@ test('fora do layout workflow/diagrams, nenhum script é criado', async () => {
   const r = adicionarNoXml(CONTRATACAO, { tipo: 'servico', x: 260, y: 300 });
   assert.deepEqual(scriptsDasCriadas('/tmp/solto/contratacao.process', r.xml, r.criados), []);
   assert.equal(scriptsDasCriadas('/w/workflow/diagrams/contratacao.process', r.xml, r.criados)[0]!.caminho, '/w/workflow/scripts/contratacao.servicetask37.js');
+});
+
+test('ligar pela rota connect: a ligação nasce traçada, e de gateway avisa a condição', async () => {
+  const p = projeto();
+  // Uma tarefa solta à esquerda e outra abaixo, para a rota precisar de degrau.
+  const a = criarNoXml(CONTRATACAO, { tipo: 'humana', nome: 'A', x: 120, y: 420 });
+  const b = criarNoXml(a.xml, { tipo: 'humana', nome: 'B', x: 400, y: 470 });
+  writeFileSync(p.arquivo, b.xml);
+  const v = await servirDiagrama({ arquivo: p.arquivo, registroDir: p.registro, undoDir: p.undo });
+  const postar = async (rota: string, corpo: unknown) => {
+    const r = await fetch(`${v.url}${rota}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) });
+    return { status: r.status, dados: (await r.json()) as Record<string, unknown> };
+  };
+  try {
+    const r = await postar('connect', { origem: a.id, destino: b.id, hash: hash(b.xml) });
+    assert.equal(r.status, 200);
+    const fluxo = (r.dados['criados'] as string[])[0]!;
+    const depois = readFileSync(p.arquivo, 'utf8');
+    const dobras = lerDiagrama(depois).dobras.get(fluxo)!;
+    assert.equal(dobras.length, 2, 'degrau no meio do vão');
+    assert.equal(dobras[0]!.x, dobras[1]!.x);
+    assert.equal(r.dados['deGateway'], false);
+    assert.deepEqual(checarDiagrama(depois).filter((x) => x.grupo === 'estrutura'), []);
+
+    const g = await postar('connect', { origem: 'exclusivegateway6', destino: b.id, hash: hash(depois) });
+    assert.equal(g.status, 200);
+    assert.equal(g.dados['deGateway'], true);
+
+    const fim = await postar('connect', { origem: 'endevent11', destino: b.id, hash: hash(readFileSync(p.arquivo, 'utf8')) });
+    assert.equal(fim.status, 400);
+    assert.match(String(fim.dados['mensagem']), /fim não tem saída/);
+
+    const html = await (await fetch(v.url)).text();
+    assert.match(html, /Ligar a…/);
+    assert.match(html, /conector/);
+    assert.match(html, /pedir\('connect'/);
+  } finally {
+    await v.fechar();
+    p.limpar();
+  }
 });
