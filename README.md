@@ -65,6 +65,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, remover, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação), ligar, remover, tamanho de raias e pool, e Organizar |
 | `group ls` / `show` / `add` / `add-member` (grupos sem o painel do Fluig) | pronto |
 | `process versions` / `release` (versões do processo e liberar a em edição) | pronto |
+| `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, elementos sem saída ou sem entrada e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -107,6 +108,23 @@ fluigctl process release contratacao --server hml  # libera a versão em ediçã
   Grupo existem no destino e recusa antes de criar a versão. Sem essa
   conferência, a liberação falhava depois do import e a versão nova ficava presa
   em edição. O `--dry-run` só lista os grupos usados, porque ele não abre sessão.
+
+### Rodando um dataset
+
+```sh
+fluigctl dataset run dsContratacaoCadastro --server hml --where LOGIN=admin
+fluigctl dataset run colleague --server hml --where login~adm% --fields login,mail --json
+fluigctl dataset run dsContratacaoAlcadas --server hml --where UNIDADE=Fabrica --where VALOR=8000 --limit 10
+```
+
+- **`--where`:** `campo=valor` (MUST), `campo!=valor` (MUST_NOT), `campo~valor`
+  (`%` é curinga) e `campo=inicio..fim`. Repita para mais de uma restrição.
+- **Só lê.** Passa pelo mesmo REST do `DatasetFactory` do navegador.
+- **Dataset que não devolve nada:** o REST responde 200 com o conteúdo vazio
+  tanto para dataset que não existe quanto para script que lançou erro. O
+  `fluigctl` consulta a lista do servidor e diz qual dos dois aconteceu. Foi
+  assim que apareceu o `getConstraintValue` faltando nos datasets da
+  contratação: o dataset estava publicado e falhava com `ReferenceError`.
 
 ## Instalação
 

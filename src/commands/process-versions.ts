@@ -1,5 +1,6 @@
 import { serverUrl, type Server } from '../config.js';
 import { ErroFluigctl } from '../errors.js';
+import { consultarDataset } from '../fluig/dataset-rest.js';
 import { login } from '../fluig/session.js';
 import { workflowEngineClient } from '../fluig/workflow-service.js';
 import { confirmProduction, type PromptSenha } from '../guard.js';
@@ -37,24 +38,11 @@ async function linhasDoDataset(o: OpcoesVersoes, processId: string): Promise<Rec
   if (o.linhas) return o.linhas;
   const url = serverUrl(o.server);
   const cookie = await login(url, o.server.username, o.senha);
-  const resposta = await fetch(`${url}/api/public/ecm/dataset/datasets`, {
-    method: 'POST',
-    headers: { cookie, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      name: 'processDefinitionVersion',
-      fields: null,
-      constraints: [{ _field: 'processDefinitionVersionPK.processId', _initialValue: processId, _finalValue: processId, _type: 1 }],
-      order: null,
-    }),
+  const r = await consultarDataset(url, cookie, {
+    nome: 'processDefinitionVersion',
+    restricoes: [{ campo: 'processDefinitionVersionPK.processId', inicial: processId, final: processId, tipo: 1 }],
   });
-  const texto = await resposta.text();
-  let corpo: { content?: { values?: Record<string, unknown>[] } };
-  try {
-    corpo = JSON.parse(texto) as typeof corpo;
-  } catch {
-    throw new ErroFluigctl(`o servidor não devolveu as versões de "${processId}" (HTTP ${resposta.status})`, 7);
-  }
-  return corpo.content?.values ?? [];
+  return r?.linhas ?? [];
 }
 
 export async function versoesDoProcesso(o: OpcoesVersoes, processId: string): Promise<VersaoProcesso[]> {

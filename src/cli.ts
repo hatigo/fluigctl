@@ -17,6 +17,7 @@ import { serverUi } from './commands/server-ui.js';
 import { checarDiagrama } from './diagram/check.js';
 import { adicionarMembro, criarGrupo, listarGrupos, verGrupo } from './commands/group.js';
 import { liberarVersao, versoesDoProcesso } from './commands/process-versions.js';
+import { formatarTabela, lerRestricao, rodarDataset } from './commands/dataset-run.js';
 import { estado as estadoDaSkill, instalarSkill, origensDasSkills, removerSkill } from './commands/skill.js';
 import { pushDataset } from './commands/push-dataset.js';
 import { pushDiagram } from './commands/push-diagram.js';
@@ -70,6 +71,8 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl diagram open <arquivo.process> [--no-open] [--foreground]
       abre no navegador um visualizador local que acompanha mudanças no arquivo
   fluigctl diagram close <arquivo.process>
+      encerra o visualizador desse arquivo
+
   fluigctl group ls --server <nome>
   fluigctl group show <grupo> --server <nome>
   fluigctl group add <grupo> --server <nome> [--description D] [--dry-run]
@@ -82,8 +85,13 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
 
   fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json]
       confere um .process editado fora do Studio: referências do Graphiti,
-      fluxos x formas, e o padrão de recuperação das service tasks
-      encerra o visualizador desse arquivo
+      fluxos x formas, elementos sem saída ou sem entrada, e o padrão de
+      recuperação das service tasks
+
+  fluigctl dataset run <nome> --server <nome> [--where campo=valor]... [--fields a,b]
+                              [--order a,b] [--limit N] [--json]
+      roda o dataset no servidor e mostra as linhas; só lê. --where aceita
+      campo=valor, campo!=valor, campo~valor (% é curinga) e campo=inicio..fim
 
   fluigctl changed [--since <ref>] [--server <nome>]
       lista o que mudou no git como artefatos do Fluig e sugere o comando de cada um; não envia nada
@@ -1109,6 +1117,49 @@ async function comandoProcess(argv: string[]): Promise<void> {
   else console.log(`versão ${r.versao} de ${processId} liberada${r.mensagem ? ` — ${r.mensagem.slice(0, 200)}` : ''}`);
 }
 
+async function comandoDataset(argv: string[]): Promise<void> {
+  const uso =
+    'uso: fluigctl dataset run <nome> --server <nome> [--where campo=valor]... [--fields a,b] [--order a,b] [--limit N] [--json]';
+  const { values, positionals } = parseArgs({
+    args: argv.slice(1),
+    allowPositionals: true,
+    options: {
+      server: { type: 'string', short: 's' },
+      where: { type: 'string', multiple: true },
+      fields: { type: 'string' },
+      order: { type: 'string' },
+      limit: { type: 'string' },
+      json: { type: 'boolean', default: false },
+    },
+  });
+  const nome = positionals[0];
+  if (argv[0] !== 'run' || !nome || positionals.length !== 1 || !values.server) throw new ErroFluigctl(uso, 2);
+  const lista = (v: string | undefined) => v?.split(',').map((x) => x.trim()).filter(Boolean);
+  let limite: number | undefined;
+  if (values.limit !== undefined) {
+    limite = Number(values.limit);
+    if (!Number.isInteger(limite) || limite < 1) throw new ErroFluigctl(`--limit "${values.limit}": use um inteiro positivo`, 2);
+  }
+  const servidor = resolveServer(loadConfig(), values.server);
+  const r = await rodarDataset(
+    {
+      server: servidor,
+      senha: resolvePassword(servidor),
+      campos: lista(values.fields),
+      restricoes: (values.where ?? []).map(lerRestricao),
+      ordem: lista(values.order),
+      limite,
+    },
+    nome,
+  );
+  if (values.json) {
+    console.log(JSON.stringify(r.linhas, null, 2));
+    return;
+  }
+  console.log(formatarTabela(r));
+  console.log(`\n${r.linhas.length} linha(s)`);
+}
+
 async function comandoDiagram(argv: string[]): Promise<void> {
   const sub = argv[0];
   const uso =
@@ -1209,6 +1260,7 @@ async function main(argv: string[]): Promise<void> {
   if (comando === 'diagram') return comandoDiagram(argv.slice(1));
   if (comando === 'group') return comandoGroup(argv.slice(1));
   if (comando === 'process') return comandoProcess(argv.slice(1));
+  if (comando === 'dataset') return comandoDataset(argv.slice(1));
   if (comando === 'changed') return comandoChanged(argv.slice(1));
   if (comando === 'push') return comandoPush(argv.slice(1));
   if (comando === 'pull') return comandoPull(argv.slice(1));

@@ -205,6 +205,17 @@ A dataset update keeps the server's description, saves the previous code under
 `~/.local/state/fluigctl/backups/` and checks afterwards that the server returns
 the local code (exit 7 if not). The dry-run says when the server already has it.
 
+After publishing a dataset, run it once on the same server. A script error
+(a helper that was not copied into the file, for instance) is invisible to the
+push and only shows when the dataset runs:
+
+```sh
+fluigctl dataset run dsFoo --server <servidor> --where CAMPO=valor [--fields a,b] [--json]
+```
+
+It only reads. Empty content means the dataset does not exist or its script
+threw; the command tells which one.
+
 Creating a form needs three things that cannot be guessed, and
 `persistenceType` cannot be changed afterwards:
 
