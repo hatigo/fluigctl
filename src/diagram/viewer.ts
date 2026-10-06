@@ -9,6 +9,7 @@ import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
 import { adicionarNoXml, ligarNoXml, scriptsDasCriadas, type TipoNovo } from './add.js';
+import { removerNoXml } from './remove.js';
 import { rotaOrtogonal } from './route.js';
 import { ConflitoEdicao, EdicaoInvalida, aplicarEdicao, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras, trocarDobrasNoXml } from './edit.js';
 import {
@@ -534,6 +535,17 @@ async function tratarEdicao(
       respostaJson(res, 200, { ok: true, criados: [id], avisos: r.avisos, deGateway: tipoOrigem === 'BpmnGateway' });
       return;
     }
+    if (rota === 'remove') {
+      const id = texto('id');
+      let feito = { removidos: [] as string[], scripts: [] as string[] };
+      const r = aplicarEdicao(arquivo, undoDir, (t) => {
+        const x = removerNoXml(t, id);
+        feito = { removidos: x.removidos, scripts: x.scripts };
+        return x.xml;
+      }, texto('hash'));
+      respostaJson(res, 200, { ok: true, removidos: feito.removidos, scripts: feito.scripts, avisos: r.avisos });
+      return;
+    }
     if (rota === 'execution') {
       const id = texto('id');
       const r = aplicarEdicao(arquivo, undoDir, (t) => tornarAutomaticaNoXml(t, id), texto('hash'));
@@ -629,6 +641,7 @@ body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cu
 .handle{fill:#fff;stroke:var(--brand);stroke-width:2;cursor:move;vector-effect:non-scaling-stroke}.handle:hover{fill:#dbeafe}
 #view-actions{display:flex;gap:8px;margin-top:14px}#view-actions[hidden]{display:none}
 #edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}#edit-actions[hidden]{display:none}
+button.perigo{color:#b91c1c;border-color:#fecaca}button.perigo:hover{background:#fef2f2;border-color:#f87171}
 .props{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}.props[hidden]{display:none}.props h3{font-size:13px;margin:12px 0 8px}.props label{display:block;font-size:12px;color:var(--muted);margin:9px 0 4px}
 .props input,.props select,.props textarea{width:100%;padding:7px 9px;border:1px solid #c3cddd;border-radius:8px;font:13px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:#fff}.props textarea{min-height:64px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .props .row{display:flex;gap:8px;align-items:center;margin-top:10px}.cond{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:10px}.cond strong{display:block;font-size:13px}.regra{display:grid;grid-template-columns:104px 1fr auto;gap:6px;margin-top:8px}.regra input:first-child{grid-column:1/-1}.regra button{padding:5px 8px}.note{font-size:12px;color:var(--muted);margin:6px 0 0}.warn{color:var(--warn)}
@@ -819,14 +832,26 @@ async function endireitarEl(id){
     flash(dados.mensagem||'não foi possível endireitar.');if(status===409)void update()}
   finally{ocupado=false}
 }
+async function remover(el){
+  if(ocupado||!podeRemover(el))return;ocupado=true;
+  try{const {status,dados}=await pedir('remove',{id:el.id,hash:hashAtual});
+    if(dados.ok){clearSelection();const fluxos=dados.removidos.filter(x=>/^flow/.test(x)).length,nos=dados.removidos.length-fluxos;
+      const partes=[];if(nos)partes.push(nos+(nos>1?' elementos':' elemento'));if(fluxos)partes.push(fluxos+(fluxos>1?' ligações':' ligação'));
+      const scripts=(dados.scripts||[]).length?' O script continua em workflow/scripts/ ('+dados.scripts.join(', ')+'): apague no seu editor se não for mais usar.':'';
+      flash('Removido: '+partes.join(' e ')+'.'+scripts+' '+resumoAvisos(dados),{rotulo:'Desfazer',aoClicar:desfazer});return}
+    flash(dados.mensagem||'não foi possível remover.');if(status===409)void update()}
+  finally{ocupado=false}
+}
+function podeRemover(el){return el&&!/^(BpmnPool|BpmnSwimLane)$/.test(el.tipo)}
 function renderAcoes(el){
   const box=document.querySelector('#edit-actions');box.replaceChildren();
-  const botao=(rotulo,titulo,acao,ativo=true)=>{const b=document.createElement('button');b.type='button';b.textContent=rotulo;b.title=titulo;b.disabled=!ativo;b.addEventListener('click',acao);box.append(b)};
+  const botao=(rotulo,titulo,acao,ativo=true,classe)=>{const b=document.createElement('button');b.type='button';b.textContent=rotulo;b.title=titulo;b.disabled=!ativo;if(classe)b.className=classe;b.addEventListener('click',acao);box.append(b)};
   if(editMode&&el.dobras){botao('Endireitar','Traça a ligação em ângulos retos, pela receita de layout',()=>void endireitarEl(el.id));botao('Remover dobras','Deixa a ligação reta, de ponta a ponta',()=>void gravarDobras(el.id,[]),el.dobras.length>0)}
   else if(editMode&&el.podeMover){
     if(podeLigarDe(el))botao('Ligar a…','Cria uma ligação deste elemento até o próximo que você clicar (ou arraste a alça azul à direita dele)',()=>comecarLigacao(el.id));
     if(el.ligacoes>0)botao('Endireitar ligações','Traça em ângulos retos todas as ligações que entram e saem deste elemento',()=>void endireitarEl(el.id));
   }
+  if(editMode&&podeRemover(el))botao('Remover',el.dobras?'Remove esta ligação (Delete)':'Remove este elemento e as ligações dele'+(el.anexados&&el.anexados.length?', com o evento de erro preso a ele':'')+' (Delete)',()=>void remover(el),true,'perigo');
   box.hidden=box.childElementCount===0;
 }
 canvas.addEventListener('dblclick',e=>{
@@ -975,6 +1000,7 @@ document.addEventListener('keydown',e=>{
   const mod=e.ctrlKey||e.metaKey,k=e.key.toLowerCase();
   if(mod&&k==='z'&&!e.shiftKey){e.preventDefault();void desfazer();return}
   if(mod&&(k==='y'||(k==='z'&&e.shiftKey))){e.preventDefault();void refazer();return}
+  if((e.key==='Delete'||e.key==='Backspace')&&selectedId){const el=elements.find(x=>x.id===selectedId);if(podeRemover(el)){e.preventDefault();void remover(el)}return}
   const passo=e.shiftKey?50:10,setas={ArrowLeft:[-passo,0],ArrowRight:[passo,0],ArrowUp:[0,-passo],ArrowDown:[0,passo]}[e.key];
   const el=selectedId&&elements.find(x=>x.id===selectedId);
   if(setas&&el&&el.podeMover){e.preventDefault();void moverPara(el.id,setas[0],setas[1])}

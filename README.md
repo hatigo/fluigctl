@@ -62,7 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
-| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação) e ligar; remover ainda não |
+| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, remover, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação), ligar e remover |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -341,6 +341,25 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
   o nome. Se a origem é um gateway, o aviso lembra de definir a condição da
   saída. O fim não tem saída, o início não tem entrada, e uma ligação repetida
   é recusada;
+- **remover** o elemento ou a ligação selecionada, pelo botão **Remover** do
+  painel ou pela tecla `Delete`:
+  - **O que sai junto:** as ligações do elemento; numa service task, também o
+    evento de erro preso a ela. O tratamento fica, e você remove se quiser.
+  - **Limpeza:** a condição de gateway para um destino que perdeu o fluxo também
+    sai. Uma condição para um destino sem fluxo o `push` não publica.
+  - **Renumeração:** o desenho referencia tudo por posição, então toda
+    referência a um item depois do removido é renumerada, e a que apontava para
+    ele sai das listas.
+  - **Recusas, com o motivo:**
+    - pool e raias;
+    - um elemento que outra tarefa usa na atribuição (Executor Atividade);
+    - um lado só de um par de eventos de link;
+    - um gateway cujas condições o painel não regrava.
+  - **O script de uma service task removida fica no disco:** é código seu, e o
+    aviso diz qual é.
+  - **Validação:** removi, um de cada vez, cada um dos 4.815 elementos e fluxos
+    dos 105 `.process` dos workspaces. Foram 150 recusas com motivo, nenhum erro
+    de estrutura e nenhuma piora na conversão do `push`;
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
   `Ctrl+Shift+Z`. Salvar sem mudança não grava nem ocupa o histórico.
 
