@@ -41,12 +41,15 @@ function rota(diagrama: Diagrama, fluxoId: string): Ponto[] {
 
   const a = centroDaFigura(origem, co);
   const b = centroDaFigura(destino, cd);
-  if (Math.abs(a.x - b.x) < 0.5 || Math.abs(a.y - b.y) < 0.5) return [];
-
   const fa: Caixa = caixaDaFigura(origem, co);
   const fb: Caixa = caixaDaFigura(destino, cd);
   const direitaA = fa.absX + fa.largura;
   const direitaB = fb.absX + fb.largura;
+  const atras = direitaB < fa.absX;
+
+  // Até 1 px é alinhado: tarefa de altura ímpar tem o centro em meio pixel (259,5 contra 260).
+  // Um retorno alinhado não vai reto: atravessaria a linha inteira e entraria pela direita.
+  if (Math.abs(a.x - b.x) <= 1 || (Math.abs(a.y - b.y) <= 1 && !atras)) return [];
 
   // Alvo à direita, com vão entre as duas: degrau no meio do vão, entra pela esquerda.
   if (fb.absX > direitaA) {
@@ -54,7 +57,7 @@ function rota(diagrama: Diagrama, fluxoId: string): Ponto[] {
     return [{ x, y: a.y }, { x, y: b.y }];
   }
   // Alvo atrás: retorno pelo corredor acima das duas formas.
-  if (direitaB < fa.absX) {
+  if (atras) {
     const acima = Math.min(fa.absY, fb.absY) - CORREDOR;
     // Sem espaço acima (forma colada no topo do diagrama), o corredor passa por baixo.
     const y = acima >= 0 ? acima : Math.max(fa.absY + fa.altura, fb.absY + fb.altura) + CORREDOR;

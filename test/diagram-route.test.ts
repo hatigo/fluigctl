@@ -75,8 +75,10 @@ test('a rota ortogonal segue a receita', () => {
   assert.deepEqual(rotaOrtogonal(d, 'flow17'), [{ x: 390, y: 100 }, { x: 390, y: 260 }]);
   // Retorno: sobe da origem, corre 20 px acima das formas e desce no alvo pelo centro.
   assert.deepEqual(rotaOrtogonal(d, 'flow24'), [{ x: 1260, y: 206 }, { x: 720, y: 206 }]);
-  // Alinhados: reto.
+  // Alinhados: reto, inclusive com o meio pixel de uma tarefa de altura ímpar (259,5 contra 260).
   assert.deepEqual(rotaOrtogonal(d, 'flow19'), []);
+  assert.deepEqual(rotaOrtogonal(d, 'flow20'), []);
+  assert.deepEqual(rotaOrtogonal(d, 'flow25'), []);
   // A saída do evento de erro é a diagonal curta do padrão.
   assert.deepEqual(rotaOrtogonal(d, 'flow27'), []);
   // Mesma coluna, desalinhados: degrau vertical no meio do vão.
@@ -106,6 +108,25 @@ test('endireitar um elemento traça todas as ligações dele, e passa no diagram
     assert.throws(() => endireitar({ arquivo: p.arquivo, id: 'task5', hashBase: hash(depois), undoDir: p.undo }), /já estão retas/);
     desfazerUltimaEdicao(p.arquivo, p.undo);
     assert.equal(readFileSync(p.arquivo, 'utf8'), movido);
+  } finally {
+    p.limpar();
+  }
+});
+
+test('endireitar tudo traça só as ligações tortas, numa edição só', () => {
+  const p = projeto();
+  try {
+    const torto = moverNoXml(moverNoXml(ORIGINAL, 'task5', 0, 60).xml, 'servicetask10', 0, -40).xml;
+    writeFileSync(p.arquivo, torto);
+    const r = endireitar({ arquivo: p.arquivo, hashBase: hash(torto), undoDir: p.undo });
+    // flow24: o corredor vai de 207 (relayout.py) para 206, 20 px acima da tarefa.
+    assert.deepEqual(r.fluxos.sort(), ['flow19', 'flow20', 'flow24', 'flow25', 'flow26']);
+    const depois = readFileSync(p.arquivo, 'utf8');
+    assert.deepEqual(checarDiagrama(depois).filter((a) => a.nivel === 'erro'), []);
+    assert.deepEqual(dobras(depois, 'flow27'), [], 'a diagonal do evento de erro fica');
+    assert.throws(() => endireitar({ arquivo: p.arquivo, hashBase: hash(depois), undoDir: p.undo }), /já estão retas/);
+    desfazerUltimaEdicao(p.arquivo, p.undo);
+    assert.equal(readFileSync(p.arquivo, 'utf8'), torto, 'um desfazer volta tudo');
   } finally {
     p.limpar();
   }
@@ -159,6 +180,8 @@ test('o visualizador entrega as dobras, troca e endireita pelos endpoints', asyn
     const html = await (await fetch(v.url)).text();
     assert.match(html, /pedir\('bends'/);
     assert.match(html, /Endireitar ligações/);
+    assert.match(html, /id="straighten-all"/);
+    assert.equal((await postar(v.url, 'straighten-all', { hash: v.estado().hash })).status, 400, 'tudo já reto');
     assert.match(html, /Clique duplo na linha cria uma dobra/);
   } finally {
     await v.fechar();

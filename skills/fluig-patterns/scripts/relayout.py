@@ -122,7 +122,7 @@ def main(entrada, spec_path, saida):
         sys.exit('erro: sem posicao no spec: ' + ', '.join(sorted(faltando)))
 
     # corredor de retorno: 20 px acima da tarefa mais alta da linha principal, igual em todas as raias
-    meia = max([shapes[bo][3] // 2 for bo in spec['nodes'] if modelo[bo].startswith('<bpmn2:BpmnTask')] or [38])
+    meia = max([(shapes[bo][3] + 1) // 2 for bo in spec['nodes'] if modelo[bo].startswith('<bpmn2:BpmnTask')] or [38])
     L = [c - meia - LOOP_ABOVE for c in C]
 
     def coord(v):

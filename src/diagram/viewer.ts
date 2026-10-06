@@ -479,6 +479,11 @@ async function tratarEdicao(
       respostaJson(res, 200, { ok: true, avisos: resultado.avisos });
       return;
     }
+    if (rota === 'straighten-all') {
+      const resultado = endireitar({ arquivo, hashBase: texto('hash'), undoDir });
+      respostaJson(res, 200, { ok: true, fluxos: resultado.fluxos, avisos: resultado.avisos });
+      return;
+    }
     if (rota === 'straighten') {
       const resultado = endireitar({ arquivo, id: texto('id'), hashBase: texto('hash'), undoDir });
       respostaJson(res, 200, { ok: true, fluxos: resultado.fluxos, avisos: resultado.avisos });
@@ -576,7 +581,7 @@ body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cu
 .props .row{display:flex;gap:8px;align-items:center;margin-top:10px}.cond{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:10px}.cond strong{display:block;font-size:13px}.regra{display:grid;grid-template-columns:104px 1fr auto;gap:6px;margin-top:8px}.regra input:first-child{grid-column:1/-1}.regra button{padding:5px 8px}.note{font-size:12px;color:var(--muted);margin:6px 0 0}.warn{color:var(--warn)}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
-<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
+<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
 <div id="error" class="banner" role="alert"></div><div id="notice" class="banner" role="status"></div>
 <div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div>
 <form id="name-form" class="name-form" hidden><label for="name-input">Nome</label><input id="name-input" type="text" autocomplete="off" spellcheck="false" maxlength="200"><div class="row"><button id="save-name" type="submit">Salvar</button><button id="cancel-name" type="button">Cancelar</button><span id="dirty" class="dirty" hidden>Alteração não salva</span></div><p class="hint">Vazio deixa o elemento <strong>Sem nome</strong>. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva.</p></form>
@@ -720,7 +725,7 @@ async function gravarDobras(id,pontos){
 }
 async function endireitarEl(id){
   if(ocupado)return;ocupado=true;
-  try{const {status,dados}=await pedir('straighten',{id,hash:hashAtual});
+  try{const {status,dados}=await pedir(id===undefined?'straighten-all':'straighten',id===undefined?{hash:hashAtual}:{id,hash:hashAtual});
     if(dados.ok){const n=(dados.fluxos||[]).length;flash((n>1?n+' ligações endireitadas. ':'Ligação endireitada. ')+resumoAvisos(dados),{rotulo:'Desfazer',aoClicar:desfazer});return}
     flash(dados.mensagem||'não foi possível endireitar.');if(status===409)void update()}
   finally{ocupado=false}
@@ -825,6 +830,7 @@ function renderProps(el){
   }
 }
 function digitando(alvo){return alvo instanceof HTMLElement&&(alvo.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))}
+document.querySelector('#straighten-all').addEventListener('click',()=>void endireitarEl(undefined));
 document.querySelector('#undo').addEventListener('click',()=>void desfazer());
 document.querySelector('#redo').addEventListener('click',()=>void refazer());
 document.addEventListener('keydown',e=>{
