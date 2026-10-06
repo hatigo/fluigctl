@@ -188,3 +188,62 @@ test('o visualizador cria pela rota add, e um desfazer tira tudo o que a criaç�
     p.limpar();
   }
 });
+
+test('o esqueleto do script é JavaScript válido, ASCII e no padrão da skill', async () => {
+  const { scriptDeServico } = await import('../src/diagram/add.js');
+  const js = scriptDeServico('contratacao', 'servicetask37', 'Integração "RM" */ fim');
+  assert.doesNotThrow(() => new Function(`${js}; return servicetask37;`), 'compila');
+  assert.match(js, /^function servicetask37\(attempt, message\) \{/);
+  assert.ok(/^[\x09\x0a\x20-\x7e]*$/.test(js), 'só ASCII, como a skill pede dos scripts do servidor');
+  assert.match(js, /Integracao/);
+  assert.doesNotMatch(js, /\*\/ fim/, 'o nome não fecha o comentário');
+  assert.match(js, /log\.warn\("contratacao\.servicetask37: ainda nao implementada/);
+  // Roda num hAPI de mentira: não lança e deixa o comentário na tarefa.
+  const comentarios: string[] = [];
+  const corpo = new Function('getValue', 'hAPI', 'log', `${js}; servicetask37(1, ''); return true;`);
+  assert.equal(corpo(() => '1', { setTaskComments: (_u: string, _i: string, _s: number, m: string) => comentarios.push(m) }, { warn: () => undefined }), true);
+  assert.equal(comentarios.length, 1);
+});
+
+test('criar service task grava o script em workflow/scripts, e desfazer e refazer cuidam dele', async () => {
+  const p = projeto();
+  const scripts = join(dirname(dirname(p.arquivo)), 'scripts');
+  const v = await servirDiagrama({ arquivo: p.arquivo, registroDir: p.registro, undoDir: p.undo });
+  const postar = async (rota: string, corpo: unknown) => {
+    const r = await fetch(`${v.url}${rota}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) });
+    return (await r.json()) as Record<string, unknown>;
+  };
+  try {
+    const r = await postar('add', { tipo: 'recuperacao', x: 260, y: 300, hash: hash(CONTRATACAO) });
+    assert.deepEqual(r['scripts'], ['workflow/scripts/contratacao.servicetask37.js']);
+    const caminho = join(scripts, 'contratacao.servicetask37.js');
+    assert.match(readFileSync(caminho, 'utf8'), /function servicetask37/);
+
+    const u = await postar('undo', {});
+    assert.deepEqual(u['apagados'], ['contratacao.servicetask37.js']);
+    assert.throws(() => readFileSync(caminho), /ENOENT/);
+    const rr = await postar('redo', {});
+    assert.deepEqual(rr['recriados'], ['contratacao.servicetask37.js']);
+
+    // Script editado não some no desfazer.
+    writeFileSync(caminho, readFileSync(caminho, 'utf8').replace('ainda nao implementada.', 'feito.'));
+    const u2 = await postar('undo', {});
+    assert.deepEqual(u2['mantidos'], ['contratacao.servicetask37.js']);
+    assert.match(readFileSync(caminho, 'utf8'), /feito\./);
+
+    // Arquivo que já existe não é sobrescrito.
+    const r2 = await postar('add', { tipo: 'servico', x: 260, y: 300, hash: hash(readFileSync(p.arquivo, 'utf8')) });
+    assert.deepEqual(r2['scriptsExistentes'], ['workflow/scripts/contratacao.servicetask37.js']);
+    assert.match(readFileSync(caminho, 'utf8'), /feito\./);
+  } finally {
+    await v.fechar();
+    p.limpar();
+  }
+});
+
+test('fora do layout workflow/diagrams, nenhum script é criado', async () => {
+  const { scriptsDasCriadas } = await import('../src/diagram/add.js');
+  const r = adicionarNoXml(CONTRATACAO, { tipo: 'servico', x: 260, y: 300 });
+  assert.deepEqual(scriptsDasCriadas('/tmp/solto/contratacao.process', r.xml, r.criados), []);
+  assert.equal(scriptsDasCriadas('/w/workflow/diagrams/contratacao.process', r.xml, r.criados)[0]!.caminho, '/w/workflow/scripts/contratacao.servicetask37.js');
+});

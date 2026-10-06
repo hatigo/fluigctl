@@ -312,8 +312,18 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
     já existe, e ganha um id com número inédito.
   - Nos 93 `.process` dos workspaces com pool, criar cada tipo e a recuperação
     não gerou erro de estrutura nem piorou a conversão do `push`.
-  - A service task nova ainda não tem script: o `push diagram` avisa, e o
-    `workflow/scripts/<processo>.<id>.js` é com você;
+  - A service task nova ganha o script dela em
+    `workflow/scripts/<processo>.<id>.js`, com um esqueleto no padrão da skill
+    `fluig-patterns`. Não é uma função vazia:
+    - o cabeçalho de sempre;
+    - um comentário dizendo que falta implementar e lembrando o padrão de
+      recuperação e a idempotência;
+    - um log de aviso e um registro no histórico da tarefa.
+
+    Desfazer apaga o script, se ele continua como foi gerado; um script que você
+    já editou fica, e o aviso diz. Refazer o recria. Um arquivo que já existe
+    nunca é sobrescrito. Fora do layout `workflow/diagrams/`, nenhum script é
+    criado;
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
   `Ctrl+Shift+Z`. Salvar sem mudança não grava nem ocupa o histórico.
 
