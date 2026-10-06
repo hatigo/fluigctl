@@ -128,8 +128,11 @@ they can:
 - add elements from the "+ Adicionar…" menu: human task, gateway, end, a lone
   service task, or a **service task with recovery**. The last one creates the
   whole recovery pattern at once: the task, the error event, the handling task
-  in `suporte_processos`, and both flows. A new service task has no script
-  yet, and `push diagram` warns about it. Every edit writes the `.process` directly and goes through the same
+  in `suporte_processos`, and both flows. A new service task gets its script at
+  `workflow/scripts/<process>.<id>.js`: a skeleton that logs "not implemented
+  yet", never an empty function. Implement it before pushing. Undo removes the
+  script only if it is still the generated one; an existing file is never
+  overwritten. Every edit writes the `.process` directly and goes through the same
 safeguards:
 - **Hash check.** The edit only applies to the text the screen was drawn from.
   If the file changed, the edit is refused and the screen refreshes.

@@ -1,3 +1,5 @@
+import { basename, dirname, join } from 'node:path';
+
 import { lerDiagrama, type Diagrama, type ObjetoBpmn } from '../push/diagram/modelo.js';
 import { ConflitoEdicao, EdicaoInvalida } from './edit.js';
 import { MODELOS, type Modelo } from './modelos.js';
@@ -392,4 +394,53 @@ export function adicionarNoXml(xml: string, p: PedidoAdicionar): { xml: string; 
   const f1 = ligarNoXml(r.xml, evento.id, tratamento.id);
   const f2 = ligarNoXml(f1.xml, tratamento.id, servico);
   return { xml: f2.xml, criados: [servico, evento.id, tratamento.id, f1.id, f2.id] };
+}
+
+/** Comentário de script do servidor é ASCII (skill fluig-patterns): tira acentos e o que sobrar. */
+function ascii(texto: string): string {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7e]/g, '?').replace(/\*\//g, '* /');
+}
+
+/**
+ * Esqueleto do script de uma service task nova, no padrão da skill fluig-patterns:
+ * Rhino ES5, cabeçalho de sempre, e — como a skill pede de uma tarefa que ainda
+ * não faz nada — um comentário dizendo isso e um log, nunca uma função vazia.
+ */
+export function scriptDeServico(processId: string, id: string, nome: string): string {
+  const prefixo = `${processId}.${id}`;
+  return `function ${id}(attempt, message) {
+	var user = getValue("WKUser");
+	var idfluig = getValue("WKNumProces");
+	var documentId = getValue("WKCardId");
+
+	/*
+	 * ${ascii(nome)}: ainda nao implementada.
+	 *
+	 * Esta service task e automatica e tem o padrao de recuperacao: um throw aqui
+	 * abre a tarefa de tratamento no grupo de suporte, que volta para esta mesma
+	 * tarefa. Lance uma mensagem em portugues que o suporte consiga seguir, e deixe
+	 * a tarefa idempotente: grave o marcador de "feito" so depois do efeito (o card
+	 * e desfeito quando a tarefa falha).
+	 */
+	log.warn("${prefixo}: ainda nao implementada (solicitacao " + idfluig + ", tentativa " + attempt + ")");
+	hAPI.setTaskComments(user, idfluig, 0, "${ascii(nome).replace(/["\\]/g, '')}: tarefa automatica ainda nao implementada.");
+}
+`;
+}
+
+/** Os scripts que as service tasks criadas pedem, ao lado do diagrama em workflow/scripts/. */
+export function scriptsDasCriadas(arquivo: string, xml: string, criados: string[]): { caminho: string; conteudo: string }[] {
+  const pastaDiagrama = dirname(arquivo);
+  // Só no layout do workspace (workflow/diagrams/x.process): fora dele não há onde pôr.
+  if (basename(pastaDiagrama) !== 'diagrams' || basename(dirname(pastaDiagrama)) !== 'workflow') return [];
+  const scripts = join(dirname(pastaDiagrama), 'scripts');
+  const d = lerDiagrama(xml);
+  const processo = idDoProcesso(d);
+  return criados.flatMap((id) => {
+    const o = d.objetos.find((x) => x.attrs['id'] === id);
+    if (!o || o.tipo !== 'BpmnTask' || o.attrs['type'] !== '82') return [];
+    const arquivoScript = o.attrs['scriptFileName'] || `${processo}.${id}.js`;
+    if (!/^[\w.-]+\.js$/.test(arquivoScript)) return [];
+    return [{ caminho: join(scripts, arquivoScript), conteudo: scriptDeServico(processo, id, o.attrs['name'] ?? id) }];
+  });
 }

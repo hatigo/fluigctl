@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 import { lerDiagrama, type Caixa, type Ponto } from '../push/diagram/modelo.js';
 import { decodificarEntidades, escaparTexto } from '../push/diagram/xml.js';
@@ -37,8 +37,14 @@ export class EdicaoInvalida extends Error {
 interface Historico {
   version: 2;
   arquivo: string;
-  desfazer: { antes: string; hashDepois: string }[];
-  refazer: { depois: string; hashAntes: string }[];
+  desfazer: { antes: string; hashDepois: string; criados?: ArquivoCriado[] }[];
+  refazer: { depois: string; hashAntes: string; criados?: ArquivoCriado[] }[];
+}
+
+/** Arquivo que uma edição criou ao lado do .process (o script de uma service task nova). */
+export interface ArquivoCriado {
+  caminho: string;
+  conteudo: string;
 }
 
 /** A versão 1 guardava um único desfazer. */
@@ -171,6 +177,9 @@ const chave = (a: Achado) => `${a.nivel} ${a.grupo} ${a.onde}: ${a.mensagem}`;
 export interface ResultadoAplicacao {
   arquivo: string;
   hash: string;
+  /** Arquivos que a edição criou; os que já existiam ficam em `existentes`, intocados. */
+  criados?: string[];
+  existentes?: string[];
   /** Achados do diagram check que a edição fez aparecer (desenho fora da receita, raia trocada...). */
   avisos: Achado[];
 }
@@ -190,6 +199,8 @@ export function aplicarEdicao(
   undoDir: string,
   transformar: (texto: string) => string,
   hashBase?: string,
+  /** Arquivos a criar junto, calculados depois da transformação. Nunca sobrescrevem. */
+  extras?: () => ArquivoCriado[],
 ): ResultadoAplicacao {
   const arquivo = caminhoReal(arquivoInformado);
   const antes = readFileSync(arquivo, 'utf8');
@@ -212,12 +223,48 @@ export function aplicarEdicao(
   if (readFileSync(arquivo, 'utf8') !== antes) {
     throw new ConflitoEdicao('arquivo-alterado', 'o arquivo mudou durante o salvamento; tente novamente');
   }
+  const pedidos = extras ? extras() : [];
+  const criar = pedidos.filter((e) => !existsSync(e.caminho));
+  const existentes = pedidos.filter((e) => existsSync(e.caminho)).map((e) => e.caminho);
   const historico = lerHistorico(arquivo, undoDir);
-  historico.desfazer = [...historico.desfazer, { antes, hashDepois: hash(depois) }].slice(-NIVEIS);
+  historico.desfazer = [...historico.desfazer, { antes, hashDepois: hash(depois), ...(criar.length ? { criados: criar } : {}) }].slice(-NIVEIS);
   historico.refazer = [];
   salvarHistorico(historico, undoDir);
   gravarAtomico(arquivo, depois, statSync(arquivo).mode);
-  return { arquivo, hash: hash(depois), avisos };
+  criarArquivos(criar);
+  return { arquivo, hash: hash(depois), avisos, ...(pedidos.length ? { criados: criar.map((c) => c.caminho), existentes } : {}) };
+}
+
+function criarArquivos(arquivos: ArquivoCriado[]): string[] {
+  const feitos: string[] = [];
+  for (const a of arquivos) {
+    if (existsSync(a.caminho)) continue; // nunca sobrescreve
+    mkdirSync(dirname(a.caminho), { recursive: true });
+    writeFileSync(a.caminho, a.conteudo, { encoding: 'utf8', flag: 'wx' });
+    feitos.push(a.caminho);
+  }
+  return feitos;
+}
+
+/** Apaga o que a edição criou, se continua como foi criado; o que alguém editou fica. */
+function apagarCriados(arquivos: ArquivoCriado[]): { apagados: string[]; mantidos: string[] } {
+  const apagados: string[] = [];
+  const mantidos: string[] = [];
+  for (const a of arquivos) {
+    let atual: string | undefined;
+    try {
+      atual = readFileSync(a.caminho, 'utf8');
+    } catch {
+      continue;
+    }
+    if (atual === a.conteudo) {
+      rmSync(a.caminho, { force: true });
+      apagados.push(a.caminho);
+    } else {
+      mantidos.push(a.caminho);
+    }
+  }
+  return { apagados, mantidos };
 }
 
 export interface PedidoRenomear {
@@ -234,6 +281,10 @@ export interface ResultadoEdicao {
   nome: string;
   hash: string;
   avisos: Achado[];
+  /** Desfazer: o que apagou e o que manteve por ter sido editado. Refazer: o que recriou. */
+  apagados?: string[];
+  mantidos?: string[];
+  recriados?: string[];
 }
 
 export function renomearElemento(pedido: PedidoRenomear): ResultadoEdicao {
@@ -281,10 +332,11 @@ export function desfazerUltimaEdicao(arquivoInformado: string, undoDir: string):
   }
   lerDiagrama(passo.antes);
   historico.desfazer.pop();
-  historico.refazer.push({ depois: atual, hashAntes: hash(passo.antes) });
+  historico.refazer.push({ depois: atual, hashAntes: hash(passo.antes), ...(passo.criados ? { criados: passo.criados } : {}) });
   salvarHistorico(historico, undoDir);
   gravarAtomico(arquivo, passo.antes, statSync(arquivo).mode);
-  return { arquivo, id: '', nome: '', hash: hash(passo.antes), avisos: [] };
+  const { apagados, mantidos } = apagarCriados(passo.criados ?? []);
+  return { arquivo, id: '', nome: '', hash: hash(passo.antes), avisos: [], ...(passo.criados ? { apagados, mantidos } : {}) };
 }
 
 export function refazerEdicao(arquivoInformado: string, undoDir: string): ResultadoEdicao {
@@ -298,10 +350,11 @@ export function refazerEdicao(arquivoInformado: string, undoDir: string): Result
   }
   lerDiagrama(passo.depois);
   historico.refazer.pop();
-  historico.desfazer.push({ antes: atual, hashDepois: hash(passo.depois) });
+  historico.desfazer.push({ antes: atual, hashDepois: hash(passo.depois), ...(passo.criados ? { criados: passo.criados } : {}) });
   salvarHistorico(historico, undoDir);
   gravarAtomico(arquivo, passo.depois, statSync(arquivo).mode);
-  return { arquivo, id: '', nome: '', hash: hash(passo.depois), avisos: [] };
+  const recriados = criarArquivos(passo.criados ?? []);
+  return { arquivo, id: '', nome: '', hash: hash(passo.depois), avisos: [], ...(passo.criados ? { recriados } : {}) };
 }
 
 /** Uma forma de topo do pictograma: onde está a tag do seu primeiro graphicsAlgorithm. */

@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
-import { adicionarNoXml, type TipoNovo } from './add.js';
+import { adicionarNoXml, scriptsDasCriadas, type TipoNovo } from './add.js';
 import { ConflitoEdicao, EdicaoInvalida, aplicarEdicao, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras } from './edit.js';
 import {
   MECANISMOS,
@@ -502,12 +502,21 @@ async function tratarEdicao(
       const nome = typeof corpo['nome'] === 'string' ? corpo['nome'] : undefined;
       const grupo = typeof corpo['grupo'] === 'string' ? corpo['grupo'] : undefined;
       let criados: string[] = [];
+      let xmlNovo = '';
       const r = aplicarEdicao(arquivo, undoDir, (t) => {
         const feito = adicionarNoXml(t, { tipo, x, y, ...(nome === undefined ? {} : { nome }), ...(grupo === undefined ? {} : { grupo }) });
         criados = feito.criados;
+        xmlNovo = feito.xml;
         return feito.xml;
-      }, texto('hash'));
-      respostaJson(res, 200, { ok: true, criados, avisos: r.avisos });
+      }, texto('hash'), () => scriptsDasCriadas(arquivo, xmlNovo, criados));
+      const relativo = (c: string) => c.slice(dirname(dirname(dirname(arquivo))).length + 1);
+      respostaJson(res, 200, {
+        ok: true,
+        criados,
+        avisos: r.avisos,
+        scripts: (r.criados ?? []).map(relativo),
+        scriptsExistentes: (r.existentes ?? []).map(relativo),
+      });
       return;
     }
     if (rota === 'execution') {
@@ -540,13 +549,13 @@ async function tratarEdicao(
       return;
     }
     if (rota === 'undo') {
-      desfazerUltimaEdicao(arquivo, undoDir);
-      respostaJson(res, 200, { ok: true });
+      const r = desfazerUltimaEdicao(arquivo, undoDir);
+      respostaJson(res, 200, { ok: true, ...(r.apagados ? { apagados: r.apagados.map((c) => basename(c)), mantidos: (r.mantidos ?? []).map((c) => basename(c)) } : {}) });
       return;
     }
     if (rota === 'redo') {
-      refazerEdicao(arquivo, undoDir);
-      respostaJson(res, 200, { ok: true });
+      const r = refazerEdicao(arquivo, undoDir);
+      respostaJson(res, 200, { ok: true, ...(r.recriados ? { recriados: r.recriados.map((c) => basename(c)) } : {}) });
       return;
     }
     respostaJson(res, 404, { ok: false, mensagem: 'não encontrado' });
@@ -729,12 +738,12 @@ async function salvar(){
 }
 async function desfazer(){
   const {dados}=await pedir('undo',{});
-  if(dados.ok){limparConflito();flash('Edição desfeita.',{rotulo:'Refazer',aoClicar:refazer});return}
+  if(dados.ok){limparConflito();const ap=(dados.apagados||[]).length?' Script apagado: '+dados.apagados.join(', ')+'.':'';const mt=(dados.mantidos||[]).length?' Script mantido, porque foi editado: '+dados.mantidos.join(', ')+'.':'';flash('Edição desfeita.'+ap+mt,{rotulo:'Refazer',aoClicar:refazer});return}
   flash(dados.mensagem||'não foi possível desfazer.');
 }
 async function refazer(){
   const {dados}=await pedir('redo',{});
-  if(dados.ok){limparConflito();flash('Edição refeita.',{rotulo:'Desfazer',aoClicar:desfazer});return}
+  if(dados.ok){limparConflito();flash('Edição refeita.'+((dados.recriados||[]).length?' Script recriado: '+dados.recriados.join(', ')+'.':''),{rotulo:'Desfazer',aoClicar:desfazer});return}
   flash(dados.mensagem||'não foi possível refazer.');
 }
 function resumoAvisos(dados){const partes=[];if(dados.raiaDepois!==undefined)partes.push('Agora na raia '+(dados.raiaDepois||'nenhuma')+(dados.raiaAntes?' (estava em '+dados.raiaAntes+')':'')+'.');const avisos=dados.avisos||[];if(avisos.length)partes.push('Atenção: '+avisos[0].mensagem+(avisos.length>1?' (+'+(avisos.length-1)+')':''));return partes.join(' ')}
@@ -880,7 +889,10 @@ addMenu.addEventListener('change',()=>{colocando=addMenu.value||undefined;docume
 async function colocarEm(e){
   const tipo=colocando;pararDeColocar();if(ocupado)return;ocupado=true;
   try{const q=pontoDoDiagrama(e);const {status,dados}=await pedir('add',{tipo,x:Math.round(q.x/10)*10,y:Math.round(q.y/10)*10,hash:hashAtual});
-    if(dados.ok){selecionarDepois=dados.criados[0];flash(((tipo==='recuperacao'?'Service task, evento de erro e tratamento criados. ':'Criado. ')+'Renomeie no painel. '+resumoAvisos(dados)).trim(),{rotulo:'Desfazer',aoClicar:desfazer});return}
+    if(dados.ok){selecionarDepois=dados.criados[0];
+      const scripts=(dados.scripts||[]).length?'Script criado: '+dados.scripts.join(', ')+'. ':'';
+      const existentes=(dados.scriptsExistentes||[]).length?'Script já existia e não foi tocado: '+dados.scriptsExistentes.join(', ')+'. ':'';
+      flash(((tipo==='recuperacao'?'Service task, evento de erro e tratamento criados. ':'Criado. ')+scripts+existentes+'Renomeie no painel. '+resumoAvisos(dados)).trim(),{rotulo:'Desfazer',aoClicar:desfazer});return}
     flash(dados.mensagem||'não foi possível criar.');if(status===409)void update()}
   finally{ocupado=false}
 }
