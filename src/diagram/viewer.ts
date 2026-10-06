@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
-import { ConflitoEdicao, EdicaoInvalida, desfazerUltimaEdicao, hash, moverElemento, refazerEdicao, renomearElemento } from './edit.js';
+import { ConflitoEdicao, EdicaoInvalida, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras } from './edit.js';
 
 export interface CampoAmigavel {
   rotulo: string;
@@ -32,6 +32,10 @@ export interface ElementoVisual {
   podeMover: boolean;
   /** Eventos de erro presos a esta tarefa: andam junto quando ela se move. */
   anexados: string[];
+  /** Dobras gravadas do fluxo (sem as pontas): o modo de edição as arrasta. */
+  dobras?: Ponto[];
+  /** Quantos fluxos entram ou saem: o "endireitar ligações" só aparece com ligação. */
+  ligacoes: number;
   geometria: GeometriaElemento;
 }
 
@@ -180,6 +184,8 @@ export function elementosDoDiagrama(diagrama: Diagrama): ElementoVisual[] {
       anexados: diagrama.objetos
         .filter((o) => o.tipo === 'BpmnIntermediateEvent' && o.attrs['parentTask'] === id && o.attrs['id'])
         .map((o) => o.attrs['id']!),
+      ...(ehFluxo ? { dobras: diagrama.dobras.get(id) ?? [] } : {}),
+      ligacoes: diagrama.objetos.filter((o) => o.tipo === 'SequenceFlow' && (o.attrs['sourceRef'] === id || o.attrs['targetRef'] === id)).length,
       geometria,
     });
   }
@@ -368,6 +374,18 @@ async function tratarEdicao(
       });
       return;
     }
+    if (rota === 'bends') {
+      const pontos = corpo['pontos'];
+      if (!Array.isArray(pontos)) throw new EdicaoInvalida('o campo pontos é obrigatório');
+      const resultado = trocarDobras({ arquivo, id: texto('id'), pontos: pontos as Ponto[], hashBase: texto('hash'), undoDir });
+      respostaJson(res, 200, { ok: true, avisos: resultado.avisos });
+      return;
+    }
+    if (rota === 'straighten') {
+      const resultado = endireitar({ arquivo, id: texto('id'), hashBase: texto('hash'), undoDir });
+      respostaJson(res, 200, { ok: true, fluxos: resultado.fluxos, avisos: resultado.avisos });
+      return;
+    }
     if (rota === 'undo') {
       desfazerUltimaEdicao(arquivo, undoDir);
       respostaJson(res, 200, { ok: true });
@@ -424,6 +442,8 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 .edit-toggle[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}.edit-toggle[aria-pressed="true"]:hover{background:#1d47b3}
 #edit-tools{display:flex;gap:6px}#edit-tools[hidden]{display:none}.mode{font-size:12px;font-weight:700;color:#1e40af;background:#dbeafe;border-radius:999px;padding:4px 9px;white-space:nowrap}
 body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cursor:move}.fluig-hit.moving{fill:#2457d61f;stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none}
+.fluig-hit.flow.moving{fill:none;stroke-width:3}.handle{fill:#fff;stroke:var(--brand);stroke-width:2;cursor:move;vector-effect:non-scaling-stroke}.handle:hover{fill:#dbeafe}
+#edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}#edit-actions[hidden]{display:none}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
 <header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
@@ -431,6 +451,7 @@ body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cu
 <div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div>
 <form id="name-form" class="name-form" hidden><label for="name-input">Nome</label><input id="name-input" type="text" autocomplete="off" spellcheck="false" maxlength="200"><div class="row"><button id="save-name" type="submit">Salvar</button><button id="cancel-name" type="button">Cancelar</button><span id="dirty" class="dirty" hidden>Alteração não salva</span></div><p class="hint">Vazio deixa o elemento <strong>Sem nome</strong>. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva.</p></form>
 <p id="move-hint" class="hint" hidden>Arraste no diagrama para mover, ou use as setas (10 px; com <kbd>Shift</kbd>, 50 px). Os eventos de erro presos à tarefa vão junto.</p>
+<div id="edit-actions" hidden></div>
 <div id="conflict" class="conflict" role="alert" hidden></div>
 <dl id="fields"></dl><details><summary>Detalhes técnicos</summary><table><tbody id="technical"></tbody></table></details></aside></div>
 <script>
@@ -451,18 +472,22 @@ function escala(){const r=svg.getBoundingClientRect();return Math.max(box.w/r.wi
 function hitsDe(ids){return [...svg.querySelectorAll('.fluig-hit')].filter(n=>ids.includes(n.dataset.id))}
 function soltarPrevia(){svg?.querySelectorAll('.fluig-hit.moving').forEach(n=>{n.classList.remove('moving');n.removeAttribute('transform')})}
 canvas.addEventListener('pointerdown',e=>{if(!svg||e.button!==0)return;const hit=e.target.closest?.('.fluig-hit');const el=hit&&elements.find(x=>x.id===hit.dataset.id);canvas.setPointerCapture(e.pointerId);
+  const alca=e.target.closest?.('.handle');
+  if(editMode&&alca&&!ocupado){const fl=elements.find(x=>x.id===selectedId);if(fl&&fl.dobras){drag={modo:'dobra',x:e.clientX,y:e.clientY,el:fl,indice:Number(alca.dataset.indice),dobras:fl.dobras.map(p=>({...p})),moved:false};return}}
   if(editMode&&el&&el.podeMover&&!ocupado){drag={modo:'mover',x:e.clientX,y:e.clientY,hitId:el.id,ids:[el.id,...el.anexados],moved:false,dx:0,dy:0};return}
   drag={modo:'pan',x:e.clientX,y:e.clientY,box:{...box},hitId:hit?.dataset.id,moved:false};canvas.classList.add('drag')});
 canvas.addEventListener('pointermove',e=>{if(!drag||!svg)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.hypot(dx,dy)>3)drag.moved=true;if(!drag.moved)return;
+  if(drag.modo==='dobra'){const q=pontoDoDiagrama(e);drag.dobras[drag.indice]={x:grade(q.x),y:grade(q.y)};const a=svg.querySelector('.handle[data-indice="'+drag.indice+'"]');if(a){a.setAttribute('x',drag.dobras[drag.indice].x-5);a.setAttribute('y',drag.dobras[drag.indice].y-5)}previaDoFluxo(drag.el,drag.dobras);return}
   if(drag.modo==='mover'){const k=escala();drag.dx=Math.round(dx*k/10)*10;drag.dy=Math.round(dy*k/10)*10;for(const n of hitsDe(drag.ids)){n.classList.add('moving');n.setAttribute('transform','translate('+drag.dx+' '+drag.dy+')')}return}
   const r=svg.getBoundingClientRect();box={...drag.box,x:drag.box.x-dx/r.width*drag.box.w,y:drag.box.y-dy/r.height*drag.box.h};apply()});
 canvas.addEventListener('pointerup',()=>{if(!drag)return;const d=drag;drag=undefined;canvas.classList.remove('drag');
   if(d.modo==='mover'&&d.moved&&(d.dx||d.dy)){void moverPara(d.hitId,d.dx,d.dy);return}
+  if(d.modo==='dobra'){if(d.moved)void gravarDobras(d.el.id,d.dobras);return}
   soltarPrevia();if(!d.moved){if(d.hitId)select(d.hitId);else clearSelection()}});
 canvas.addEventListener('pointercancel',()=>{drag=undefined;soltarPrevia();canvas.classList.remove('drag')});
 function flash(texto,acao){clearTimeout(noticeTimer);notice.replaceChildren();const span=document.createElement('span');span.textContent=texto;notice.append(span);if(acao){const b=document.createElement('button');b.type='button';b.textContent=acao.rotulo;b.addEventListener('click',acao.aoClicar);const linha=document.createElement('span');linha.className='row';linha.append(b);notice.append(linha)}notice.classList.add('show');noticeTimer=setTimeout(()=>notice.classList.remove('show'),acao?12000:2800)}
 function limparConflito(){conflict.hidden=true;conflict.replaceChildren()}
-function clearSelection(){selectedId=undefined;editando=undefined;inspector.classList.remove('open');svg?.querySelectorAll('.fluig-hit.selected').forEach(x=>x.classList.remove('selected'))}
+function clearSelection(){svg?.querySelector('[data-layer=handles]')?.remove();selectedId=undefined;editando=undefined;inspector.classList.remove('open');svg?.querySelectorAll('.fluig-hit.selected').forEach(x=>x.classList.remove('selected'))}
 function text(el,value){el.textContent=value}
 function sujo(){return Boolean(editando)&&input.value!==editando.baseline}
 function atualizarSujo(){dirty.hidden=!sujo()}
@@ -479,9 +504,12 @@ function renderPanel(element){
   else if(!sujo())editando.baseline=element.nome;
   if(editando&&editMode){form.hidden=false;if(!sujo())input.value=element.nome;atualizarSujo()}else{form.hidden=true;if(!editando)input.value='';dirty.hidden=true}
   moveHint.hidden=!(editMode&&element.podeMover);
+  if(editMode&&element.dobras)moveHint.hidden=false,moveHint.textContent='Arraste os quadrados para mover as dobras. Clique duplo na linha cria uma dobra; clique duplo num quadrado a remove.';
+  else moveHint.textContent='Arraste no diagrama para mover, ou use as setas (10 px; com Shift, 50 px). Os eventos de erro presos à tarefa vão junto.';
+  renderAcoes(element);
   inspector.classList.add('open');
 }
-function select(id){const element=elements.find(x=>x.id===id);if(!element)return;selectedId=id;svg.querySelectorAll('.fluig-hit').forEach(x=>x.classList.toggle('selected',x.dataset.id===id));renderPanel(element)}
+function select(id){const element=elements.find(x=>x.id===id);if(!element)return;selectedId=id;svg.querySelectorAll('.fluig-hit').forEach(x=>x.classList.toggle('selected',x.dataset.id===id));renderPanel(element);desenharAlcas()}
 function shape(tag,element){const node=document.createElementNS(NS,tag);node.classList.add('fluig-hit');if(element.podeMover)node.classList.add('movable');node.dataset.id=element.id;node.setAttribute('tabindex','0');node.setAttribute('role','button');node.setAttribute('aria-label',(element.nome||'Sem nome')+', '+element.tipoAmigavel);return node}
 function addInteractions(){
   const layer=document.createElementNS(NS,'g');layer.setAttribute('data-layer','interaction');
@@ -540,6 +568,51 @@ async function moverPara(id,dx,dy){
     soltarPrevia();flash(dados.mensagem||'não foi possível mover.');if(status===409)void update();
   }finally{ocupado=false}
 }
+function pontoDoDiagrama(e){const m=svg.getScreenCTM();if(!m)return{x:0,y:0};const p=new DOMPoint(e.clientX,e.clientY).matrixTransform(m.inverse());return{x:p.x,y:p.y}}
+const grade=n=>Math.max(0,Math.round(n/10)*10);
+function desenharAlcas(){
+  svg?.querySelector('[data-layer=handles]')?.remove();
+  const el=selectedId&&elements.find(x=>x.id===selectedId);
+  if(!svg||!editMode||!el||!el.dobras)return;
+  const g=document.createElementNS(NS,'g');g.setAttribute('data-layer','handles');
+  el.dobras.forEach((p,i)=>{const r=document.createElementNS(NS,'rect');r.classList.add('handle');r.dataset.indice=String(i);r.setAttribute('x',p.x-5);r.setAttribute('y',p.y-5);r.setAttribute('width','10');r.setAttribute('height','10');r.setAttribute('rx','2');const t=document.createElementNS(NS,'title');t.textContent='Dobra '+(i+1)+': arraste para mover, clique duplo para remover';r.append(t);g.append(r)});
+  svg.append(g);
+}
+function previaDoFluxo(el,dobras){const pts=el.geometria.pontos;const linha=[pts[0],...dobras,pts[pts.length-1]];const p=svg.querySelector('.fluig-hit.flow[data-id="'+CSS.escape(el.id)+'"]');if(p){p.classList.add('moving');p.setAttribute('d',linha.map((x,i)=>(i?'L':'M')+x.x+' '+x.y).join(' '))}}
+async function gravarDobras(id,pontos){
+  if(ocupado)return;ocupado=true;
+  try{const {status,dados}=await pedir('bends',{id,pontos,hash:hashAtual});
+    if(dados.ok){flash(('Dobras alteradas. '+resumoAvisos(dados)).trim(),{rotulo:'Desfazer',aoClicar:desfazer});return}
+    flash(dados.mensagem||'não foi possível alterar as dobras.');void update();if(status===409)return}
+  finally{ocupado=false}
+}
+async function endireitarEl(id){
+  if(ocupado)return;ocupado=true;
+  try{const {status,dados}=await pedir('straighten',{id,hash:hashAtual});
+    if(dados.ok){const n=(dados.fluxos||[]).length;flash((n>1?n+' ligações endireitadas. ':'Ligação endireitada. ')+resumoAvisos(dados),{rotulo:'Desfazer',aoClicar:desfazer});return}
+    flash(dados.mensagem||'não foi possível endireitar.');if(status===409)void update()}
+  finally{ocupado=false}
+}
+function renderAcoes(el){
+  const box=document.querySelector('#edit-actions');box.replaceChildren();
+  const botao=(rotulo,titulo,acao,ativo=true)=>{const b=document.createElement('button');b.type='button';b.textContent=rotulo;b.title=titulo;b.disabled=!ativo;b.addEventListener('click',acao);box.append(b)};
+  if(editMode&&el.dobras){botao('Endireitar','Traça a ligação em ângulos retos, pela receita de layout',()=>void endireitarEl(el.id));botao('Remover dobras','Deixa a ligação reta, de ponta a ponta',()=>void gravarDobras(el.id,[]),el.dobras.length>0)}
+  else if(editMode&&el.ligacoes>0&&el.podeMover)botao('Endireitar ligações','Traça em ângulos retos todas as ligações que entram e saem deste elemento',()=>void endireitarEl(el.id));
+  box.hidden=box.childElementCount===0;
+}
+canvas.addEventListener('dblclick',e=>{
+  if(!editMode||!svg||ocupado)return;
+  const el=selectedId&&elements.find(x=>x.id===selectedId);if(!el||!el.dobras)return;
+  // Com o ponteiro capturado pelo canvas no pointerdown, o dblclick chega com o canvas como alvo: vale o que está sob o ponteiro.
+  const sob=document.elementFromPoint(e.clientX,e.clientY);
+  const alca=sob?.closest?.('.handle');
+  if(alca){e.preventDefault();const i=Number(alca.dataset.indice);void gravarDobras(el.id,el.dobras.filter((_,j)=>j!==i));return}
+  const hit=sob?.closest?.('.fluig-hit.flow');if(!hit||hit.dataset.id!==el.id)return;
+  e.preventDefault();
+  const q=pontoDoDiagrama(e),pts=el.geometria.pontos;let melhor=0,menor=Infinity;
+  for(let i=0;i<pts.length-1;i++){const a=pts[i],b=pts[i+1],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((q.x-a.x)*dx+(q.y-a.y)*dy)/((dx*dx+dy*dy)||1))),d=Math.hypot(a.x+t*dx-q.x,a.y+t*dy-q.y);if(d<menor){menor=d;melhor=i}}
+  const novas=[...el.dobras];novas.splice(melhor,0,{x:grade(q.x),y:grade(q.y)});void gravarDobras(el.id,novas);
+});
 function digitando(alvo){return alvo instanceof HTMLElement&&(alvo.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))}
 document.querySelector('#undo').addEventListener('click',()=>void desfazer());
 document.querySelector('#redo').addEventListener('click',()=>void refazer());

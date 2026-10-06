@@ -62,7 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
-| `diagram open` + modo de edição (renomear e mover elementos, desfazer/refazer) | pronto: renomear e mover; adicionar, ligar, remover e propriedades ainda não |
+| `diagram open` + modo de edição (renomear, mover, traçar e endireitar ligações, desfazer/refazer) | pronto: renomear, mover e traçar; adicionar, ligar, remover e propriedades ainda não |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -256,20 +256,30 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
   O evento de erro preso a uma tarefa vai junto. Pool e raias não se movem, e um
   card não sai da pool. Quando o elemento muda de raia, ou o `diagram check`
   passa a acusar algo, o aviso diz;
+- **traçar as ligações**: com um fluxo selecionado, as dobras viram quadrados
+  arrastáveis (grade de 10 px). Clique duplo na linha cria uma dobra, e clique
+  duplo num quadrado a remove. Também há os botões:
+  - **Endireitar**: traça o fluxo em ângulos retos pela receita de layout.
+    - Alvo à frente: degrau no meio do vão.
+    - Retorno: pelo corredor 20 px acima.
+    - Saída de evento de erro: fica a diagonal curta.
+  - **Remover dobras**: deixa a linha reta de ponta a ponta.
+  - **Endireitar ligações**: com uma tarefa, evento ou gateway selecionado,
+    endireita todas as que entram e saem dele. É o passo natural depois de mover;
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
   `Ctrl+Shift+Z`.
 
 Toda edição passa pelo mesmo caminho:
 1. **Hash da tela.** A edição só vale sobre o texto que a tela desenhou. Se o
    arquivo mudou nesse meio-tempo, ela é recusada e a tela se atualiza.
-2. **Troca de texto.** Só o atributo editado muda (`name`, ou o `x`/`y` da
-   forma), sem reserializar o XML.
+2. **Troca de texto.** Só o atributo editado muda (`name`, o `x`/`y` da forma
+   ou as `<bendpoints>` do fluxo), sem reserializar o XML.
 3. **Conferência.** O resultado precisa ser relido, e o `diagram check` não pode
    acusar erro de estrutura que o arquivo não tinha.
 4. **Escrita atômica.**
 
-As linhas ligadas a um elemento movido mantêm as dobras que tinham. Traçar os
-fluxos é o próximo passo.
+As linhas ligadas a um elemento movido mantêm as dobras que tinham, como no
+Studio. Use **Endireitar ligações** para refazê-las.
 
 #### Renomear pelo painel
 
