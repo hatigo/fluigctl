@@ -243,6 +243,11 @@ outras mudanças enquanto o ID existir.
 Para automação sem navegador use `--no-open`; para depurar o servidor no processo atual,
 `--foreground`.
 
+Numa service task selecionada, **Ver script** abre ao lado do diagrama o
+arquivo dela (`workflow/scripts/<processo>.<id>.js`, pelo `scriptFileName`),
+com as linhas numeradas e o caminho para copiar. É só leitura, e funciona fora
+do modo de edição também. Se o arquivo ainda não existe, o painel diz isso.
+
 #### Modo de edição
 
 O visualizador abre somente leitura. O botão **Editar** liga o modo de edição, e

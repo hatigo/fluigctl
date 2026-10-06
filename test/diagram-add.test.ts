@@ -289,3 +289,42 @@ test('ligar pela rota connect: a ligação nasce traçada, e de gateway avisa a 
     p.limpar();
   }
 });
+
+test('o JavaScript da página do visualizador compila', async () => {
+  // Ele é gerado dentro de uma template string: um \n mal escapado vira quebra de linha no meio de uma regex.
+  const p = projeto();
+  const v = await servirDiagrama({ arquivo: p.arquivo, registroDir: p.registro, undoDir: p.undo });
+  try {
+    const html = await (await fetch(v.url)).text();
+    const js = html.split('<script>')[1]!.split('</script>')[0]!;
+    assert.doesNotThrow(() => new Function(js));
+  } finally {
+    await v.fechar();
+    p.limpar();
+  }
+});
+
+test('ver script: lê o arquivo da service task, diz quando não existe e recusa o que não é service task', async () => {
+  const { lerScript } = await import('../src/diagram/viewer.js');
+  const p = projeto();
+  try {
+    const scripts = join(dirname(dirname(p.arquivo)), 'scripts');
+    mkdirSync(scripts, { recursive: true });
+    writeFileSync(join(scripts, 'contratacao.servicetask3.js'), 'function servicetask3(attempt, message) {}\n');
+    assert.deepEqual(lerScript(p.arquivo, 'servicetask3'), {
+      ok: true, caminho: 'workflow/scripts/contratacao.servicetask3.js', existe: true, conteudo: 'function servicetask3(attempt, message) {}\n',
+    });
+    assert.deepEqual(lerScript(p.arquivo, 'servicetask4'), { ok: true, caminho: 'workflow/scripts/contratacao.servicetask4.js', existe: false });
+    assert.equal(lerScript(p.arquivo, 'task5').ok, false);
+    const v = await servirDiagrama({ arquivo: p.arquivo, registroDir: p.registro, undoDir: p.undo });
+    try {
+      const r = (await (await fetch(`${v.url}script?id=servicetask3`)).json()) as { conteudo: string };
+      assert.match(r.conteudo, /function servicetask3/);
+      assert.match(await (await fetch(v.url)).text(), /Ver script/);
+    } finally {
+      await v.fechar();
+    }
+  } finally {
+    p.limpar();
+  }
+});
