@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { checarDiagrama, type Achado } from '../src/diagram/check.js';
+import { removerNoXml } from '../src/diagram/remove.js';
 
 /**
  * O `diagram check` existe porque o agente edita o `.process` direto. Cada teste
@@ -115,4 +116,15 @@ test('desenho fora da receita: bolinha longe do canto e tratamento em outra raia
   // Tratamento de servicetask3 subindo para a raia Solicitante: erro.
   const outraRaia = trocar(CONTRATACAO, 'width="140" height="67" x="450" y="326"/>\n      <link businessObjects="task13"/>', 'width="140" height="67" x="450" y="30"/>\n      <link businessObjects="task13"/>');
   assert.ok(erros(checarDiagrama(outraRaia)).some((x) => x.onde.startsWith('task13') && /mesma raia/.test(x.mensagem)));
+});
+
+test('elemento sem saída ou sem entrada é erro: a solicitação para ou nunca chega', () => {
+  const { xml } = removerNoXml(CONTRATACAO, 'flow19');
+  const achados = erros(checarDiagrama(xml)).filter((a) => /sem (saída|entrada)/.test(a.mensagem));
+  assert.deepEqual(
+    achados.map((a) => `${a.onde.split(' ')[0]}: ${a.mensagem.split(':')[0]}`).sort(),
+    ['servicetask4: sem saída', 'task5: sem entrada'],
+  );
+  // Fim, início e o erro anexado não entram na regra; o acervo do Studio passa.
+  assert.deepEqual(erros(checarDiagrama(fixture('processoTeste.process'))), []);
 });

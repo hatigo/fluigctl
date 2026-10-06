@@ -39,6 +39,9 @@ export interface OpcoesCheck {
 const TIPO_HUMANA = '80';
 const TIPO_SERVICO = '82';
 const TIPO_ERRO = '43';
+const TIPO_LINK_ENVIA = '36';
+const TIPO_LINK_RECEBE = '42';
+const NOS_DE_FLUXO = new Set(['BpmnTask', 'BpmnGateway', 'BpmnStartEvent', 'BpmnEndEvent', 'BpmnIntermediateEvent', 'BpmnSubProcess']);
 
 /** Um caminho EMF: `/0` e depois `@feature` ou `@feature.indice`. */
 const CAMINHO = /^\/\d+(\/@[\w]+(\.\d+)?)*$/;
@@ -240,6 +243,20 @@ function conferirPadrao(
   }
 
   for (const [id, o] of objetos) {
+    // Nos 95 diagramas do acervo, só fim e link que envia ficam sem saída, e só
+    // início, link que recebe e erro anexado ficam sem entrada.
+    if (NOS_DE_FLUXO.has(o.tipo)) {
+      const semSaida = o.tipo === 'BpmnEndEvent' || (o.tipo === 'BpmnIntermediateEvent' && o.attrs['type'] === TIPO_LINK_ENVIA);
+      const semEntrada =
+        o.tipo === 'BpmnStartEvent' ||
+        (o.tipo === 'BpmnIntermediateEvent' && (o.attrs['type'] === TIPO_LINK_RECEBE || (o.attrs['type'] === TIPO_ERRO && !!o.attrs['parentTask'])));
+      if (!semSaida && lista(o.attrs['outgoing']).length === 0) {
+        achar('erro', nome(id), 'sem saída: a solicitação que chegar aqui fica parada');
+      }
+      if (!semEntrada && lista(o.attrs['incoming']).length === 0) {
+        achar('erro', nome(id), 'sem entrada: nenhuma solicitação chega aqui');
+      }
+    }
     if (o.tipo === 'BpmnTask' && o.attrs['type'] === TIPO_HUMANA && !o.attrs['managerMechanism']) {
       // Comum nos diagramas do Studio: quem movimenta escolhe o responsável à mão. Por isso aviso.
       achar('aviso', nome(id), 'tarefa humana sem mecanismo de atribuição: quem movimenta escolhe o responsável à mão');

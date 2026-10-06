@@ -85,8 +85,12 @@ test('service task com recuperação cria o padrão inteiro, e ele passa no diag
   assert.ok(Math.abs(ce.absY + ce.altura / 2 - (cs.absY + cs.altura)) <= 1);
   assert.equal(ct.absY, cs.absY + cs.altura + 33);
   assert.equal(ct.absX + ct.largura / 2, cs.absX + cs.largura / 2);
-  assert.deepEqual(erros(r.xml), []);
-  assert.deepEqual(checarDiagrama(r.xml, { grupo: 'suporte_processos' }).filter((a) => r.criados.some((id) => a.onde.startsWith(id))), []);
+  assert.deepEqual(erros(r.xml).filter((a) => !a.onde.startsWith(st!)), []);
+  // O padrão fecha; falta só a saída da service task, que o usuário liga depois.
+  assert.deepEqual(
+    checarDiagrama(r.xml, { grupo: 'suporte_processos' }).filter((a) => r.criados.some((id) => a.onde.startsWith(id))).map((a) => a.mensagem),
+    ['sem saída: a solicitação que chegar aqui fica parada'],
+  );
 });
 
 test('no formato do Studio, o clone reescreve as referências a si mesmo e herda os estilos', () => {
