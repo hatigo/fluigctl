@@ -282,6 +282,39 @@ file — `--name` and `--description` are the only overrides. The server compile
 global event on write, and a syntax error comes back with the event name and the
 line.
 
+## Service-task error handling pattern
+
+Unless the human explicitly calls out an exception, model every service task as
+an automatic/posterior task (`executionType="1"`) with this complete recovery
+loop:
+
+1. attach one `intermediateerror` to the service task (`attachedEvents` on the
+   task; `parentTask` and `sequenceAttached` on the event);
+2. draw the error-event circle **overlapping the task's lower-right corner**,
+   not as an unrelated node below the flow;
+3. route the event to a user task, normally directly below the service task,
+   assigned to the support group with `Pool Grupo` / `AssignmentControllerPoolGroup`;
+4. after support resolves the cause, route that user task **back to the same
+   service task** to retry it. Do not silently end the process or continue to a
+   later state after an automation failure.
+
+The group is data, not a convention: use the explicit `groupId` supplied for
+that server/process. Never invent a support group or substitute the requester
+or `admin`; an unassigned error task is worse than a release failure.
+
+An error task assigned to a group has this shape (with a real group id):
+
+```xml
+managerMechanism="Pool Grupo"
+managerAssignmentControllerString="&lt;org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>
+  &lt;groupId>suporte_processos&lt;/groupId>
+  &lt;mechanismName>Pool Grupo&lt;/mechanismName>
+&lt;/org.eclipse.bpmn2.impl.AssignmentControllerPoolGroup>"
+```
+
+`executionType="0"` is the rare exception and must be intentional: record why
+it is synchronous in the task instruction or accompanying change.
+
 ## Pulling from a server
 
 When someone published straight to the server and the repository is behind,
