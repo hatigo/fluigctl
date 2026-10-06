@@ -53,6 +53,14 @@ test('decifra a senha no formato da extensão', () => {
   assert.equal(pareceCifrada('senha-em-claro'), false);
 });
 
+test('chave errada que passa no padding por acaso é recusada, e não devolve lixo', () => {
+  // Achado em 1.193 IVs: com 'outra-maquina', este blob decifra sem erro de
+  // padding em 15 bytes de lixo. Era o que fazia o teste acima falhar ~1 vez em 256.
+  const blob = 'eyJzYWx0IjoiMDcwNzA3MDcwNzA3MDcwNzA3MDcwNzA3MDcwNzA3MDciLCJpdiI6IjY0MWNiOWQ3ZGU2MGZlOTExYzFhMjczZGFiODFhZmU0IiwidGV4dCI6ImU0ZGQxY2Q5MTllY2UxNTQ2YWM4Njg5YjY3ZGM3MzE5In0=';
+  assert.equal(decifrar(blob, MAQUINA), 's3nh@-de-teste');
+  assert.throws(() => decifrar(blob, 'outra-maquina'), /esta chave não decifra a senha/);
+});
+
 test('machineIds lê o storage.json do VS Code e ignora editor ausente', () => {
   const home = homeCom(MAQUINA);
   try {

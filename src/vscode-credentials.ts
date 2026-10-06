@@ -101,10 +101,21 @@ export function decifrar(texto: string, machineId: string): string {
   if (!dados) throw new Error('a senha não está no formato da extensão');
   const chave = scryptSync(machineId, Buffer.from(dados.salt, 'hex'), 32);
   const decifrador = createDecipheriv('aes-256-cbc', chave, Buffer.from(dados.iv, 'hex'));
-  return Buffer.concat([
+  const bytes = Buffer.concat([
     decifrador.update(Buffer.from(dados.text, 'hex')),
     decifrador.final(),
-  ]).toString('utf8');
+  ]);
+  // AES-CBC sem autenticação: com a chave de outra máquina, o padding passa por
+  // acaso ~1 vez em 256 e sai lixo no lugar de um erro. Senha é texto: UTF-8
+  // inválido ou caractere de controle quer dizer chave errada.
+  let senha: string;
+  try {
+    senha = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error('esta chave não decifra a senha');
+  }
+  if (/[\u0000-\u001f\u007f]/.test(senha)) throw new Error('esta chave não decifra a senha');
+  return senha;
 }
 
 /** Mesma identidade do `server import`: host, porta, ssl e usuário. */
