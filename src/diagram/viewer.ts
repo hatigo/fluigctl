@@ -627,17 +627,24 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cursor:move}.fluig-hit.moving{fill:#2457d61f;stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none}
 .fluig-hit.flow.moving{fill:none;stroke-width:3}.conector{fill:var(--brand);stroke:#fff;stroke-width:2;cursor:crosshair;vector-effect:non-scaling-stroke}.conector:hover{fill:#1d47b3}.previa-ligacao{stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;fill:none;pointer-events:none;vector-effect:non-scaling-stroke}
 .handle{fill:#fff;stroke:var(--brand);stroke-width:2;cursor:move;vector-effect:non-scaling-stroke}.handle:hover{fill:#dbeafe}
+#view-actions{display:flex;gap:8px;margin-top:14px}#view-actions[hidden]{display:none}
 #edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}#edit-actions[hidden]{display:none}
 .props{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}.props[hidden]{display:none}.props h3{font-size:13px;margin:12px 0 8px}.props label{display:block;font-size:12px;color:var(--muted);margin:9px 0 4px}
 .props input,.props select,.props textarea{width:100%;padding:7px 9px;border:1px solid #c3cddd;border-radius:8px;font:13px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:#fff}.props textarea{min-height:64px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
 .props .row{display:flex;gap:8px;align-items:center;margin-top:10px}.cond{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:10px}.cond strong{display:block;font-size:13px}.regra{display:grid;grid-template-columns:104px 1fr auto;gap:6px;margin-top:8px}.regra input:first-child{grid-column:1/-1}.regra button{padding:5px 8px}.note{font-size:12px;color:var(--muted);margin:6px 0 0}.warn{color:var(--warn)}
+#script-view{position:fixed;inset:64px 0 0 auto;width:min(760px,100%);background:var(--panel);border-left:1px solid var(--line);box-shadow:-10px 0 30px #17203326;z-index:7;display:flex;flex-direction:column}#script-view[hidden]{display:none}
+#script-view header{height:auto;box-shadow:none;padding:12px 16px;gap:10px}#script-view header div{flex:1;min-width:0}#script-view strong{display:block}#script-view small{color:var(--muted);font:12px ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere}
+#script-code{margin:0;flex:1;overflow:auto;padding:14px 16px;background:#0f172a;color:#e2e8f0;font:12.5px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;counter-reset:linha}#script-code span{display:block}#script-code span::before{counter-increment:linha;content:counter(linha);display:inline-block;width:3.2em;margin-right:12px;text-align:right;color:#64748b;user-select:none}
+#script-code.vazio{background:#f8fafc;color:var(--muted);white-space:normal;font-family:system-ui,sans-serif}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
 <header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><span id="save-state" class="save" role="status" aria-live="polite" title="As edições são gravadas no .process assim que você as faz">Tudo salvo</span><select id="add-menu" aria-label="Adicionar elemento" title="Escolha o tipo e clique no diagrama onde ele vai ficar"><option value="">+ Adicionar…</option><option value="humana">Tarefa humana</option><option value="recuperacao">Service task com recuperação</option><option value="servico">Service task sozinha</option><option value="gateway">Gateway</option><option value="fim">Fim</option></select><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
+<section id="script-view" role="dialog" aria-label="Script da service task" hidden><header><div><strong id="script-title">Script</strong><small id="script-path"></small></div><button id="script-copy" type="button" title="Copiar o caminho do arquivo">Copiar caminho</button><button id="script-close" class="close" type="button" aria-label="Fechar o script">×</button></header><pre id="script-code"></pre></section>
 <div id="error" class="banner" role="alert"></div><div id="notice" class="banner" role="status"></div>
 <div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div>
 <form id="name-form" class="name-form" hidden><label for="name-input">Nome</label><input id="name-input" type="text" autocomplete="off" spellcheck="false" maxlength="200"><div class="row"><button id="save-name" type="submit">Salvar</button><button id="cancel-name" type="button">Cancelar</button><span id="dirty" class="dirty" hidden>Alteração não salva</span></div><p class="hint">Vazio deixa o elemento <strong>Sem nome</strong>. <kbd>Ctrl</kbd>+<kbd>Enter</kbd> salva.</p></form>
 <p id="move-hint" class="hint" hidden>Arraste no diagrama para mover, ou use as setas (10 px; com <kbd>Shift</kbd>, 50 px). Os eventos de erro presos à tarefa vão junto.</p>
+<div id="view-actions" class="row" hidden><button id="view-script" type="button" title="Abre o arquivo de script desta service task, só para leitura">Ver script</button></div>
 <div id="edit-actions" hidden></div>
 <section id="props" class="props" hidden></section>
 <div id="conflict" class="conflict" role="alert" hidden></div>
@@ -700,6 +707,9 @@ function renderPanel(element){
   if(editMode&&element.dobras)moveHint.hidden=false,moveHint.textContent='Arraste os quadrados para mover as dobras. Clique duplo na linha cria uma dobra; clique duplo num quadrado a remove.';
   else moveHint.textContent='Arraste no diagrama para mover, ou use as setas (10 px; com Shift, 50 px). Os eventos de erro presos à tarefa vão junto.';
   renderAcoes(element);
+  const ehServico=element.tipo==='BpmnTask'&&element.propriedades&&element.propriedades.execucao!==undefined;
+  document.querySelector('#view-actions').hidden=!ehServico;document.querySelector('#view-script').onclick=()=>void verScript(element);
+  if(!scriptView.hidden&&!ehServico)fecharScript();
   renderProps(element);
   inspector.classList.add('open');
 }
@@ -941,6 +951,21 @@ async function colocarEm(e){
     flash(dados.mensagem||'não foi possível criar.');if(status===409)void update()}
   finally{ocupado=false}
 }
+// Ver script: só leitura, ao lado do diagrama. Fecha com Esc ou ×.
+const scriptView=document.querySelector('#script-view'),scriptCode=document.querySelector('#script-code');
+async function verScript(el){
+  const r=await fetch('script?id='+encodeURIComponent(el.id),{cache:'no-store'}).then(x=>x.json()).catch(()=>({ok:false,mensagem:'sem conexão com o visualizador'}));
+  document.querySelector('#script-title').textContent='Script de '+(el.nome||el.id);
+  document.querySelector('#script-path').textContent=r.caminho||'';
+  scriptCode.replaceChildren();scriptCode.classList.toggle('vazio',!(r.ok&&r.existe));
+  if(!r.ok)scriptCode.textContent=r.mensagem||'não foi possível ler o script';
+  else if(!r.existe)scriptCode.textContent='O arquivo ainda não existe. Service tasks criadas pelo modo de edição já nascem com ele; esta veio de antes ou do Studio. Crie '+r.caminho+' no seu editor.';
+  else for(const linha of r.conteudo.replace(/\\n$/,'').split('\\n')){const s=document.createElement('span');s.textContent=linha||' ';scriptCode.append(s)}
+  scriptView.hidden=false;document.querySelector('#script-close').focus();
+}
+function fecharScript(){scriptView.hidden=true}
+document.querySelector('#script-close').addEventListener('click',fecharScript);
+document.querySelector('#script-copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(document.querySelector('#script-path').textContent);flash('Caminho copiado.')}catch{flash('Não foi possível copiar.')}});
 function digitando(alvo){return alvo instanceof HTMLElement&&(alvo.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))}
 document.querySelector('#straighten-all').addEventListener('click',()=>void endireitarEl(undefined));
 document.querySelector('#undo').addEventListener('click',()=>void desfazer());
@@ -959,12 +984,41 @@ input.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))
 function cancelarEdicao(){limparConflito();if(editando)input.value=editando.baseline;atualizarSujo()}
 document.querySelector('#cancel-name').addEventListener('click',cancelarEdicao);
 document.querySelector('#close-panel').addEventListener('click',clearSelection);
-document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(colocando){pararDeColocar();flash('Adição cancelada.');return}if(ligando){pararDeLigar();flash('Ligação cancelada.');return}if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!scriptView.hidden){fecharScript();return}if(colocando){pararDeColocar();flash('Adição cancelada.');return}if(ligando){pararDeLigar();flash('Ligação cancelada.');return}if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
 async function update(){try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();elements=s.elementos||[];hashAtual=s.hash;sugestoes=s.sugestoes||sugestoes;if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}if(selecionarDepois&&elements.some(x=>x.id===selecionarDepois)){select(selecionarDepois);selecionarDepois=undefined;document.querySelector('#name-input')?.focus()}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
 try{if(localStorage.getItem('fluigctl-edicao')==='1')setEditMode(true)}catch{}
 update();const events=new EventSource('events');events.addEventListener('change',update);events.onerror=()=>{dot.classList.add('bad');status.textContent='reconectando…'};
 </script></body></html>`;
 }
+/**
+ * O script de uma service task, para o painel mostrar. Só lê, e só o arquivo que
+ * o `scriptFileName` dela aponta em `workflow/scripts/` ao lado do diagrama.
+ */
+export function lerScript(arquivo: string, id: string): { ok: boolean; caminho?: string; existe?: boolean; conteudo?: string; mensagem?: string } {
+  let diagrama: Diagrama;
+  try {
+    diagrama = lerDiagrama(readFileSync(arquivo, 'utf8'));
+  } catch (erro) {
+    return { ok: false, mensagem: mensagem(erro) };
+  }
+  const o = diagrama.objetos.find((x) => x.attrs['id'] === id);
+  if (!o || o.tipo !== 'BpmnTask' || o.attrs['type'] !== '82') return { ok: false, mensagem: `${id} não é uma service task` };
+  const processo = diagrama.objetos.find((x) => x.tipo === 'BpmnProcess')?.attrs['id'] ?? '';
+  const nome = o.attrs['scriptFileName'] || `${processo}.${id}.js`;
+  if (!/^[\w.-]+\.js$/.test(nome)) return { ok: false, mensagem: `scriptFileName inválido: ${nome}` };
+  const pasta = dirname(resolve(arquivo));
+  if (basename(pasta) !== 'diagrams' || basename(dirname(pasta)) !== 'workflow') {
+    return { ok: false, mensagem: 'o diagrama não está em workflow/diagrams/, então não há onde procurar o script' };
+  }
+  const caminho = join(dirname(pasta), 'scripts', nome);
+  const relativo = `workflow/scripts/${nome}`;
+  try {
+    return { ok: true, caminho: relativo, existe: true, conteudo: readFileSync(caminho, 'utf8') };
+  } catch {
+    return { ok: true, caminho: relativo, existe: false };
+  }
+}
+
 export interface OpcoesServidor {
   arquivo: string;
   token?: string;
@@ -1039,6 +1093,11 @@ export async function servirDiagrama(opcoes: OpcoesServidor): Promise<ServidorVi
     }
     if (rota === 'state') {
       responder(res, 200, 'application/json', JSON.stringify(estado));
+      return;
+    }
+    if (rota === 'script') {
+      const id = new URL(url, 'http://local').searchParams.get('id') ?? '';
+      respostaJson(res, 200, lerScript(arquivo, id));
       return;
     }
     if (rota === 'events') {
