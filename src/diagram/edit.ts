@@ -401,7 +401,7 @@ export function formasDeTopo(xml: string): Map<string, FormaNoTexto> {
 }
 
 /** O Studio omite x/y quando valem 0; o resto vai logo depois de height. */
-function trocarCoordenada(tag: string, attr: 'x' | 'y', valor: number): string {
+export function trocarCoordenada(tag: string, attr: "x" | "y", valor: number): string {
   const existente = new RegExp(`\\s${attr}="-?\\d+"`);
   if (valor === 0) return tag.replace(existente, '');
   if (existente.test(tag)) return tag.replace(existente, ` ${attr}="${valor}"`);

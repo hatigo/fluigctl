@@ -144,7 +144,10 @@ they can:
   dropped. Removal is refused for pool and lanes, for an element another
   task's assignment uses, for one side of a link pair, and for a gateway whose
   conditions the panel cannot rewrite. A removed service task's script stays
-  on disk. Every edit writes the `.process` directly and goes through the same
+  on disk.
+- resize a lane (panel field or the handle on its bottom edge) or the pool
+  width. Everything below the lane moves with it, and the pool follows.
+  Shrinking is refused if it would cut an element that fits today. Every edit writes the `.process` directly and goes through the same
 safeguards:
 - **Hash check.** The edit only applies to the text the screen was drawn from.
   If the file changed, the edit is refused and the screen refreshes.
