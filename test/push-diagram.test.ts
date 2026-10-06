@@ -15,8 +15,8 @@ import type { Server } from '../src/config.js';
 import { ErroFluigctl } from '../src/errors.js';
 import { converterDiagrama } from '../src/push/diagram/ecm30.js';
 import { lerXml, type No } from '../src/push/diagram/xml.js';
-import { gerarSvg, sequenciasDoSvg } from '../src/push/diagram/svg.js';
-import { lerDiagrama } from '../src/push/diagram/modelo.js';
+import { gerarSvg, pontosDoFluxo, sequenciasDoSvg } from '../src/push/diagram/svg.js';
+import { lerDiagrama, type Diagrama } from '../src/push/diagram/modelo.js';
 
 const FIXTURES = fileURLToPath(new URL('./fixtures/diagrams/', import.meta.url));
 const CLI = fileURLToPath(new URL('../src/cli.js', import.meta.url));
@@ -1086,6 +1086,24 @@ test('bpmnVersionDe lê a PDV do export; ilegível vira undefined', () => {
 
 
 /* ============================ Imagem do diagrama ============================ */
+
+test('fluxo diagonal de evento circular toca a circunferência, não o canto invisível da chopbox', () => {
+  const diagrama: Diagrama = {
+    objetos: [
+      { tipo: 'BpmnIntermediateEvent', attrs: { id: 'erro', type: '43' } },
+      { tipo: 'BpmnTask', attrs: { id: 'tratar', type: '80' } },
+      { tipo: 'SequenceFlow', attrs: { id: 'flow1', sourceRef: 'erro', targetRef: 'tratar' } },
+    ],
+    caixas: new Map([
+      ['erro', { x: 100, y: 100, absX: 100, absY: 100, largura: 40, altura: 40 }],
+      ['tratar', { x: 200, y: 200, absX: 200, absY: 200, largura: 100, altura: 50 }],
+    ]),
+    dobras: new Map(),
+    icones: new Map(),
+  };
+
+  assert.deepEqual(pontosDoFluxo(diagrama, diagrama.objetos[2]!), [{ x: 136, y: 133 }, { x: 219, y: 200 }]);
+});
 
 test('gerarSvg desenha cada estado num <g sequence>, as raias e os fluxos com seta, e é XML válido', () => {
   const svg = gerarSvg(lerDiagrama(PROCESSO));
