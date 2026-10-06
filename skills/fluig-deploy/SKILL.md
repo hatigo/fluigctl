@@ -132,7 +132,11 @@ they can:
   `workflow/scripts/<process>.<id>.js`: a skeleton that logs "not implemented
   yet", never an empty function. Implement it before pushing. Undo removes the
   script only if it is still the generated one; an existing file is never
-  overwritten. Every edit writes the `.process` directly and goes through the same
+  overwritten.
+- connect two elements, by dragging the blue handle on the right of the
+  selected one, or with "Ligar a…" and a click on the target. The new flow is
+  routed by the recipe. The router goes around cards in the way, through the
+  corridor above them, so no line crosses a card. Every edit writes the `.process` directly and goes through the same
 safeguards:
 - **Hash check.** The edit only applies to the text the screen was drawn from.
   If the file changed, the edit is refused and the screen refreshes.
@@ -148,8 +152,7 @@ If the human edits, expect the file to change under you. Re-read it before your
 next write, so you do not overwrite their edit. Your own writes have none of
 these protections. Outside edit mode the viewer is read-only.
 
-Do not claim the viewer can do more than this. Connecting elements by hand and removing
-them are not built yet.
+Do not claim the viewer can do more than this. Removing elements is not built yet.
 
 ## Pushing
 

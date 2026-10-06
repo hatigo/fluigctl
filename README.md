@@ -62,7 +62,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `server ui` (tela no terminal para o cadastro) | pronto |
 | `skill install` / `uninstall` (as skills que ensinam um agente a publicar e a escrever no padrão) | pronto |
 | `diagram open` / `close` (visualizador local, vivo e somente leitura) | pronto |
-| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades e adicionar (com a service task com recuperação); ligar e remover ainda não |
+| `diagram open` + modo de edição (renomear, mover, traçar ligações, propriedades, adicionar, ligar, desfazer/refazer) | pronto: renomear, mover, traçar, propriedades, adicionar (com a service task com recuperação) e ligar; remover ainda não |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
@@ -263,6 +263,9 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
     - Alvo à frente: degrau no meio do vão.
     - Retorno: pelo corredor 20 px acima.
     - Saída de evento de erro: fica a diagonal curta.
+    - Um card no caminho: a linha contorna pelo corredor de cima dos elementos
+      daquele trecho, ou por baixo se não houver espaço. Nenhuma linha cruza um
+      card.
   - **Remover dobras**: deixa a linha reta de ponta a ponta.
   - **Endireitar ligações**: com uma tarefa, evento ou gateway selecionado,
     endireita todas as que entram e saem dele. É o passo natural depois de mover.
@@ -324,6 +327,15 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
     já editou fica, e o aviso diz. Refazer o recria. Um arquivo que já existe
     nunca é sobrescrito. Fora do layout `workflow/diagrams/`, nenhum script é
     criado;
+- **ligar** dois elementos, de dois jeitos:
+  - com uma tarefa, evento ou gateway selecionado, arraste a alça azul à direita
+    dele até o destino;
+  - ou **Ligar a…** no painel, e um clique no destino (`Esc` cancela).
+
+  A ligação nova já nasce traçada pela receita e fica selecionada para você dar
+  o nome. Se a origem é um gateway, o aviso lembra de definir a condição da
+  saída. O fim não tem saída, o início não tem entrada, e uma ligação repetida
+  é recusada;
 - **desfazer e refazer** até 30 edições, pelos botões ou com `Ctrl+Z` e
   `Ctrl+Shift+Z`. Salvar sem mudança não grava nem ocupa o histórico.
 

@@ -361,6 +361,19 @@ export function adicionarNoXml(xml: string, p: PedidoAdicionar): { xml: string; 
   const t = tamanho(modeloTratamento.forma);
   const ty = y + h + GAP;
   if (!dentro(x + w / 2 - t.w / 2, ty, t.w, t.h)) throw new EdicaoInvalida('a tarefa de tratamento ficaria fora da pool; escolha um ponto mais acima');
+  // O padrão pede o tratamento na mesma raia da service task (sem raia de suporte).
+  const raias = d.objetos.filter((o) => o.tipo === 'BpmnSwimLane').flatMap((o) => {
+    const c = d.caixas.get(o.attrs['id'] ?? '');
+    return c ? [{ nome: o.attrs['name'] || o.attrs['id'] || '', c }] : [];
+  });
+  const raiaEm = (cy: number) => raias.find((r) => cy >= r.c.absY && cy < r.c.absY + r.c.altura);
+  const raiaServico = raiaEm(y + h / 2);
+  const raiaTratamento = raiaEm(ty + t.h / 2);
+  if (raiaServico && raiaTratamento !== raiaServico) {
+    throw new EdicaoInvalida(
+      `o tratamento cairia ${raiaTratamento ? `na raia ${raiaTratamento.nome}` : 'fora das raias'}, e o padrão o quer na raia ${raiaServico.nome}, junto da service task; escolha um ponto mais acima ou aumente a raia`,
+    );
+  }
   const tratamento = criarNoXml(r.xml, {
     tipo: 'humana',
     nome: `Tratar erro: ${nome}`,

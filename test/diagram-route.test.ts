@@ -90,6 +90,21 @@ test('a rota ortogonal segue a receita', () => {
   assert.equal(r[1]!.x, 1130, 'entra no centro da tarefa');
 });
 
+test('a rota desvia de um card no caminho, pelo corredor de cima', async () => {
+  const { criarNoXml, ligarNoXml } = await import('../src/diagram/add.js');
+  // Na linha da raia Solicitante (centro y=100): um card no meio e um destino depois dele.
+  const meio = criarNoXml(ORIGINAL, { tipo: 'humana', nome: 'No caminho', x: 500, y: 67 });
+  const fim = criarNoXml(meio.xml, { tipo: 'humana', nome: 'Destino', x: 800, y: 67 });
+  const f = ligarNoXml(fim.xml, 'task2', fim.id);
+  const d = lerDiagrama(f.xml);
+  const r = rotaOrtogonal(d, f.id);
+  const caminho = d.caixas.get(meio.id)!;
+  assert.equal(r.length, 2);
+  assert.equal(r[0]!.y, r[1]!.y, 'corredor horizontal');
+  assert.ok(r[0]!.y < caminho.absY, 'passa por cima do card do meio');
+  assert.equal(r[0]!.x, 250, 'sobe do centro da origem');
+});
+
 test('endireitar um elemento traça todas as ligações dele, e passa no diagram check', () => {
   const p = projeto();
   try {

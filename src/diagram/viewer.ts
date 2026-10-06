@@ -8,8 +8,9 @@ import { spawn } from 'node:child_process';
 import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
-import { adicionarNoXml, scriptsDasCriadas, type TipoNovo } from './add.js';
-import { ConflitoEdicao, EdicaoInvalida, aplicarEdicao, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras } from './edit.js';
+import { adicionarNoXml, ligarNoXml, scriptsDasCriadas, type TipoNovo } from './add.js';
+import { rotaOrtogonal } from './route.js';
+import { ConflitoEdicao, EdicaoInvalida, aplicarEdicao, desfazerUltimaEdicao, endireitar, hash, moverElemento, refazerEdicao, renomearElemento, trocarDobras, trocarDobrasNoXml } from './edit.js';
 import {
   MECANISMOS,
   lerAtribuicao,
@@ -519,6 +520,20 @@ async function tratarEdicao(
       });
       return;
     }
+    if (rota === 'connect') {
+      const origem = texto('origem');
+      const destino = texto('destino');
+      let id = '';
+      const r = aplicarEdicao(arquivo, undoDir, (t) => {
+        const feito = ligarNoXml(t, origem, destino);
+        id = feito.id;
+        // A ligação nova já nasce traçada pela receita.
+        return trocarDobrasNoXml(feito.xml, feito.id, rotaOrtogonal(lerDiagrama(feito.xml), feito.id));
+      }, texto('hash'));
+      const tipoOrigem = lerDiagrama(readFileSync(arquivo, 'utf8')).objetos.find((o) => o.attrs['id'] === origem)?.tipo;
+      respostaJson(res, 200, { ok: true, criados: [id], avisos: r.avisos, deGateway: tipoOrigem === 'BpmnGateway' });
+      return;
+    }
     if (rota === 'execution') {
       const id = texto('id');
       const r = aplicarEdicao(arquivo, undoDir, (t) => tornarAutomaticaNoXml(t, id), texto('hash'));
@@ -610,7 +625,8 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 .edit-toggle[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}.edit-toggle[aria-pressed="true"]:hover{background:#1d47b3}
 #edit-tools{display:flex;gap:6px}#edit-tools[hidden]{display:none}.mode{font-size:12px;font-weight:700;color:#1e40af;background:#dbeafe;border-radius:999px;padding:4px 9px;white-space:nowrap}
 body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cursor:move}.fluig-hit.moving{fill:#2457d61f;stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none}
-.fluig-hit.flow.moving{fill:none;stroke-width:3}.handle{fill:#fff;stroke:var(--brand);stroke-width:2;cursor:move;vector-effect:non-scaling-stroke}.handle:hover{fill:#dbeafe}
+.fluig-hit.flow.moving{fill:none;stroke-width:3}.conector{fill:var(--brand);stroke:#fff;stroke-width:2;cursor:crosshair;vector-effect:non-scaling-stroke}.conector:hover{fill:#1d47b3}.previa-ligacao{stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;fill:none;pointer-events:none;vector-effect:non-scaling-stroke}
+.handle{fill:#fff;stroke:var(--brand);stroke-width:2;cursor:move;vector-effect:non-scaling-stroke}.handle:hover{fill:#dbeafe}
 #edit-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}#edit-actions[hidden]{display:none}
 .props{margin-top:18px;border-top:1px solid var(--line);padding-top:12px}.props[hidden]{display:none}.props h3{font-size:13px;margin:12px 0 8px}.props label{display:block;font-size:12px;color:var(--muted);margin:9px 0 4px}
 .props input,.props select,.props textarea{width:100%;padding:7px 9px;border:1px solid #c3cddd;border-radius:8px;font:13px system-ui,-apple-system,Segoe UI,sans-serif;color:var(--ink);background:#fff}.props textarea{min-height:64px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
@@ -632,7 +648,7 @@ const canvas=document.querySelector('#canvas'), status=document.querySelector('#
 const form=document.querySelector('#name-form'), input=document.querySelector('#name-input'), dirty=document.querySelector('#dirty'), conflict=document.querySelector('#conflict');
 let svg, original, box, drag, elements=[], selectedId, editando, noticeTimer, editMode=false, hashAtual, ocupado=false;
 const moveHint=document.querySelector('#move-hint'), editTools=document.querySelector('#edit-tools'), editToggle=document.querySelector('#edit-toggle');
-function setEditMode(on){if(!on&&typeof pararDeColocar==='function')pararDeColocar();editMode=on;document.body.classList.toggle('editing',on);editToggle.setAttribute('aria-pressed',String(on));editToggle.textContent=on?'Sair da edição':'Editar';editToggle.title=on?'Voltar ao modo somente leitura':'Ligar o modo de edição';editTools.hidden=!on;try{localStorage.setItem('fluigctl-edicao',on?'1':'0')}catch{}if(!on&&editando&&sujo())cancelarEdicao();if(selectedId)select(selectedId)}
+function setEditMode(on){if(!on&&typeof pararDeColocar==='function'){pararDeColocar();pararDeLigar()}editMode=on;document.body.classList.toggle('editing',on);editToggle.setAttribute('aria-pressed',String(on));editToggle.textContent=on?'Sair da edição':'Editar';editToggle.title=on?'Voltar ao modo somente leitura':'Ligar o modo de edição';editTools.hidden=!on;try{localStorage.setItem('fluigctl-edicao',on?'1':'0')}catch{}if(!on&&editando&&sujo())cancelarEdicao();if(selectedId)select(selectedId)}
 editToggle.addEventListener('click',()=>setEditMode(!editMode));
 function dimensions(el){const w=Number(el.getAttribute('width'))||1000,h=Number(el.getAttribute('height'))||700;return {x:0,y:0,w,h}}
 function apply(){if(svg&&box)svg.setAttribute('viewBox',box.x+' '+box.y+' '+box.w+' '+box.h)}
@@ -643,18 +659,23 @@ canvas.addEventListener('wheel',e=>{if(!svg)return;e.preventDefault();const r=sv
 function escala(){const r=svg.getBoundingClientRect();return Math.max(box.w/r.width,box.h/r.height)}
 function hitsDe(ids){return [...svg.querySelectorAll('.fluig-hit')].filter(n=>ids.includes(n.dataset.id))}
 function soltarPrevia(){svg?.querySelectorAll('.fluig-hit.moving').forEach(n=>{n.classList.remove('moving');n.removeAttribute('transform')})}
-canvas.addEventListener('pointerdown',e=>{if(!svg||e.button!==0)return;if(editMode&&colocando){e.preventDefault();void colocarEm(e);return}const hit=e.target.closest?.('.fluig-hit');const el=hit&&elements.find(x=>x.id===hit.dataset.id);canvas.setPointerCapture(e.pointerId);
+canvas.addEventListener('pointerdown',e=>{if(!svg||e.button!==0)return;if(editMode&&colocando){e.preventDefault();void colocarEm(e);return}
+  if(editMode&&ligando){e.preventDefault();const alvo=alvoSob(e),origem=ligando.origem;pararDeLigar();if(!alvo||alvo.id===origem){flash('Ligação cancelada: clique numa tarefa, evento ou gateway diferente da origem.');return}void ligar(origem,alvo.id);return}
+  if(editMode&&e.target.closest?.('.conector')&&!ocupado){const el=elements.find(x=>x.id===selectedId);if(el){canvas.setPointerCapture(e.pointerId);const c=el.geometria.caixa;const linha=document.createElementNS(NS,'line');linha.classList.add('previa-ligacao');const cx=c.x+c.largura/2,cy=c.y+(el.tipo==='BpmnGateway'?Math.min(c.largura,c.altura):c.altura)/2;linha.setAttribute('x1',cx);linha.setAttribute('y1',cy);linha.setAttribute('x2',cx);linha.setAttribute('y2',cy);svg.append(linha);drag={modo:'ligar',origem:el.id,linha,x:e.clientX,y:e.clientY,moved:false};return}}const hit=e.target.closest?.('.fluig-hit');const el=hit&&elements.find(x=>x.id===hit.dataset.id);canvas.setPointerCapture(e.pointerId);
   const alca=e.target.closest?.('.handle');
   if(editMode&&alca&&!ocupado){const fl=elements.find(x=>x.id===selectedId);if(fl&&fl.dobras){drag={modo:'dobra',x:e.clientX,y:e.clientY,el:fl,indice:Number(alca.dataset.indice),dobras:fl.dobras.map(p=>({...p})),moved:false};return}}
   if(editMode&&el&&el.podeMover&&!ocupado){drag={modo:'mover',x:e.clientX,y:e.clientY,hitId:el.id,ids:[el.id,...el.anexados],moved:false,dx:0,dy:0};return}
   drag={modo:'pan',x:e.clientX,y:e.clientY,box:{...box},hitId:hit?.dataset.id,moved:false};canvas.classList.add('drag')});
-canvas.addEventListener('pointermove',e=>{if(!drag||!svg)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.hypot(dx,dy)>3)drag.moved=true;if(!drag.moved)return;
+let lastPointer={clientX:0,clientY:0};
+canvas.addEventListener('pointermove',e=>{lastPointer={clientX:e.clientX,clientY:e.clientY};if(!drag||!svg)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.hypot(dx,dy)>3)drag.moved=true;if(!drag.moved)return;
+  if(drag.modo==='ligar'){const q=pontoDoDiagrama(e);drag.linha.setAttribute('x2',q.x);drag.linha.setAttribute('y2',q.y);return}
   if(drag.modo==='dobra'){const q=pontoDoDiagrama(e);drag.dobras[drag.indice]={x:grade(q.x),y:grade(q.y)};const a=svg.querySelector('.handle[data-indice="'+drag.indice+'"]');if(a){a.setAttribute('x',drag.dobras[drag.indice].x-5);a.setAttribute('y',drag.dobras[drag.indice].y-5)}previaDoFluxo(drag.el,drag.dobras);return}
   if(drag.modo==='mover'){const k=escala();drag.dx=Math.round(dx*k/10)*10;drag.dy=Math.round(dy*k/10)*10;for(const n of hitsDe(drag.ids)){n.classList.add('moving');n.setAttribute('transform','translate('+drag.dx+' '+drag.dy+')')}return}
   const r=svg.getBoundingClientRect();box={...drag.box,x:drag.box.x-dx/r.width*drag.box.w,y:drag.box.y-dy/r.height*drag.box.h};apply()});
 canvas.addEventListener('pointerup',()=>{if(!drag)return;const d=drag;drag=undefined;canvas.classList.remove('drag');
   if(d.modo==='mover'&&d.moved&&(d.dx||d.dy)){void moverPara(d.hitId,d.dx,d.dy);return}
   if(d.modo==='dobra'){if(d.moved)void gravarDobras(d.el.id,d.dobras);return}
+  if(d.modo==='ligar'){d.linha.remove();const alvo=alvoSob(lastPointer);if(!d.moved)return;if(!alvo||alvo.id===d.origem){flash('Solte a ligação sobre uma tarefa, evento ou gateway.');return}void ligar(d.origem,alvo.id);return}
   soltarPrevia();if(!d.moved){if(d.hitId)select(d.hitId);else clearSelection()}});
 canvas.addEventListener('pointercancel',()=>{drag=undefined;soltarPrevia();canvas.classList.remove('drag')});
 function flash(texto,acao){clearTimeout(noticeTimer);notice.replaceChildren();const span=document.createElement('span');span.textContent=texto;notice.append(span);if(acao){const b=document.createElement('button');b.type='button';b.textContent=acao.rotulo;b.addEventListener('click',acao.aoClicar);const linha=document.createElement('span');linha.className='row';linha.append(b);notice.append(linha)}notice.classList.add('show');noticeTimer=setTimeout(()=>notice.classList.remove('show'),acao?12000:2800)}
@@ -760,7 +781,15 @@ const grade=n=>Math.max(0,Math.round(n/10)*10);
 function desenharAlcas(){
   svg?.querySelector('[data-layer=handles]')?.remove();
   const el=selectedId&&elements.find(x=>x.id===selectedId);
-  if(!svg||!editMode||!el||!el.dobras)return;
+  if(!svg||!editMode||!el)return;
+  if(!el.dobras){
+    // Nó: a alça de ligar, no meio da borda direita.
+    if(!podeLigarDe(el))return;
+    const c=el.geometria.caixa,alto=el.tipo==='BpmnGateway'?Math.min(c.largura,c.altura):c.altura;
+    const g=document.createElementNS(NS,'g');g.setAttribute('data-layer','handles');
+    const a=document.createElementNS(NS,'circle');a.classList.add('conector');a.setAttribute('cx',c.x+c.largura+12);a.setAttribute('cy',c.y+alto/2);a.setAttribute('r','8');
+    const t=document.createElementNS(NS,'title');t.textContent='Arraste até outro elemento para ligar';a.append(t);g.append(a);svg.append(g);return;
+  }
   const g=document.createElementNS(NS,'g');g.setAttribute('data-layer','handles');
   el.dobras.forEach((p,i)=>{const r=document.createElementNS(NS,'rect');r.classList.add('handle');r.dataset.indice=String(i);r.setAttribute('x',p.x-5);r.setAttribute('y',p.y-5);r.setAttribute('width','10');r.setAttribute('height','10');r.setAttribute('rx','2');const t=document.createElementNS(NS,'title');t.textContent='Dobra '+(i+1)+': arraste para mover, clique duplo para remover';r.append(t);g.append(r)});
   svg.append(g);
@@ -784,7 +813,10 @@ function renderAcoes(el){
   const box=document.querySelector('#edit-actions');box.replaceChildren();
   const botao=(rotulo,titulo,acao,ativo=true)=>{const b=document.createElement('button');b.type='button';b.textContent=rotulo;b.title=titulo;b.disabled=!ativo;b.addEventListener('click',acao);box.append(b)};
   if(editMode&&el.dobras){botao('Endireitar','Traça a ligação em ângulos retos, pela receita de layout',()=>void endireitarEl(el.id));botao('Remover dobras','Deixa a ligação reta, de ponta a ponta',()=>void gravarDobras(el.id,[]),el.dobras.length>0)}
-  else if(editMode&&el.ligacoes>0&&el.podeMover)botao('Endireitar ligações','Traça em ângulos retos todas as ligações que entram e saem deste elemento',()=>void endireitarEl(el.id));
+  else if(editMode&&el.podeMover){
+    if(podeLigarDe(el))botao('Ligar a…','Cria uma ligação deste elemento até o próximo que você clicar (ou arraste a alça azul à direita dele)',()=>comecarLigacao(el.id));
+    if(el.ligacoes>0)botao('Endireitar ligações','Traça em ângulos retos todas as ligações que entram e saem deste elemento',()=>void endireitarEl(el.id));
+  }
   box.hidden=box.childElementCount===0;
 }
 canvas.addEventListener('dblclick',e=>{
@@ -881,6 +913,19 @@ function renderProps(el){
       no('div',{class:'row'},no('button',{type:'button',text:'Salvar condições',onclick:()=>void gravarProps('conditions',{id:el.id,condicoes:modelo.filter(m=>m.c).map(m=>m.c)},'Condições salvas.')})));
   }
 }
+// Ligar: arrastando a alça do elemento selecionado, ou "Ligar a…" e um clique no destino.
+let ligando;
+function podeLigarDe(el){return el.podeMover&&el.tipo!=='BpmnEndEvent'&&!/Pool|SwimLane/.test(el.tipo)}
+function alvoSob(e){const sob=document.elementFromPoint(e.clientX,e.clientY)?.closest?.('.fluig-hit');const el=sob&&elements.find(x=>x.id===sob.dataset.id);return el&&el.podeMover?el:undefined}
+function comecarLigacao(origem){ligando={origem};document.body.classList.add('colocando');flash('Clique no elemento de destino da ligação. Esc cancela.')}
+function pararDeLigar(){ligando=undefined;document.body.classList.remove('colocando');svg?.querySelector('.previa-ligacao')?.remove()}
+async function ligar(origem,destino){
+  if(ocupado)return;ocupado=true;
+  try{const {status,dados}=await pedir('connect',{origem,destino,hash:hashAtual});
+    if(dados.ok){selecionarDepois=dados.criados[0];flash(('Ligação criada. '+(dados.deGateway?'Defina a condição desta saída no painel do gateway. ':'')+resumoAvisos(dados)).trim(),{rotulo:'Desfazer',aoClicar:desfazer});return}
+    flash(dados.mensagem||'não foi possível ligar.');if(status===409)void update()}
+  finally{ocupado=false}
+}
 // Adicionar: escolhe o tipo no menu, e o próximo clique no diagrama diz onde.
 const addMenu=document.querySelector('#add-menu');let colocando,selecionarDepois;
 const NOMES_TIPO={humana:'tarefa humana',recuperacao:'service task com recuperação',servico:'service task',gateway:'gateway',fim:'fim'};
@@ -914,7 +959,7 @@ input.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey))
 function cancelarEdicao(){limparConflito();if(editando)input.value=editando.baseline;atualizarSujo()}
 document.querySelector('#cancel-name').addEventListener('click',cancelarEdicao);
 document.querySelector('#close-panel').addEventListener('click',clearSelection);
-document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(colocando){pararDeColocar();flash('Adição cancelada.');return}if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(colocando){pararDeColocar();flash('Adição cancelada.');return}if(ligando){pararDeLigar();flash('Ligação cancelada.');return}if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
 async function update(){try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();elements=s.elementos||[];hashAtual=s.hash;sugestoes=s.sugestoes||sugestoes;if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}if(selecionarDepois&&elements.some(x=>x.id===selecionarDepois)){select(selecionarDepois);selecionarDepois=undefined;document.querySelector('#name-input')?.focus()}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
 try{if(localStorage.getItem('fluigctl-edicao')==='1')setEditMode(true)}catch{}
 update();const events=new EventSource('events');events.addEventListener('change',update);events.onerror=()=>{dot.classList.add('bad');status.textContent='reconectando…'};
