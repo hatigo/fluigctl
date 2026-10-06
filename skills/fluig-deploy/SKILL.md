@@ -113,12 +113,21 @@ they can:
 - move tasks, events and gateways, by dragging or with the arrow keys. An
   attached error event moves with its task;
 - route flows: drag, add or remove bendpoints, or straighten a flow, or all the
-  flows of an element, into right angles by the layout recipe. Every edit writes the `.process` directly and goes through the same
+  flows of an element, into right angles by the layout recipe.
+- edit properties in the panel:
+  - make a service task automatic;
+  - set a human task's assignment: Pool Grupo, Grupo, Pool Papel, Usuário,
+    Campo Formulário, Executor Atividade, or a custom mechanism;
+  - edit a gateway's conditions per outgoing flow, as field rules (equal / not
+    equal) or as an expression.
+
+  Assignment and condition blobs are only rewritten in Studio's exact format.
+  When the panel cannot round-trip one, it shows it read-only. Every edit writes the `.process` directly and goes through the same
 safeguards:
 - **Hash check.** The edit only applies to the text the screen was drawn from.
   If the file changed, the edit is refused and the screen refreshes.
 - **Text patch.** The change touches only what is being edited: the `name`, a
-  shape's `x`/`y`, or a flow's `<bendpoints>`. Nothing else in the file is rewritten.
+  shape's `x`/`y`, a flow's `<bendpoints>`, or the one property attribute. Nothing else in the file is rewritten.
 - **Structure check.** `diagram check` must find no structural error that the
   file did not already have.
 - **Atomic write.**
@@ -130,7 +139,7 @@ next write, so you do not overwrite their edit. Your own writes have none of
 these protections. Outside edit mode the viewer is read-only.
 
 Do not claim the viewer can do more than this. Adding, connecting or removing
-elements, and editing properties, are not built yet.
+elements is not built yet.
 
 ## Pushing
 
