@@ -1181,7 +1181,7 @@ a mesma comparação quando o acervo está na máquina.
 do visualizador: cada `.process` é organizado e as ligações são contadas
 (`src/diagram/layout-medida.ts`) — as que passam por cima de uma forma, os pares
 que correm um em cima do outro e os que se cruzam. No acervo de 94 diagramas: 1,
-15 e 205 (o desenho feito à mão no Studio: 204, 1 e 43). `--original` mede os
+5 e 152 (o desenho feito à mão no Studio: 204, 1 e 43). `--original` mede os
 diagramas como estão.
 
 Tarefas e gateways criados (visualizador, `diagram pull`) ou renomeados saem no

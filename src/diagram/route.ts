@@ -31,18 +31,27 @@ export function rotaOrtogonal(diagrama: Diagrama, fluxoId: string): Ponto[] {
 
 const NOS = new Set(['BpmnTask', 'BpmnGateway', 'BpmnStartEvent', 'BpmnEndEvent', 'BpmnIntermediateEvent', 'BpmnSubProcess']);
 
+/** As figuras dos nós de um diagrama, lidas uma vez: o Organizar pergunta milhares de vezes. */
+const figurasDe = new WeakMap<Diagrama, { id: string; presoA: string | undefined; caixa: Caixa }[]>();
+function figuras(diagrama: Diagrama) {
+  let lista = figurasDe.get(diagrama);
+  if (!lista) {
+    lista = diagrama.objetos
+      .filter((o) => NOS.has(o.tipo))
+      .flatMap((o) => {
+        const c = diagrama.caixas.get(o.attrs['id'] ?? '');
+        return c ? [{ id: o.attrs['id'] ?? '', presoA: o.attrs['parentTask'], caixa: caixaDaFigura(o, c) }] : [];
+      });
+    figurasDe.set(diagrama, lista);
+  }
+  return lista;
+}
+
 /** As figuras que uma linha não pode atravessar: todo nó, menos as pontas e os eventos presos a elas. */
 function obstaculos(diagrama: Diagrama, origem: string, destino: string): Caixa[] {
-  return diagrama.objetos
-    .filter((o) => NOS.has(o.tipo))
-    .filter((o) => {
-      const id = o.attrs['id'] ?? '';
-      return id !== origem && id !== destino && o.attrs['parentTask'] !== origem && o.attrs['parentTask'] !== destino;
-    })
-    .flatMap((o) => {
-      const c = diagrama.caixas.get(o.attrs['id'] ?? '');
-      return c ? [caixaDaFigura(o, c)] : [];
-    });
+  return figuras(diagrama)
+    .filter((f) => f.id !== origem && f.id !== destino && f.presoA !== origem && f.presoA !== destino)
+    .map((f) => f.caixa);
 }
 
 /** O segmento de a até b passa por dentro da caixa (com 2 px de folga na borda)? */

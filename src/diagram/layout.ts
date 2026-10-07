@@ -1,9 +1,9 @@
 import { lerDiagrama, type Caixa, type Diagrama, type ObjetoBpmn, type Ponto as Point } from '../push/diagram/modelo.js';
 import { caixaDaFigura } from '../push/diagram/svg.js';
-import { EdicaoInvalida, trocarCoordenada, trocarDobrasNoXml } from './edit.js';
+import { EdicaoInvalida, trocarCoordenada, trocarVariasDobrasNoXml } from './edit.js';
 import { formas, type Tag } from './lanes.js';
 import { cruzaCards, pontasDoFluxo, rotaOrtogonal } from './route.js';
-import { cruzam, sobrepoem } from './layout-medida.js';
+import { cruzam, medirLayout, sobrepoem } from './layout-medida.js';
 
 /**
  * Organizar o diagrama inteiro pela receita de layout da skill fluig-patterns,
@@ -46,7 +46,30 @@ interface No {
 
 const fluxosDe = (d: Diagrama) => d.objetos.filter((o) => o.tipo === 'SequenceFlow');
 
+/**
+ * Onde dois nós disputam o mesmo lugar (mesma raia e coluna), o primeiro que a
+ * busca em profundidade encontra fica na linha principal; a ordem em que ela
+ * visita as saídas de cada nó decide qual. O arquivo não diz nada sobre o
+ * desenho, então cada ordem é tentada e fica a que deixa as ligações melhores
+ * (menos por cima de forma, sobrepostas e cruzadas). No empate, a do arquivo:
+ * organizar de novo não muda nada.
+ */
+type OrdemDasSaidas = 'arquivo' | 'invertida' | 'raia-acima' | 'raia-abaixo' | 'ramo-longo';
+const ORDENS: OrdemDasSaidas[] = ['arquivo', 'invertida', 'raia-acima', 'raia-abaixo', 'ramo-longo'];
+
 export function organizarNoXml(xml: string): { xml: string; nos: number } {
+  let melhor: { xml: string; nos: number; custo: number } | undefined;
+  for (const ordem of ORDENS) {
+    const r = organizarCom(xml, ordem);
+    const m = medirLayout(r.xml);
+    const custo = m.cards * 10 + m.sobrepostas * 3 + m.cruzamentos;
+    if (!melhor || custo < melhor.custo) melhor = { ...r, custo };
+    if (custo === 0) break;
+  }
+  return { xml: melhor!.xml, nos: melhor!.nos };
+}
+
+function organizarCom(xml: string, ordemDasSaidas: OrdemDasSaidas): { xml: string; nos: number } {
   const d = lerDiagrama(xml);
   const objeto = (id: string) => d.objetos.find((o) => o.attrs['id'] === id);
   const fluxos = fluxosDe(d);
@@ -118,6 +141,23 @@ export function organizarNoXml(xml: string): { xml: string; nos: number } {
     .filter(([a, b]) => nos.has(a) && nos.has(b) && a !== b && !retentativas.has(`${a}>${b}`));
   const saidas = new Map<string, string[]>();
   for (const [a, b] of arestas) saidas.set(a, [...(saidas.get(a) ?? []), b]);
+  for (const [a, lista] of saidas) {
+    const raia = (id: string) => nos.get(id)!.raia;
+    if (ordemDasSaidas === 'invertida') saidas.set(a, [...lista].reverse());
+    else if (ordemDasSaidas === 'raia-acima') saidas.set(a, [...lista].sort((p, q) => raia(p) - raia(q)));
+    else if (ordemDasSaidas === 'raia-abaixo') saidas.set(a, [...lista].sort((p, q) => raia(q) - raia(p)));
+  }
+  if (ordemDasSaidas === 'ramo-longo') {
+    // O ramo que alcança mais nós primeiro: o caminho principal fica na linha principal.
+    const alcance = (id: string) => {
+      const vistos = new Set([id]);
+      const fila = [id];
+      while (fila.length) for (const b of saidas.get(fila.shift()!) ?? []) if (!vistos.has(b)) { vistos.add(b); fila.push(b); }
+      return vistos.size;
+    };
+    const tamanhoDoRamo = new Map([...nos.keys()].map((id) => [id, alcance(id)]));
+    for (const [a, lista] of saidas) saidas.set(a, [...lista].sort((p, q) => tamanhoDoRamo.get(q)! - tamanhoDoRamo.get(p)!));
+  }
   const entram = new Set(arestas.map(([, b]) => b));
   // Ordem de partida: inícios, depois quem não tem entrada, na ordem do arquivo.
   const fontes = [...nos.values()].filter((n) => n.o.tipo === 'BpmnStartEvent').concat([...nos.values()].filter((n) => n.o.tipo !== 'BpmnStartEvent' && !entram.has(n.id)));
@@ -280,19 +320,21 @@ export function organizarNoXml(xml: string): { xml: string; nos: number } {
   const colide = (pts: Point[], origem: string, destino: string) =>
     segmentos(pts).some((s) => trechos.some((t) => t.origem !== origem && t.destino !== destino && t.vertical === s.vertical && Math.abs(t.pos - s.pos) < 6 && Math.min(t.ate, s.ate) - Math.max(t.de, s.de) > 0));
   // Os curtos primeiro: têm menos vãos para escolher; os longos desviam deles.
+  // As posições já não mudam: o diagrama é lido uma vez, e as dobras de todas
+  // as ligações vão para o texto de uma vez no fim.
   const posicionado = lerDiagrama(texto);
   const vao = (f: ObjetoBpmn) => {
     const p = pontasDoFluxo(posicionado, f.attrs['id']!);
     return p ? Math.abs(p[1].x - p[0].x) : 0;
   };
+  const rotas = new Map<string, Point[]>();
   for (const f of [...fluxos].sort((p, q) => vao(p) - vao(q))) {
     const id = f.attrs['id']!;
-    const atual = lerDiagrama(texto);
-    if (!atual.dobras.has(id)) continue;
+    if (!posicionado.dobras.has(id)) continue;
     const origem = f.attrs['sourceRef'] ?? '';
     const destino = f.attrs['targetRef'] ?? '';
-    let dobras = rotaOrtogonal(atual, id);
-    const pontas = pontasDoFluxo(atual, id);
+    let dobras = rotaOrtogonal(posicionado, id);
+    const pontas = pontasDoFluxo(posicionado, id);
     if (pontas && dobras.length === 2) {
       const linha = (db: Point[]) => [pontas[0], ...db, pontas[1]].map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
       if (colide(linha(dobras), origem, destino)) {
@@ -308,7 +350,7 @@ export function organizarNoXml(xml: string): { xml: string; nos: number } {
           const tentativa = vertical
             ? dobras.map((p) => ({ x: alvo, y: p.y }))
             : dobras.map((p) => ({ x: p.x, y: alvo }));
-          if (!colide(linha(tentativa), origem, destino) && !cruzaCards(atual, id, tentativa)) {
+          if (!colide(linha(tentativa), origem, destino) && !cruzaCards(posicionado, id, tentativa)) {
             dobras = tentativa;
             break;
           }
@@ -316,9 +358,10 @@ export function organizarNoXml(xml: string): { xml: string; nos: number } {
       }
       for (const sg of segmentos(linha(dobras))) trechos.push({ ...sg, origem, destino });
     }
-    texto = trocarDobrasNoXml(texto, id, dobras);
+    rotas.set(id, dobras);
   }
-  texto = aliviarCruzamentos(texto, fluxos.map((f) => f.attrs['id']!));
+  aliviarCruzamentos(posicionado, rotas);
+  texto = trocarVariasDobrasNoXml(texto, rotas);
   return { xml: texto, nos: posicoes.size };
 }
 
@@ -329,16 +372,16 @@ export function organizarNoXml(xml: string): { xml: string; nos: number } {
  * duas formas (degrau ou corredor), a rota que cruza menos ligações e não corre
  * em cima de outra, sem passar por card nem entrar na figura das pontas.
  */
-function aliviarCruzamentos(xml: string, ids: string[]): string {
-  const d = lerDiagrama(xml);
-  const objeto = (id: string) => d.objetos.find((o) => o.attrs['id'] === id);
+function aliviarCruzamentos(d: Diagrama, dobrasPorFluxo: Map<string, Point[]>): void {
+  const porId = new Map(d.objetos.filter((o) => o.attrs['id']).map((o) => [o.attrs['id']!, o]));
+  const objeto = (id: string) => porId.get(id);
   interface Rota { id: string; origem: string; destino: string; a: Point; b: Point; dobras: Point[] }
   const rotas: Rota[] = [];
-  for (const id of ids) {
+  for (const [id, dobras] of dobrasPorFluxo) {
     const pontas = pontasDoFluxo(d, id);
     const f = objeto(id);
     if (!pontas || !f) continue;
-    rotas.push({ id, origem: f.attrs['sourceRef'] ?? '', destino: f.attrs['targetRef'] ?? '', a: pontas[0], b: pontas[1], dobras: d.dobras.get(id) ?? [] });
+    rotas.push({ id, origem: f.attrs['sourceRef'] ?? '', destino: f.attrs['targetRef'] ?? '', a: pontas[0], b: pontas[1], dobras });
   }
   const segmentos = (r: Rota, dobras = r.dobras): [Point, Point][] => {
     const pts = [r.a, ...dobras, r.b].map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
@@ -349,12 +392,30 @@ function aliviarCruzamentos(xml: string, ids: string[]): string {
     const c = d.caixas.get(id);
     return o && c ? caixaDaFigura(o, c) : undefined;
   };
+  // Segmentos e caixa envolvente de cada rota, guardados: o custo é perguntado
+  // para cada posição candidata de cada ligação, contra todas as outras.
+  type Tracado = { segmentos: [Point, Point][]; x0: number; x1: number; y0: number; y1: number };
+  const tracar = (r: Rota, dobras: Point[]): Tracado => {
+    const sg = segmentos(r, dobras);
+    const xs = sg.flatMap(([p, q]) => [p.x, q.x]);
+    const ys = sg.flatMap(([p, q]) => [p.y, q.y]);
+    return { segmentos: sg, x0: Math.min(...xs) - 6, x1: Math.max(...xs) + 6, y0: Math.min(...ys) - 6, y1: Math.max(...ys) + 6 };
+  };
+  const tracados = new Map<Rota, Tracado>();
+  const tracadoDe = (r: Rota) => {
+    let t = tracados.get(r);
+    if (!t) tracados.set(r, (t = tracar(r, r.dobras)));
+    return t;
+  };
   const custo = (r: Rota, dobras: Point[]) => {
-    const meus = segmentos(r, dobras);
+    const eu = tracar(r, dobras);
+    const meus = eu.segmentos;
     let n = 0;
     for (const outra of rotas) {
       if (outra === r) continue;
-      const delas = segmentos(outra);
+      const ela = tracadoDe(outra);
+      if (ela.x1 < eu.x0 || ela.x0 > eu.x1 || ela.y1 < eu.y0 || ela.y0 > eu.y1) continue;
+      const delas = ela.segmentos;
       const mesmaPonta = outra.origem === r.origem || outra.destino === r.destino;
       if (meus.some((s) => delas.some((t) => cruzam(s, t)))) n += 1;
       if (!mesmaPonta && meus.some((s) => delas.some((t) => sobrepoem(s, t)))) n += 3;
@@ -392,24 +453,21 @@ function aliviarCruzamentos(xml: string, ids: string[]): string {
       for (let y = Math.floor((topo - 120) / 10) * 10; y <= fundo + 120; y += 10) if (foraEmY(y)) candidatas.push([{ x: Math.round(r.a.x), y }, { x: Math.round(r.b.x), y }]);
       let melhor = { dobras: r.dobras, custo: atual, comprimento: comprimento(r, r.dobras) };
       for (const tentativa of candidatas) {
-        if (cruzaCards(d, r.id, tentativa)) continue;
         const c = custo(r, tentativa);
         if (c > melhor.custo) continue;
         const l = comprimento(r, tentativa);
         // Menos cruzamentos ganha; no empate, só troca o que já cruzava algo, e pela rota mais curta.
-        if (c < melhor.custo || (melhor.dobras !== r.dobras && l < melhor.comprimento)) melhor = { dobras: tentativa, custo: c, comprimento: l };
+        const ganha = c < melhor.custo || (melhor.dobras !== r.dobras && l < melhor.comprimento);
+        // Passar por forma é o teste mais caro: só para quem ganharia.
+        if (ganha && !cruzaCards(d, r.id, tentativa)) melhor = { dobras: tentativa, custo: c, comprimento: l };
       }
       if (melhor.dobras !== r.dobras) {
         r.dobras = melhor.dobras;
+        tracados.delete(r);
         mudou = true;
       }
     }
     if (!mudou) break;
   }
-  let texto = xml;
-  for (const r of rotas) {
-    const antes = d.dobras.get(r.id) ?? [];
-    if (r.dobras.length === 2 && JSON.stringify(antes) !== JSON.stringify(r.dobras)) texto = trocarDobrasNoXml(texto, r.id, r.dobras);
-  }
-  return texto;
+  for (const r of rotas) dobrasPorFluxo.set(r.id, r.dobras);
 }

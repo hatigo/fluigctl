@@ -583,6 +583,33 @@ export function trocarDobrasNoXml(xml: string, fluxoId: string, pontos: Ponto[])
   return texto;
 }
 
+/**
+ * Troca as dobras de vários fluxos de uma vez: uma leitura do texto só, para
+ * quem traça o diagrama inteiro (o Organizar). Fluxo sem conexão desenhada é
+ * ignorado.
+ */
+export function trocarVariasDobrasNoXml(xml: string, novas: Map<string, Ponto[]>): string {
+  for (const pontos of novas.values()) {
+    if (pontos.length > MAX_DOBRAS || pontos.some((p) => !Number.isInteger(p.x) || !Number.isInteger(p.y) || p.x < 0 || p.y < 0 || p.x > 100000 || p.y > 100000)) {
+      throw new EdicaoInvalida('cada dobra precisa de x e y inteiros, não negativos');
+    }
+  }
+  const conexoes = conexoesNoTexto(xml);
+  const coordenadas = (p: Ponto) => `${p.x === 0 ? '' : ` x="${p.x}"`}${p.y === 0 ? '' : ` y="${p.y}"`}`;
+  // Trocas no texto, do fim para o começo: [início, fim, texto novo].
+  const trocas: [number, number, string][] = [];
+  for (const [id, pontos] of novas) {
+    const c = conexoes.get(id);
+    if (!c) continue;
+    trocas.push([c.fechamento, c.fechamento, pontos.map((p) => `${c.recuo}<bendpoints${coordenadas(p)}/>\n`).join('')]);
+    for (const [inicio, fim] of c.dobras) trocas.push([inicio, fim, '']);
+  }
+  trocas.sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+  let texto = xml;
+  for (const [inicio, fim, novo] of trocas) texto = texto.slice(0, inicio) + novo + texto.slice(fim);
+  return texto;
+}
+
 export interface PedidoDobras {
   arquivo: string;
   id: string;

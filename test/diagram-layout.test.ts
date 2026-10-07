@@ -144,8 +144,8 @@ test('o Organizar no acervo: quase nenhuma ligação por cima de forma, poucas s
     total.cruzamentos += m.cruzamentos;
   }
   assert.ok(total.diagramas > 50);
-  // 2026-10-07: 1, 15 e 205 (o desenho à mão: 204, 1 e 43; o Organizar antes: 18, 41 e 442).
+  // 2026-10-07: 1, 5 e 152 (o desenho à mão: 204, 1 e 43; o Organizar antes: 18, 41 e 442).
   assert.ok(total.cards <= 3, `por cima de forma: ${total.cards}`);
-  assert.ok(total.sobrepostas <= 20, `sobrepostas: ${total.sobrepostas}`);
-  assert.ok(total.cruzamentos <= 230, `cruzamentos: ${total.cruzamentos}`);
+  assert.ok(total.sobrepostas <= 10, `sobrepostas: ${total.sobrepostas}`);
+  assert.ok(total.cruzamentos <= 170, `cruzamentos: ${total.cruzamentos}`);
 });
