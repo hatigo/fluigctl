@@ -54,6 +54,25 @@ export interface ResultadoPushForm {
   /** Num update: o nome e o campo descritor que vão (ou foram) para o servidor. */
   nomeEnviado?: string;
   descritorEnviado?: string;
+  /** Numa criação: onde e como o formulário é (ou seria) criado. */
+  criacao?: { pasta: number; dataset: string; persistencia: 'form' | 'list' };
+}
+
+/**
+ * A pasta dos formulários deste servidor: a única em que eles estão. Com mais de
+ * uma, não se escolhe (um formulário na pasta errada não se move por update).
+ */
+function pastaDosFormularios(catalogo: readonly { pasta?: number }[], nome: string): number {
+  const contagem = new Map<number, number>();
+  for (const f of catalogo) if (f.pasta !== undefined) contagem.set(f.pasta, (contagem.get(f.pasta) ?? 0) + 1);
+  if (contagem.size === 1) return [...contagem.keys()][0]!;
+  const lista = [...contagem].sort((a, b) => b[1] - a[1]).map(([p, n]) => `pasta ${p} (${n} formulário(s))`).join(', ');
+  throw new ErroFluigctl(
+    contagem.size === 0
+      ? `criar o formulário "${nome}" exige --parent-id <documentId da pasta>: o servidor não informou onde estão os outros formulários`
+      : `criar o formulário "${nome}" exige --parent-id: os formulários deste servidor estão em mais de uma pasta — ${lista}`,
+    6,
+  );
 }
 
 export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushForm> {
@@ -119,22 +138,31 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
     throw erro;
   };
 
-  // Na criação, nada é adivinhado: errar a pasta-mãe ou o tipo de persistência
-  // produz um formulário que não dá para consertar por update.
+  // Na criação, errar a pasta-mãe ou o tipo de persistência produz um formulário
+  // que não dá para consertar por update. Sem a flag, vale o que não tem dúvida:
+  // a pasta onde estão todos os formulários do servidor (só se for uma), o
+  // dataset ds<nome> (a convenção do Studio) e a persistência do Studio (form).
+  let criacao: ResultadoPushForm['criacao'];
   if (decisao.acao === 'create') {
-    const faltando: string[] = [];
-    if (opcoes.parentId === undefined) faltando.push('--parent-id <documentId da pasta>');
-    if (!opcoes.datasetName) faltando.push('--dataset-name <nome do dataset>');
-    if (!opcoes.persistenceType) faltando.push('--persistence-type form|list');
-
-    if (faltando.length > 0) {
+    const dataset = opcoes.datasetName ?? `ds${fonte.nome}`;
+    const dono = catalogo.find((f) => f.datasetName === dataset);
+    if (dono) {
       throw new ErroFluigctl(
-        `criar o formulário "${fonte.nome}" exige informação que não dá para ` +
-          `adivinhar:\n  ${faltando.join('\n  ')}\n` +
-          `Sugestão de dataset pela convenção: ds${fonte.nome}`,
+        `o dataset "${dataset}" já é do formulário ${dono.documentId} ("${dono.documentDescription}"); use --dataset-name com outro nome`,
         6,
       );
     }
+    criacao = {
+      pasta: opcoes.parentId ?? pastaDosFormularios(catalogo, fonte.nome),
+      dataset,
+      persistencia: opcoes.persistenceType ?? 'form',
+    };
+    const assumidos = [
+      opcoes.parentId === undefined ? `pasta ${criacao.pasta} (a dos formulários do servidor)` : '',
+      opcoes.datasetName === undefined ? `dataset ${dataset}` : '',
+      opcoes.persistenceType === undefined ? 'persistência form (a do Studio)' : '',
+    ].filter(Boolean);
+    if (assumidos.length) decisao.avisos.push(`sem flag, vale: ${assumidos.join(', ')}`);
   }
 
   // Nome e campo descritor num update: os do servidor, a menos que o usuário peça outro. O web
@@ -170,13 +198,13 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
           nomeEnviado: nomeEnviado!,
           descritorEnviado: descritorEnviado!,
         }
-      : { ...base, acao: 'create' };
+      : { ...base, acao: 'create', criacao: criacao! };
   }
 
   const alvo =
     decisao.acao === 'update'
       ? `documentId ${decisao.documentId}`
-      : `novo, na pasta ${opcoes.parentId}`;
+      : `novo, na pasta ${criacao!.pasta}`;
   await confirmProduction(server, senha, `push form ${fonte.nome} (${alvo})`, opcoes.prompt);
 
   if (decisao.acao === 'update') {
@@ -227,14 +255,14 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
   }
 
   const documentId = await cliente.createForm({
-    parentDocumentId: opcoes.parentId!,
+    parentDocumentId: criacao!.pasta,
     documentDescription: fonte.nome,
     cardDescription: opcoes.description ?? fonte.nome,
-    datasetName: opcoes.datasetName!,
+    datasetName: criacao!.dataset,
     anexos: fonte.anexos,
     eventos: fonte.eventos,
-    persistenceType: PERSISTENCE_TYPE[opcoes.persistenceType!],
+    persistenceType: PERSISTENCE_TYPE[criacao!.persistencia],
   }).catch(traduzir);
 
-  return { ...base, acao: 'create', documentId };
+  return { ...base, acao: 'create', documentId, criacao: criacao! };
 }

@@ -219,20 +219,25 @@ which one, and lists the columns.
 
 A new form starts from `form new`, which writes the folder the way Studio does
 (style guide, `<form name="form">`, one panel with the fields, and
-`events/validateForm.js` for the fields marked `!`):
+`events/validateForm.js` for the fields marked `!`). Select and radio carry
+their options in the type:
 
 ```sh
 fluigctl form new formNovo --title "Pedido" --field "pedido!:text:Pedido" \
-  --field "valor!:number:Valor" --field "obs:textarea:Observação"
+  --field "valor!:number:Valor" \
+  --field "decisao!:radio(aprovado=Aprovar|reprovado=Reprovar):Decisão"
 ```
 
-Creating it on the server needs three things that cannot be guessed, and
-`persistenceType` cannot be changed afterwards. `form` is what Studio creates;
-the parent is the forms folder (on a fresh server, "Formulários Fluig"):
+`persistenceType` and the parent folder cannot be changed after the form is
+created. Without flags, `push form --create` takes the folder where all of the
+server's forms are (it refuses when they are in more than one and lists them),
+the dataset `ds<nome>` and the persistence Studio uses (`form`), and prints
+what it took. Read it in the dry-run:
 
 ```sh
-fluigctl push form forms/formNovo --server <servidor> \
-  --create --parent-id <pasta> --dataset-name dsformNovo --persistence-type form
+fluigctl push form forms/formNovo --server <servidor> --create --dry-run
+fluigctl push form forms/formNovo --server <servidor> --create \
+  [--parent-id <pasta>] [--dataset-name dsformNovo] [--persistence-type form]
 ```
 
 A new process links to it by name: `fluigctl diagram new <processId> --name

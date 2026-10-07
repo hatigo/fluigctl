@@ -12,6 +12,8 @@ export interface FormNoServidor {
    * update é o NOME do formulário). Ausente quando o servidor não o informou.
    */
   descriptionField?: string;
+  /** A pasta (documentId) onde o formulário está; ausente quando o servidor não a informou. */
+  pasta?: number;
 }
 
 export interface ParametrosUpdate {
@@ -97,6 +99,9 @@ export async function cardIndexClient(
         documentId: Number(f.documentId),
         documentDescription: String(f.documentDescription ?? ''),
         datasetName: String(f.datasetName ?? ''),
+        ...(Number.isInteger(Number((f as { parentDocumentId?: unknown }).parentDocumentId)) && (f as { parentDocumentId?: unknown }).parentDocumentId != null
+          ? { pasta: Number((f as { parentDocumentId?: unknown }).parentDocumentId) }
+          : {}),
         // Tag vazia chega como null (o formulário não tem descritor); só a tag ausente é "não sei".
         ...(Object.prototype.hasOwnProperty.call(f, 'cardDescription')
           ? { descriptionField: f.cardDescription === null ? '' : String(f.cardDescription) }

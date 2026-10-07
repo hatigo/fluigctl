@@ -130,7 +130,7 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl push dataset <arquivo.js> --server <nome> [--create] [--description D] [--dry-run]
   fluigctl push form <pasta/> --server <nome> [--document-id N] [--principal A] [--description D]
                               (--keep-version | --new-version) [--dry-run]
-                              [--create --parent-id N --dataset-name D --persistence-type form|list]
+                              [--create [--parent-id N] [--dataset-name D] [--persistence-type form|list]]
   fluigctl push process <processId> --server <nome> [--workflow <pasta>] [--dry-run]
                               [--no-release] [--save-export <arquivo.xml>] [--base <export.xml>]
       publica os scripts de workflow/scripts/ num processo que já existe — pelo nome do
@@ -569,7 +569,7 @@ async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<
     console.log(
       r.acao === 'update'
         ? `[dry-run] ${r.nome} seria atualizado em ${alvo}, documentId ${r.documentId} — ${detalhe}. Nada foi enviado.`
-        : `[dry-run] ${r.nome} seria criado em ${alvo} — ${detalhe}. Nada foi enviado.`,
+        : `[dry-run] ${r.nome} seria criado em ${alvo}, na pasta ${r.criacao!.pasta}, dataset ${r.criacao!.dataset}, persistência ${r.criacao!.persistencia} — ${detalhe}. Nada foi enviado.`,
     );
     return;
   }
@@ -577,7 +577,7 @@ async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<
   console.log(
     r.acao === 'update'
       ? `${r.nome} atualizado em ${alvo}, documentId ${r.documentId} — ${detalhe}.`
-      : `${r.nome} criado em ${alvo} com documentId ${r.documentId} — ${detalhe}.`,
+      : `${r.nome} criado em ${alvo} com documentId ${r.documentId}, na pasta ${r.criacao!.pasta}, dataset ${r.criacao!.dataset} — ${detalhe}.`,
   );
 }
 
@@ -1277,7 +1277,7 @@ function comandoForm(argv: string[]): void {
   const criados = criarFormulario({ nome, campos, pasta: values.forms, ...(values.title === undefined ? {} : { titulo: values.title }) });
   console.log(`criado o formulário ${nome}: ${campos.length} campo(s)`);
   for (const c of criados) console.log(`  ${c}`);
-  console.log(`  próximo passo: fluigctl push form ${values.forms}/${nome} --server <nome> --create --parent-id <pasta> --dataset-name ds_${nome} --persistence-type form`);
+  console.log(`  próximo passo: fluigctl push form ${values.forms}/${nome} --server <nome> --create --dry-run`);
 }
 
 async function comandoDiagram(argv: string[]): Promise<void> {

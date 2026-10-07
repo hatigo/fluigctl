@@ -30,7 +30,15 @@ function pasta(nome: string): string {
   return fileURLToPath(new URL(`./fixtures/forms/${nome}`, import.meta.url));
 }
 
-async function ambiente() {
+/** A lista do servidor com a pasta de cada formulário (parentDocumentId) e os datasets. */
+const listaCom = (itens: [number, string, string, number][]) =>
+  env(
+    `<ns:getCardIndexesWithoutApproverResponse xmlns:ns="${NS}"><result>${itens
+      .map(([id, nome, ds, pasta]) => `<item><documentId>${id}</documentId><documentDescription>${nome}</documentDescription><datasetName>${ds}</datasetName><parentDocumentId>${pasta}</parentDocumentId></item>`)
+      .join('')}</result></ns:getCardIndexesWithoutApproverResponse>`,
+  );
+
+async function ambiente(lista = LISTA) {
   const fluig = await fakeFluig({
     [CAMINHO]: (req) => {
       if (req.method === 'GET') return { headers: { 'content-type': 'text/xml' }, body: WSDL };
@@ -39,7 +47,7 @@ async function ambiente() {
         : 'updateSimpleCardIndexWithDatasetAndGeneralInfo';
       return {
         headers: { 'content-type': 'text/xml' },
-        body: req.body.includes('getCardIndexes') ? LISTA : okMsg(op, op.startsWith('create') ? 23691 : 8),
+        body: req.body.includes('getCardIndexes') ? lista : okMsg(op, op.startsWith('create') ? 23691 : 8),
       };
     },
   });
@@ -122,7 +130,34 @@ test('push form em produção não escreve quando o gate recusa', async () => {
   }
 });
 
-test('push form recusa criar sem os parâmetros que não dá para adivinhar', async () => {
+test('push form cria na pasta dos formulários, com ds<nome> e a persistência do Studio, quando não se diz', async () => {
+  const a = await ambiente(listaCom([[8, 'formSolicitacaoCompras', 'dsformSolicitacaoCompras', 2], [902, 'formSolicitacaoReembolso', 'dsformSolicitacaoReembolso', 2]]));
+  try {
+    const r = await pushForm({ server: a.server, senha: 's', pasta: pasta('formNovoSimples'), create: true, prompt: async () => '' });
+    assert.deepEqual(r.criacao, { pasta: 2, dataset: 'dsformNovoSimples', persistencia: 'form' });
+    assert.ok(r.avisos.some((x) => /sem flag, vale: pasta 2 .*dataset dsformNovoSimples, persistência form/.test(x)));
+    const [criacao] = escritas(a.fluig);
+    assert.match(criacao!.body, /<parentDocumentId>2<\/parentDocumentId>/);
+    assert.match(criacao!.body, /<datasetName>dsformNovoSimples<\/datasetName>/);
+    assert.match(criacao!.body, /<persistenceType>0<\/persistenceType>/);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('push form não escolhe a pasta quando os formulários estão em mais de uma, nem repete dataset de outro', async () => {
+  const a = await ambiente(listaCom([[8, 'formSolicitacaoCompras', 'dsformNovoSimples', 2], [902, 'formSolicitacaoReembolso', 'dsformSolicitacaoReembolso', 7]]));
+  try {
+    const criar = (extra: object) => pushForm({ server: a.server, senha: 's', pasta: pasta('formNovoSimples'), create: true, prompt: async () => '', ...extra });
+    await assert.rejects(criar({ datasetName: 'dsOutro' }), /--parent-id: os formulários deste servidor estão em mais de uma pasta — pasta 2 \(1 formulário\(s\)\), pasta 7/);
+    await assert.rejects(criar({ parentId: 2 }), /o dataset "dsformNovoSimples" já é do formulário 8/);
+    assert.equal(escritas(a.fluig).length, 0);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('push form recusa criar sem saber a pasta: o servidor não informou onde estão os formulários', async () => {
   const a = await ambiente();
 
   try {
