@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -49,11 +49,12 @@ import { testServer } from './commands/server-test.js';
 import { findUserByLogin, login } from './fluig/session.js';
 import { ErroFluigctl } from './errors.js';
 import { abrirVisualizador, diretorioDeEstado, executarServidor, fecharVisualizador } from './diagram/viewer.js';
-import { aplicarEdicao } from './diagram/edit.js';
+import { EdicaoInvalida, aplicarEdicao } from './diagram/edit.js';
 import { garantirFontes, textosSemFonte } from './diagram/fonts.js';
 import { garantirLosangos, poligonosSemPontos } from './diagram/gateways.js';
 import { formasSemEstilo, garantirVisual } from './diagram/visual.js';
 import { encaixarErros, errosForaDoCanto } from './diagram/erros.js';
+import { novoProcesso } from './diagram/novo.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -88,6 +89,12 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl process versions <processId> --server <nome>
   fluigctl process release <processId> --server <nome> [--dry-run]
       as versões do processo (qual roda, quais ficaram em edição) e liberar a em edição
+
+  fluigctl diagram new <processId> --name <nome> [--lane <raia>]... [--form <id|nome>]
+                      [--category <categoria>] [--server <nome>] [--workflow <pasta>]
+      cria workflow/diagrams/<processId>.process como o Studio grava: a pool com
+      as raias (padrão: Solicitante) e o início ligado ao fim; abre sem alteração
+      no Studio e se edita pelo diagram open
 
   fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]
       confere um .process editado fora do Studio: referências do Graphiti,
@@ -1249,7 +1256,48 @@ async function comandoDiagram(argv: string[]): Promise<void> {
   const uso =
     'uso: fluigctl diagram open <arquivo.process> [--no-open] [--foreground]\n' +
     '     fluigctl diagram close <arquivo.process>\n' +
-    '     fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]';
+    '     fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]\n' +
+    '     fluigctl diagram new <processId> --name <nome> [--lane <raia>]... [--form <id|nome>] [--category <c>] [--server <nome>] [--workflow <pasta>]';
+
+  if (sub === 'new') {
+    const { values, positionals } = parseArgs({
+      args: argv.slice(1),
+      allowPositionals: true,
+      options: {
+        name: { type: 'string' },
+        lane: { type: 'string', multiple: true },
+        form: { type: 'string' },
+        category: { type: 'string' },
+        server: { type: 'string' },
+        workflow: { type: 'string', default: 'workflow' },
+      },
+    });
+    const id = positionals[0];
+    if (!id || positionals.length !== 1 || !values.name) throw new ErroFluigctl(uso, 2);
+    const pasta = join(values.workflow, 'diagrams');
+    const arquivo = join(pasta, `${id}.process`);
+    if (existsSync(arquivo)) throw new ErroFluigctl(`${arquivo} já existe; o diagram new não sobrescreve`, 2);
+    let xml: string;
+    try {
+      xml = novoProcesso({
+        id,
+        nome: values.name,
+        raias: values.lane?.length ? values.lane : ['Solicitante'],
+        ...(values.form === undefined ? {} : { formulario: values.form }),
+        ...(values.category === undefined ? {} : { categoria: values.category }),
+        ...(values.server === undefined ? {} : { servidor: values.server }),
+      });
+    } catch (e) {
+      if (e instanceof EdicaoInvalida) throw new ErroFluigctl(e.message, 2);
+      throw e;
+    }
+    mkdirSync(pasta, { recursive: true });
+    writeFileSync(arquivo, xml, { encoding: 'latin1', flag: 'wx' });
+    console.log(`criado ${arquivo}: pool "${values.name}", raia(s) ${(values.lane?.length ? values.lane : ['Solicitante']).join(', ')}, início ligado ao fim`);
+    if (values.form === undefined) console.log('  sem formulário: --form <id|nome> ou o Studio associam um antes de publicar');
+    console.log(`  próximo passo: fluigctl diagram open ${arquivo}`);
+    return;
+  }
 
   if (sub === 'check') {
     const { values, positionals } = parseArgs({

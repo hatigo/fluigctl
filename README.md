@@ -67,6 +67,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `process versions` / `release` (versões do processo e liberar a em edição) | pronto |
 | `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
 | `request start` / `show` / `move` / `cancel` (solicitações sem a tela do Fluig) | pronto, conferido no localdev com a contratação: recuperação, laço de aprovação e reprovação |
+| `diagram new` (processo novo como o Studio grava: pool, raias, início ligado ao fim) | pronto; abre no Studio sem alteração e passa no `diagram check` |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, textos sem fonte, losangos sem pontos e formas sem o visual do Studio (`--fix` acrescenta), elementos sem saída ou sem entrada e o padrão das service tasks; `--fix` também devolve ao canto da tarefa a bolinha de erro que o Studio deixou solta) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
