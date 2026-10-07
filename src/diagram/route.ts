@@ -12,7 +12,8 @@ import { caixaDaFigura, centroDaFigura } from '../push/diagram/svg.js';
  * - alvo atrás (um retorno): sai por cima, corre num corredor 20 px acima das
  *   duas formas e desce no alvo pelo centro;
  * - mesma coluna: vertical, com o degrau no meio do vão;
- * - a saída de um evento de erro anexado é a diagonal curta do padrão: sem dobras.
+ * - a saída de um evento de erro anexado para o tratamento logo abaixo é a
+ *   diagonal curta do padrão: sem dobras.
  */
 
 const GRADE = 10;
@@ -99,7 +100,7 @@ function desviar(diagrama: Diagrama, fluxoId: string, pontos: Ponto[]): Ponto[] 
   const o = objeto(diagrama, ido), d = objeto(diagrama, idd);
   const co = diagrama.caixas.get(ido), cd = diagrama.caixas.get(idd);
   if (!o || !d || !co || !cd) return pontos;
-  if (o.tipo === 'BpmnIntermediateEvent' && o.attrs['type'] === '43' && o.attrs['parentTask']) return pontos;
+  if (doPadrao(diagrama, o, caixaDaFigura(d, cd))) return pontos;
   const a = centroDaFigura(o, co), b = centroDaFigura(d, cd);
   const obs = obstaculos(diagrama, ido, idd);
   if (!atravessa([a, ...pontos, b], obs)) return pontos;
@@ -144,6 +145,20 @@ function desviar(diagrama: Diagrama, fluxoId: string, pontos: Ponto[]): Ponto[] 
   return livres.sort((p, q) => comprimento(p) - comprimento(q) || Math.min(p[0]!.y, p[1]!.y) - Math.min(q[0]!.y, q[1]!.y))[0]!;
 }
 
+/**
+ * A saída do evento de erro para o tratamento logo abaixo da tarefa é a diagonal
+ * curta do padrão. Para um tratamento em outro lugar (compartilhado por várias
+ * tarefas, em outra raia), a ligação é traçada como as outras.
+ */
+function doPadrao(diagrama: Diagrama, origem: ObjetoBpmn, fb: Caixa): boolean {
+  if (origem.tipo !== 'BpmnIntermediateEvent' || origem.attrs['type'] !== '43' || !origem.attrs['parentTask']) return false;
+  const dona = diagrama.caixas.get(origem.attrs['parentTask']);
+  if (!dona) return true;
+  const fd = caixaDaFigura(objeto(diagrama, origem.attrs['parentTask']), dona);
+  // Logo abaixo: começa abaixo da tarefa, a menos de 120 px, e na mesma faixa de x.
+  return fb.absY >= fd.absY + fd.altura && fb.absY - (fd.absY + fd.altura) < 120 && fb.absX < fd.absX + fd.largura + 40 && fb.absX + fb.largura > fd.absX - 40;
+}
+
 function rota(diagrama: Diagrama, fluxoId: string): Ponto[] {
   const fluxo = objeto(diagrama, fluxoId);
   if (!fluxo || fluxo.tipo !== 'SequenceFlow') throw new Error(`fluxo ${fluxoId} não existe`);
@@ -153,12 +168,11 @@ function rota(diagrama: Diagrama, fluxoId: string): Ponto[] {
   const cd = diagrama.caixas.get(fluxo.attrs['targetRef'] ?? '');
   if (!origem || !destino || !co || !cd) throw new Error(`o fluxo ${fluxoId} não tem as duas pontas desenhadas`);
 
-  if (origem.tipo === 'BpmnIntermediateEvent' && origem.attrs['type'] === '43' && origem.attrs['parentTask']) return [];
-
   const a = centroDaFigura(origem, co);
   const b = centroDaFigura(destino, cd);
   const fa: Caixa = caixaDaFigura(origem, co);
   const fb: Caixa = caixaDaFigura(destino, cd);
+  if (doPadrao(diagrama, origem, fb)) return [];
   const direitaA = fa.absX + fa.largura;
   const direitaB = fb.absX + fb.largura;
   const atras = direitaB < fa.absX;

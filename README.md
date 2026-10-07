@@ -1177,6 +1177,13 @@ restam são defeitos dos próprios arquivos (seta duplicada, estilo que não
 existe ou de outro tipo de forma). O teste `fidelidade ao acervo do Studio` roda
 a mesma comparação quando o acervo está na máquina.
 
+`npm run medir-organizar [raiz] [--original] [--piores <n>]` mede o Organizar
+do visualizador: cada `.process` é organizado e as ligações são contadas
+(`src/diagram/layout-medida.ts`) — as que passam por cima de uma forma, os pares
+que correm um em cima do outro e os que se cruzam. No acervo de 94 diagramas: 1,
+15 e 205 (o desenho feito à mão no Studio: 204, 1 e 43). `--original` mede os
+diagramas como estão.
+
 Tarefas e gateways criados (visualizador, `diagram pull`) ou renomeados saem no
 tamanho que o Studio recalcula ao abrir, então abrir e salvar no Studio não muda
 o arquivo. O Studio mede o nome com a fonte da máquina (Arial 8 negrito, ou a

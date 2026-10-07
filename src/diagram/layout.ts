@@ -3,6 +3,7 @@ import { caixaDaFigura } from '../push/diagram/svg.js';
 import { EdicaoInvalida, trocarCoordenada, trocarDobrasNoXml } from './edit.js';
 import { formas, type Tag } from './lanes.js';
 import { cruzaCards, pontasDoFluxo, rotaOrtogonal } from './route.js';
+import { cruzam, sobrepoem } from './layout-medida.js';
 
 /**
  * Organizar o diagrama inteiro pela receita de layout da skill fluig-patterns,
@@ -100,9 +101,21 @@ export function organizarNoXml(xml: string): { xml: string; nos: number } {
   }
 
   // 2. Colunas: caminho mais longo a partir das fontes, sem as arestas de retorno.
+  // A saída de um evento de erro preso (que não ocupa coluna) conta como saída
+  // da tarefa dona dele: um tratamento compartilhado por várias service tasks
+  // fica depois delas, e não na coluna 0, como se não tivesse entrada.
+  const donoDoEvento = new Map<string, string>();
+  for (const [st, par] of pares) donoDoEvento.set(par.evento, st);
+  // E a volta do tratamento para a tarefa que falhou é retorno (a retentativa),
+  // não avanço: não empurra a tarefa para depois do tratamento.
+  const retentativas = new Set<string>();
+  for (const f of fluxos) {
+    const st = donoDoEvento.get(f.attrs['sourceRef'] ?? '');
+    if (st) retentativas.add(`${f.attrs['targetRef']}>${st}`);
+  }
   const arestas = fluxos
-    .map((f) => [f.attrs['sourceRef'] ?? '', f.attrs['targetRef'] ?? ''] as const)
-    .filter(([a, b]) => nos.has(a) && nos.has(b) && a !== b);
+    .map((f) => [donoDoEvento.get(f.attrs['sourceRef'] ?? '') ?? f.attrs['sourceRef'] ?? '', f.attrs['targetRef'] ?? ''] as const)
+    .filter(([a, b]) => nos.has(a) && nos.has(b) && a !== b && !retentativas.has(`${a}>${b}`));
   const saidas = new Map<string, string[]>();
   for (const [a, b] of arestas) saidas.set(a, [...(saidas.get(a) ?? []), b]);
   const entram = new Set(arestas.map(([, b]) => b));
@@ -305,5 +318,98 @@ export function organizarNoXml(xml: string): { xml: string; nos: number } {
     }
     texto = trocarDobrasNoXml(texto, id, dobras);
   }
+  texto = aliviarCruzamentos(texto, fluxos.map((f) => f.attrs['id']!));
   return { xml: texto, nos: posicoes.size };
+}
+
+/**
+ * Cada ligação foi traçada sozinha, com o degrau no meio do vão: duas que trocam
+ * de raia no mesmo vão, ou um retorno pelo corredor, cruzam as outras sem
+ * precisar. Aqui cada ligação com duas dobras procura, em passos de 10 px e nas
+ * duas formas (degrau ou corredor), a rota que cruza menos ligações e não corre
+ * em cima de outra, sem passar por card nem entrar na figura das pontas.
+ */
+function aliviarCruzamentos(xml: string, ids: string[]): string {
+  const d = lerDiagrama(xml);
+  const objeto = (id: string) => d.objetos.find((o) => o.attrs['id'] === id);
+  interface Rota { id: string; origem: string; destino: string; a: Point; b: Point; dobras: Point[] }
+  const rotas: Rota[] = [];
+  for (const id of ids) {
+    const pontas = pontasDoFluxo(d, id);
+    const f = objeto(id);
+    if (!pontas || !f) continue;
+    rotas.push({ id, origem: f.attrs['sourceRef'] ?? '', destino: f.attrs['targetRef'] ?? '', a: pontas[0], b: pontas[1], dobras: d.dobras.get(id) ?? [] });
+  }
+  const segmentos = (r: Rota, dobras = r.dobras): [Point, Point][] => {
+    const pts = [r.a, ...dobras, r.b].map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+    return pts.slice(0, -1).map((p, i) => [p, pts[i + 1]!]);
+  };
+  const figura = (id: string) => {
+    const o = objeto(id);
+    const c = d.caixas.get(id);
+    return o && c ? caixaDaFigura(o, c) : undefined;
+  };
+  const custo = (r: Rota, dobras: Point[]) => {
+    const meus = segmentos(r, dobras);
+    let n = 0;
+    for (const outra of rotas) {
+      if (outra === r) continue;
+      const delas = segmentos(outra);
+      const mesmaPonta = outra.origem === r.origem || outra.destino === r.destino;
+      if (meus.some((s) => delas.some((t) => cruzam(s, t)))) n += 1;
+      if (!mesmaPonta && meus.some((s) => delas.some((t) => sobrepoem(s, t)))) n += 3;
+    }
+    return n;
+  };
+
+  // A rota não sai da pool (nem encosta na borda dela).
+  const pool = d.objetos.find((o) => o.tipo === 'BpmnPool' && d.caixas.has(o.attrs['id'] ?? ''));
+  const cp = pool ? d.caixas.get(pool.attrs['id']!)! : undefined;
+  const naPool = (y: number) => !cp || (y > cp.absY + 10 && y < cp.absY + cp.altura - 10);
+  const comprimento = (r: Rota, dobras: Point[]) =>
+    segmentos(r, dobras).reduce((t, [p, q]) => t + Math.abs(q.x - p.x) + Math.abs(q.y - p.y), 0);
+  for (let passada = 0; passada < 3; passada++) {
+    let mudou = false;
+    for (const r of rotas) {
+      if (r.dobras.length !== 2) continue;
+      const fa = figura(r.origem);
+      const fb = figura(r.destino);
+      if (!fa || !fb) continue;
+      const atual = custo(r, r.dobras);
+      if (atual === 0) continue;
+      // As duas formas de rota com duas dobras: o degrau (o trecho do meio
+      // vertical, num x entre as pontas) e o corredor (o trecho do meio
+      // horizontal, num y acima, abaixo ou entre as figuras). Trocar de forma
+      // separa a ida e a volta entre as mesmas duas tarefas, que pelo degrau
+      // saem as duas do centro, na mesma altura.
+      const foraEmX = (x: number) => [fa, fb].every((c) => x < c.absX - 5 || x > c.absX + c.largura + 5);
+      const foraEmY = (y: number) => y >= 0 && naPool(y) && [fa, fb].every((c) => y < c.absY - 5 || y > c.absY + c.altura + 5);
+      const candidatas: Point[][] = [];
+      const [x0, x1] = [Math.min(r.a.x, r.b.x), Math.max(r.a.x, r.b.x)];
+      for (let x = Math.ceil(x0 / 10) * 10; x < x1; x += 10) if (x > x0 && foraEmX(x)) candidatas.push([{ x, y: Math.round(r.a.y) }, { x, y: Math.round(r.b.y) }]);
+      const topo = Math.min(fa.absY, fb.absY);
+      const fundo = Math.max(fa.absY + fa.altura, fb.absY + fb.altura);
+      for (let y = Math.floor((topo - 120) / 10) * 10; y <= fundo + 120; y += 10) if (foraEmY(y)) candidatas.push([{ x: Math.round(r.a.x), y }, { x: Math.round(r.b.x), y }]);
+      let melhor = { dobras: r.dobras, custo: atual, comprimento: comprimento(r, r.dobras) };
+      for (const tentativa of candidatas) {
+        if (cruzaCards(d, r.id, tentativa)) continue;
+        const c = custo(r, tentativa);
+        if (c > melhor.custo) continue;
+        const l = comprimento(r, tentativa);
+        // Menos cruzamentos ganha; no empate, só troca o que já cruzava algo, e pela rota mais curta.
+        if (c < melhor.custo || (melhor.dobras !== r.dobras && l < melhor.comprimento)) melhor = { dobras: tentativa, custo: c, comprimento: l };
+      }
+      if (melhor.dobras !== r.dobras) {
+        r.dobras = melhor.dobras;
+        mudou = true;
+      }
+    }
+    if (!mudou) break;
+  }
+  let texto = xml;
+  for (const r of rotas) {
+    const antes = d.dobras.get(r.id) ?? [];
+    if (r.dobras.length === 2 && JSON.stringify(antes) !== JSON.stringify(r.dobras)) texto = trocarDobrasNoXml(texto, r.id, r.dobras);
+  }
+  return texto;
 }

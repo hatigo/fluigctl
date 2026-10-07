@@ -15,6 +15,7 @@
     "diff-diagramas": "tsc && node dist/scripts/diff-diagramas.js",
     "validar-pull-diagramas": "tsc && node dist/scripts/validar-pull-diagramas.js",
     "fidelidade-visual": "tsc && node dist/scripts/fidelidade-visual.js",
+    "medir-organizar": "tsc && node dist/scripts/medir-organizar.js",
     "test": "rm -rf dist && tsc && cp -r test/fixtures dist/test/ && FLUIGCTL_FONTE_STUDIO=arial node --test \"dist/test/**/*.test.js\""
   },
   "dependencies": {

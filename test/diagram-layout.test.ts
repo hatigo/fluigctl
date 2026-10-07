@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { checarDiagrama } from '../src/diagram/check.js';
 import { desfazerUltimaEdicao, hash, moverNoXml } from '../src/diagram/edit.js';
 import { organizarNoXml } from '../src/diagram/layout.js';
+import { medirLayout } from '../src/diagram/layout-medida.js';
 import { servirDiagrama } from '../src/diagram/viewer.js';
 import { lerDiagrama } from '../src/push/diagram/modelo.js';
 import { converterDiagrama } from '../src/push/diagram/ecm30.js';
@@ -79,4 +80,72 @@ test('o visualizador organiza pela rota layout, e um desfazer volta tudo', async
     await v.fechar();
     rmSync(raiz, { recursive: true, force: true });
   }
+});
+
+test('a contratação organizada: nenhuma ligação por cima de forma, sobreposta ou cruzada', () => {
+  assert.deepEqual(medirLayout(organizarNoXml(CONTRATACAO).xml), { ligacoes: 19, cards: 0, sobrepostas: 0, cruzamentos: 0 });
+});
+
+test('o tratamento compartilhado fica depois das service tasks, e a volta dele é retorno', async () => {
+  const { novoProcesso } = await import('../src/diagram/novo.js');
+  const { adicionarNoXml, ligarNoXml } = await import('../src/diagram/add.js');
+  const { removerNoXml } = await import('../src/diagram/remove.js');
+  // Início → s1 → s2 → fim; o erro das duas vai para o mesmo tratamento, que volta para as duas.
+  let xml = novoProcesso({ id: 'compartilhado', nome: 'Compartilhado', raias: ['Sistema', 'Suporte'] });
+  const d0 = lerDiagrama(xml);
+  const inicio = d0.objetos.find((o) => o.tipo === 'BpmnStartEvent')!.attrs['id']!;
+  const fim = d0.objetos.find((o) => o.tipo === 'BpmnEndEvent')!.attrs['id']!;
+  xml = removerNoXml(xml, d0.objetos.find((o) => o.tipo === 'SequenceFlow')!.attrs['id']!).xml;
+  const r1 = adicionarNoXml(xml, { tipo: 'recuperacao', x: 400, y: 120, nome: 'Um' });
+  const [s1, , tratamento] = r1.criados;
+  const r2 = adicionarNoXml(r1.xml, { tipo: 'recuperacao', x: 700, y: 120, nome: 'Dois' });
+  const [s2, e2, t2] = r2.criados;
+  xml = removerNoXml(r2.xml, t2!).xml;
+  for (const [a, b] of [[inicio, s1], [s1, s2], [s2, fim], [e2, tratamento], [tratamento, s2]] as const) xml = ligarNoXml(xml, a!, b!).xml;
+  // Bagunça: o tratamento vai para o começo do diagrama.
+  const c = lerDiagrama(xml).caixas.get(tratamento!)!;
+  xml = moverNoXml(xml, tratamento!, 60 - c.absX, 0).xml;
+
+  const d = lerDiagrama(organizarNoXml(xml).xml);
+  const x = (id: string) => d.caixas.get(id)!.absX;
+  assert.ok(x(tratamento!) > x(s2!), 'o tratamento fica depois das duas service tasks, não na coluna 0');
+  assert.ok(x(s2!) > x(s1!), 'a volta do tratamento para s2 não empurra s2 para depois dele');
+  assert.ok(x(fim) > x(s2!));
+});
+
+/**
+ * O acervo de diagramas do Studio (~/fluig/workspaces), quando existe nesta
+ * máquina: o Organizar não pode piorar. npm run medir-organizar mostra os números.
+ */
+const ACERVO = join(homedir(), 'fluig', 'workspaces');
+test('o Organizar no acervo: quase nenhuma ligação por cima de forma, poucas sobrepostas e cruzadas', { skip: !existsSync(ACERVO) && 'sem acervo nesta máquina' }, () => {
+  const arquivos: string[] = [];
+  const visitar = (pasta: string) => {
+    for (const nome of readdirSync(pasta)) {
+      const caminho = join(pasta, nome);
+      if (statSync(caminho).isDirectory()) visitar(caminho);
+      else if (nome.endsWith('.process')) arquivos.push(caminho);
+    }
+  };
+  visitar(ACERVO);
+  const total = { diagramas: 0, cards: 0, sobrepostas: 0, cruzamentos: 0 };
+  for (const arquivo of arquivos) {
+    let xml: string;
+    try {
+      xml = readFileSync(arquivo, 'latin1');
+      lerDiagrama(xml);
+    } catch {
+      continue;
+    }
+    const m = medirLayout(organizarNoXml(xml).xml);
+    total.diagramas++;
+    total.cards += m.cards;
+    total.sobrepostas += m.sobrepostas;
+    total.cruzamentos += m.cruzamentos;
+  }
+  assert.ok(total.diagramas > 50);
+  // 2026-10-07: 1, 15 e 205 (o desenho à mão: 204, 1 e 43; o Organizar antes: 18, 41 e 442).
+  assert.ok(total.cards <= 3, `por cima de forma: ${total.cards}`);
+  assert.ok(total.sobrepostas <= 20, `sobrepostas: ${total.sobrepostas}`);
+  assert.ok(total.cruzamentos <= 230, `cruzamentos: ${total.cruzamentos}`);
 });
