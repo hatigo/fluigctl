@@ -7,6 +7,7 @@ import { decodificarEntidades, escaparTexto } from '../push/diagram/xml.js';
 import { checarDiagrama, type Achado } from './check.js';
 import { rotaOrtogonal } from './route.js';
 import { ajustarAoNome } from './tamanho.js';
+import { refinarRotas } from './rotas.js';
 
 export type MotivoConflito = 'elemento-removido' | 'nome-alterado' | 'arquivo-alterado' | 'sem-desfazer' | 'sem-refazer';
 
@@ -652,15 +653,16 @@ export function endireitar(pedido: PedidoEndireitar): ResultadoEndireitar {
   const r = aplicarEdicao(pedido.arquivo, pedido.undoDir, (texto) => {
     const alvos = pedido.id === undefined ? [...lerDiagrama(texto).dobras.keys()] : fluxosDe(texto, pedido.id);
     if (alvos.length === 0) throw new EdicaoInvalida(pedido.id === undefined ? 'o diagrama não tem ligações' : 'este elemento não tem ligações para endireitar');
-    let novo = texto;
-    fluxos = [];
-    for (const f of alvos) {
-      const depois = trocarDobrasNoXml(novo, f, rotaOrtogonal(lerDiagrama(novo), f));
-      if (depois !== novo) fluxos.push(f);
-      novo = depois;
-    }
-    if (novo === texto) throw new EdicaoInvalida('as ligações já estão retas');
-    return novo;
+    // Cada ligação pela rota da receita e, depois, o refinamento contra as
+    // outras (rotas.ts): sem cruzar à toa e sem chegar seta pelo mesmo ponto
+    // de onde outra sai. Só as ligações pedidas mudam.
+    const d = lerDiagrama(texto);
+    const rotas = new Map(d.dobras);
+    for (const f of alvos) rotas.set(f, rotaOrtogonal(d, f));
+    refinarRotas(d, rotas, new Set(alvos));
+    fluxos = alvos.filter((f) => JSON.stringify(rotas.get(f)) !== JSON.stringify(d.dobras.get(f) ?? []));
+    if (fluxos.length === 0) throw new EdicaoInvalida('as ligações já estão retas');
+    return trocarVariasDobrasNoXml(texto, new Map(fluxos.map((f) => [f, rotas.get(f)!])));
   }, pedido.hashBase);
   return { ...r, fluxos };
 }

@@ -8,6 +8,7 @@ import { basename, dirname, join } from 'node:path';
 import { lerDiagrama, type Diagrama, type ObjetoBpmn } from '../push/diagram/modelo.js';
 import { ConflitoEdicao, EdicaoInvalida, trocarDobrasNoXml } from './edit.js';
 import { rotaOrtogonal } from './route.js';
+import { refinarRotas } from './rotas.js';
 import { MODELOS, type Modelo } from './modelos.js';
 import { blobDeAtribuicao, codificarAtributo, estiloDoArquivo, trocarAtributosNaTag, type EstiloAtributo } from './props.js';
 
@@ -346,9 +347,14 @@ export function ligarNoXml(xml: string, origem: string, destino: string, nome = 
   // estilo aparece sem cor: o que entra sai certo, e o arquivo inteiro é
   // acertado junto (veja fonts.ts, gateways.ts e visual.ts).
   let pronto = garantirVisual(garantirLosangos(garantirFontes(novo)));
-  // A ligação já sai traçada em ângulo reto, pela rota do endireitar (route.ts);
-  // a que já fica reta (formas alinhadas, saída do evento de erro) fica sem dobra.
-  const pontos = rotaOrtogonal(lerDiagrama(pronto), id);
+  // A ligação já sai traçada em ângulo reto, como o Endireitar a deixaria
+  // (route.ts e rotas.ts); a que já fica reta (formas alinhadas, saída do
+  // evento de erro) fica sem dobra.
+  const final = lerDiagrama(pronto);
+  const rotas = new Map(final.dobras);
+  rotas.set(id, rotaOrtogonal(final, id));
+  refinarRotas(final, rotas, new Set([id]));
+  const pontos = rotas.get(id)!;
   if (pontos.length) pronto = trocarDobrasNoXml(pronto, id, pontos);
   return { xml: pronto, id };
 }

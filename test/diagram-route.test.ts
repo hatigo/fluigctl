@@ -222,3 +222,41 @@ test('a ligação nova já sai em ângulo reto, e a que fica reta sai sem dobra'
   const reta = ligarNoXml(alinhada.xml, 'task2', alinhada.id);
   assert.deepEqual(dobras(reta.xml, reta.id) ?? [], []);
 });
+
+test('endireitar não deixa seta chegando pelo mesmo ponto de onde outra sai', async () => {
+  const { novoProcesso } = await import('../src/diagram/novo.js');
+  const { adicionarNoXml, ligarNoXml } = await import('../src/diagram/add.js');
+  const { medirLayout } = await import('../src/diagram/layout-medida.js');
+  // A → B → C, e dois retornos: C → B e B → A. Pelo corredor de cima, os dois
+  // usam o topo de B: um chega e o outro sai pelo mesmo ponto (o caso mais comum no acervo).
+  let xml = novoProcesso({ id: 'retornos', nome: 'Retornos', raias: ['Raia'] });
+  const ids: string[] = [];
+  for (const [x, nome] of [[300, 'A'], [550, 'B'], [800, 'C']] as const) {
+    const r = adicionarNoXml(xml, { tipo: 'humana', x, y: 140, nome });
+    xml = r.xml;
+    ids.push(r.criados[0]!);
+  }
+  const [a, b, c] = ids as [string, string, string];
+  const fluxos: string[] = [];
+  for (const [o, t] of [[a, b], [b, c], [c, b], [b, a]] as const) {
+    const r = ligarNoXml(xml, o, t);
+    xml = r.xml;
+    fluxos.push(r.id);
+  }
+  // Como o Endireitar antigo deixava: cada ligação pela rota sozinha.
+  const d = lerDiagrama(xml);
+  for (const f of fluxos) xml = trocarDobrasNoXml(xml, f, rotaOrtogonal(d, f));
+  assert.ok(medirLayout(xml).mistos > 0, 'o caso de partida tem o topo de B misturado');
+
+  const p = projeto();
+  try {
+    writeFileSync(p.arquivo, xml);
+    endireitar({ arquivo: p.arquivo, hashBase: hash(xml), undoDir: p.undo });
+    const m = medirLayout(readFileSync(p.arquivo, 'utf8'));
+    assert.equal(m.mistos, 0, 'nenhum lado com seta chegando e saindo');
+    assert.equal(m.sobrepostas, 0);
+    assert.equal(m.cards, 0);
+  } finally {
+    p.limpar();
+  }
+});

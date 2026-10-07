@@ -32,7 +32,7 @@ const visitar = (pasta: string) => {
 };
 (raizes.length ? raizes : [join(homedir(), 'fluig', 'workspaces')]).forEach(visitar);
 
-const total: MedidaLayout & { diagramas: number; falhas: number } = { diagramas: 0, falhas: 0, ligacoes: 0, cards: 0, sobrepostas: 0, cruzamentos: 0 };
+const total: MedidaLayout & { diagramas: number; falhas: number } = { diagramas: 0, falhas: 0, ligacoes: 0, cards: 0, sobrepostas: 0, cruzamentos: 0, mistos: 0 };
 const porDiagrama: (MedidaLayout & { arquivo: string })[] = [];
 for (const arquivo of arquivos.sort()) {
   let xml: string;
@@ -45,7 +45,7 @@ for (const arquivo of arquivos.sort()) {
   try {
     const m = medirLayout(original ? xml : organizarNoXml(xml).xml);
     total.diagramas++;
-    for (const k of ['ligacoes', 'cards', 'sobrepostas', 'cruzamentos'] as const) total[k] += m[k];
+    for (const k of ['ligacoes', 'cards', 'sobrepostas', 'cruzamentos', 'mistos'] as const) total[k] += m[k];
     porDiagrama.push({ arquivo, ...m });
   } catch (e) {
     total.falhas++;
@@ -56,7 +56,8 @@ console.log(`${total.diagramas} diagramas${total.falhas ? `, ${total.falhas} com
 console.log(`  por cima de forma   ${total.cards}`);
 console.log(`  sobrepostas         ${total.sobrepostas}`);
 console.log(`  cruzamentos         ${total.cruzamentos}`);
-const peso = (m: MedidaLayout) => m.cards * 10 + m.sobrepostas * 3 + m.cruzamentos;
+console.log(`  entra e sai no mesmo ponto   ${total.mistos}`);
+const peso = (m: MedidaLayout) => m.cards * 10 + m.sobrepostas * 3 + m.mistos * 3 + m.cruzamentos;
 for (const m of porDiagrama.sort((a, b) => peso(b) - peso(a)).slice(0, piores)) {
-  if (peso(m)) console.log(`  ${String(m.cards).padStart(3)} ${String(m.sobrepostas).padStart(3)} ${String(m.cruzamentos).padStart(4)}  ${basename(m.arquivo)} (${m.ligacoes} ligações)`);
+  if (peso(m)) console.log(`  ${String(m.cards).padStart(3)} ${String(m.sobrepostas).padStart(3)} ${String(m.cruzamentos).padStart(4)} ${String(m.mistos).padStart(3)}  ${basename(m.arquivo)} (${m.ligacoes} ligações)`);
 }

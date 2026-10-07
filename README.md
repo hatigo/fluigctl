@@ -1180,8 +1180,9 @@ a mesma comparação quando o acervo está na máquina.
 `npm run medir-organizar [raiz] [--original] [--piores <n>]` mede o Organizar
 do visualizador: cada `.process` é organizado e as ligações são contadas
 (`src/diagram/layout-medida.ts`) — as que passam por cima de uma forma, os pares
-que correm um em cima do outro e os que se cruzam. No acervo de 94 diagramas: 1,
-5 e 152 (o desenho feito à mão no Studio: 204, 1 e 43). `--original` mede os
+que correm um em cima do outro, os que se cruzam e os lados de forma em que uma
+seta chega pelo mesmo ponto de onde outra sai. No acervo de 94 diagramas: 1, 0,
+142 e 0 (o desenho feito à mão no Studio: 204, 1, 43 e 0). `--original` mede os
 diagramas como estão.
 
 Tarefas e gateways criados (visualizador, `diagram pull`) ou renomeados saem no

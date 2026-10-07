@@ -83,7 +83,7 @@ test('o visualizador organiza pela rota layout, e um desfazer volta tudo', async
 });
 
 test('a contratação organizada: nenhuma ligação por cima de forma, sobreposta ou cruzada', () => {
-  assert.deepEqual(medirLayout(organizarNoXml(CONTRATACAO).xml), { ligacoes: 19, cards: 0, sobrepostas: 0, cruzamentos: 0 });
+  assert.deepEqual(medirLayout(organizarNoXml(CONTRATACAO).xml), { ligacoes: 19, cards: 0, sobrepostas: 0, cruzamentos: 0, mistos: 0 });
 });
 
 test('o tratamento compartilhado fica depois das service tasks, e a volta dele é retorno', async () => {
@@ -144,7 +144,7 @@ test('o Organizar no acervo: quase nenhuma ligação por cima de forma, poucas s
     total.cruzamentos += m.cruzamentos;
   }
   assert.ok(total.diagramas > 50);
-  // 2026-10-07: 1, 5 e 152 (o desenho à mão: 204, 1 e 43; o Organizar antes: 18, 41 e 442).
+  // 2026-10-07: 1, 0 e 142 (o desenho à mão: 204, 1 e 43; o Organizar antes: 18, 41 e 442).
   assert.ok(total.cards <= 3, `por cima de forma: ${total.cards}`);
   assert.ok(total.sobrepostas <= 10, `sobrepostas: ${total.sobrepostas}`);
   assert.ok(total.cruzamentos <= 170, `cruzamentos: ${total.cruzamentos}`);

@@ -3,7 +3,8 @@ import { caixaDaFigura } from '../push/diagram/svg.js';
 import { EdicaoInvalida, trocarCoordenada, trocarVariasDobrasNoXml } from './edit.js';
 import { formas, type Tag } from './lanes.js';
 import { cruzaCards, pontasDoFluxo, rotaOrtogonal } from './route.js';
-import { cruzam, medirLayout, sobrepoem } from './layout-medida.js';
+import { medirLayout } from './layout-medida.js';
+import { refinarRotas } from './rotas.js';
 
 /**
  * Organizar o diagrama inteiro pela receita de layout da skill fluig-patterns,
@@ -62,7 +63,7 @@ export function organizarNoXml(xml: string): { xml: string; nos: number } {
   for (const ordem of ORDENS) {
     const r = organizarCom(xml, ordem);
     const m = medirLayout(r.xml);
-    const custo = m.cards * 10 + m.sobrepostas * 3 + m.cruzamentos;
+    const custo = m.cards * 10 + m.mistos * 4 + m.sobrepostas * 3 + m.cruzamentos;
     if (!melhor || custo < melhor.custo) melhor = { ...r, custo };
     if (custo === 0) break;
   }
@@ -360,114 +361,7 @@ function organizarCom(xml: string, ordemDasSaidas: OrdemDasSaidas): { xml: strin
     }
     rotas.set(id, dobras);
   }
-  aliviarCruzamentos(posicionado, rotas);
+  refinarRotas(posicionado, rotas);
   texto = trocarVariasDobrasNoXml(texto, rotas);
   return { xml: texto, nos: posicoes.size };
-}
-
-/**
- * Cada ligação foi traçada sozinha, com o degrau no meio do vão: duas que trocam
- * de raia no mesmo vão, ou um retorno pelo corredor, cruzam as outras sem
- * precisar. Aqui cada ligação com duas dobras procura, em passos de 10 px e nas
- * duas formas (degrau ou corredor), a rota que cruza menos ligações e não corre
- * em cima de outra, sem passar por card nem entrar na figura das pontas.
- */
-function aliviarCruzamentos(d: Diagrama, dobrasPorFluxo: Map<string, Point[]>): void {
-  const porId = new Map(d.objetos.filter((o) => o.attrs['id']).map((o) => [o.attrs['id']!, o]));
-  const objeto = (id: string) => porId.get(id);
-  interface Rota { id: string; origem: string; destino: string; a: Point; b: Point; dobras: Point[] }
-  const rotas: Rota[] = [];
-  for (const [id, dobras] of dobrasPorFluxo) {
-    const pontas = pontasDoFluxo(d, id);
-    const f = objeto(id);
-    if (!pontas || !f) continue;
-    rotas.push({ id, origem: f.attrs['sourceRef'] ?? '', destino: f.attrs['targetRef'] ?? '', a: pontas[0], b: pontas[1], dobras });
-  }
-  const segmentos = (r: Rota, dobras = r.dobras): [Point, Point][] => {
-    const pts = [r.a, ...dobras, r.b].map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
-    return pts.slice(0, -1).map((p, i) => [p, pts[i + 1]!]);
-  };
-  const figura = (id: string) => {
-    const o = objeto(id);
-    const c = d.caixas.get(id);
-    return o && c ? caixaDaFigura(o, c) : undefined;
-  };
-  // Segmentos e caixa envolvente de cada rota, guardados: o custo é perguntado
-  // para cada posição candidata de cada ligação, contra todas as outras.
-  type Tracado = { segmentos: [Point, Point][]; x0: number; x1: number; y0: number; y1: number };
-  const tracar = (r: Rota, dobras: Point[]): Tracado => {
-    const sg = segmentos(r, dobras);
-    const xs = sg.flatMap(([p, q]) => [p.x, q.x]);
-    const ys = sg.flatMap(([p, q]) => [p.y, q.y]);
-    return { segmentos: sg, x0: Math.min(...xs) - 6, x1: Math.max(...xs) + 6, y0: Math.min(...ys) - 6, y1: Math.max(...ys) + 6 };
-  };
-  const tracados = new Map<Rota, Tracado>();
-  const tracadoDe = (r: Rota) => {
-    let t = tracados.get(r);
-    if (!t) tracados.set(r, (t = tracar(r, r.dobras)));
-    return t;
-  };
-  const custo = (r: Rota, dobras: Point[]) => {
-    const eu = tracar(r, dobras);
-    const meus = eu.segmentos;
-    let n = 0;
-    for (const outra of rotas) {
-      if (outra === r) continue;
-      const ela = tracadoDe(outra);
-      if (ela.x1 < eu.x0 || ela.x0 > eu.x1 || ela.y1 < eu.y0 || ela.y0 > eu.y1) continue;
-      const delas = ela.segmentos;
-      const mesmaPonta = outra.origem === r.origem || outra.destino === r.destino;
-      if (meus.some((s) => delas.some((t) => cruzam(s, t)))) n += 1;
-      if (!mesmaPonta && meus.some((s) => delas.some((t) => sobrepoem(s, t)))) n += 3;
-    }
-    return n;
-  };
-
-  // A rota não sai da pool (nem encosta na borda dela).
-  const pool = d.objetos.find((o) => o.tipo === 'BpmnPool' && d.caixas.has(o.attrs['id'] ?? ''));
-  const cp = pool ? d.caixas.get(pool.attrs['id']!)! : undefined;
-  const naPool = (y: number) => !cp || (y > cp.absY + 10 && y < cp.absY + cp.altura - 10);
-  const comprimento = (r: Rota, dobras: Point[]) =>
-    segmentos(r, dobras).reduce((t, [p, q]) => t + Math.abs(q.x - p.x) + Math.abs(q.y - p.y), 0);
-  for (let passada = 0; passada < 3; passada++) {
-    let mudou = false;
-    for (const r of rotas) {
-      if (r.dobras.length !== 2) continue;
-      const fa = figura(r.origem);
-      const fb = figura(r.destino);
-      if (!fa || !fb) continue;
-      const atual = custo(r, r.dobras);
-      if (atual === 0) continue;
-      // As duas formas de rota com duas dobras: o degrau (o trecho do meio
-      // vertical, num x entre as pontas) e o corredor (o trecho do meio
-      // horizontal, num y acima, abaixo ou entre as figuras). Trocar de forma
-      // separa a ida e a volta entre as mesmas duas tarefas, que pelo degrau
-      // saem as duas do centro, na mesma altura.
-      const foraEmX = (x: number) => [fa, fb].every((c) => x < c.absX - 5 || x > c.absX + c.largura + 5);
-      const foraEmY = (y: number) => y >= 0 && naPool(y) && [fa, fb].every((c) => y < c.absY - 5 || y > c.absY + c.altura + 5);
-      const candidatas: Point[][] = [];
-      const [x0, x1] = [Math.min(r.a.x, r.b.x), Math.max(r.a.x, r.b.x)];
-      for (let x = Math.ceil(x0 / 10) * 10; x < x1; x += 10) if (x > x0 && foraEmX(x)) candidatas.push([{ x, y: Math.round(r.a.y) }, { x, y: Math.round(r.b.y) }]);
-      const topo = Math.min(fa.absY, fb.absY);
-      const fundo = Math.max(fa.absY + fa.altura, fb.absY + fb.altura);
-      for (let y = Math.floor((topo - 120) / 10) * 10; y <= fundo + 120; y += 10) if (foraEmY(y)) candidatas.push([{ x: Math.round(r.a.x), y }, { x: Math.round(r.b.x), y }]);
-      let melhor = { dobras: r.dobras, custo: atual, comprimento: comprimento(r, r.dobras) };
-      for (const tentativa of candidatas) {
-        const c = custo(r, tentativa);
-        if (c > melhor.custo) continue;
-        const l = comprimento(r, tentativa);
-        // Menos cruzamentos ganha; no empate, só troca o que já cruzava algo, e pela rota mais curta.
-        const ganha = c < melhor.custo || (melhor.dobras !== r.dobras && l < melhor.comprimento);
-        // Passar por forma é o teste mais caro: só para quem ganharia.
-        if (ganha && !cruzaCards(d, r.id, tentativa)) melhor = { dobras: tentativa, custo: c, comprimento: l };
-      }
-      if (melhor.dobras !== r.dobras) {
-        r.dobras = melhor.dobras;
-        tracados.delete(r);
-        mudou = true;
-      }
-    }
-    if (!mudou) break;
-  }
-  for (const r of rotas) dobrasPorFluxo.set(r.id, r.dobras);
 }
