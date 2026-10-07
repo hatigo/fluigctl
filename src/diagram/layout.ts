@@ -59,18 +59,19 @@ type OrdemDasSaidas = 'arquivo' | 'invertida' | 'raia-acima' | 'raia-abaixo' | '
 const ORDENS: OrdemDasSaidas[] = ['arquivo', 'invertida', 'raia-acima', 'raia-abaixo', 'ramo-longo'];
 
 export function organizarNoXml(xml: string): { xml: string; nos: number } {
-  let melhor: { xml: string; nos: number; custo: number } | undefined;
+  // As ordens se comparam pelo traçado simples (sem o refinamento, que é o caro);
+  // só a vencedora é refinada.
+  let melhor: { ordem: OrdemDasSaidas; custo: number } | undefined;
   for (const ordem of ORDENS) {
-    const r = organizarCom(xml, ordem);
-    const m = medirLayout(r.xml);
+    const m = medirLayout(organizarCom(xml, ordem, false).xml);
     const custo = m.cards * 10 + m.mistos * 4 + m.sobrepostas * 3 + m.cruzamentos;
-    if (!melhor || custo < melhor.custo) melhor = { ...r, custo };
+    if (!melhor || custo < melhor.custo) melhor = { ordem, custo };
     if (custo === 0) break;
   }
-  return { xml: melhor!.xml, nos: melhor!.nos };
+  return organizarCom(xml, melhor!.ordem, true);
 }
 
-function organizarCom(xml: string, ordemDasSaidas: OrdemDasSaidas): { xml: string; nos: number } {
+function organizarCom(xml: string, ordemDasSaidas: OrdemDasSaidas, refinar: boolean): { xml: string; nos: number } {
   const d = lerDiagrama(xml);
   const objeto = (id: string) => d.objetos.find((o) => o.attrs['id'] === id);
   const fluxos = fluxosDe(d);
@@ -361,7 +362,7 @@ function organizarCom(xml: string, ordemDasSaidas: OrdemDasSaidas): { xml: strin
     }
     rotas.set(id, dobras);
   }
-  refinarRotas(posicionado, rotas);
+  if (refinar) refinarRotas(posicionado, rotas);
   texto = trocarVariasDobrasNoXml(texto, rotas);
   return { xml: texto, nos: posicoes.size };
 }

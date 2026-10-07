@@ -21,12 +21,16 @@ export interface MedidaLayout {
 
 export type Lado = 'cima' | 'baixo' | 'esquerda' | 'direita';
 
-/** Por que lado o segmento que sai do centro `de` rumo a `para` cruza a borda; só para segmento reto (horizontal ou vertical). */
+/**
+ * Por que lado o segmento que sai do centro `de` rumo a `para` cruza a borda;
+ * só para segmento reto (horizontal ou vertical). Até 1 px é reto, como na
+ * rota: a tarefa de altura ímpar tem o centro em meio pixel.
+ */
 export function ladoDoSegmento(de: Ponto, para: Ponto): Lado | undefined {
   const dx = para.x - de.x;
   const dy = para.y - de.y;
-  if (Math.abs(dx) < 0.5 && Math.abs(dy) >= 0.5) return dy < 0 ? 'cima' : 'baixo';
-  if (Math.abs(dy) < 0.5 && Math.abs(dx) >= 0.5) return dx < 0 ? 'esquerda' : 'direita';
+  if (Math.abs(dx) <= 1 && Math.abs(dy) > 1) return dy < 0 ? 'cima' : 'baixo';
+  if (Math.abs(dy) <= 1 && Math.abs(dx) > 1) return dx < 0 ? 'esquerda' : 'direita';
   return undefined;
 }
 

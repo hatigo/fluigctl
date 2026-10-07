@@ -55,7 +55,7 @@ function obstaculos(diagrama: Diagrama, origem: string, destino: string): Caixa[
 }
 
 /** O segmento de a até b passa por dentro da caixa (com 2 px de folga na borda)? */
-function cruza(a: Ponto, b: Ponto, c: Caixa): boolean {
+export function cruza(a: Ponto, b: Ponto, c: Caixa): boolean {
   const x0 = c.absX + 2, x1 = c.absX + c.largura - 2, y0 = c.absY + 2, y1 = c.absY + c.altura - 2;
   // Liang-Barsky: recorta o segmento contra o retângulo.
   let t0 = 0, t1 = 1;
@@ -85,6 +85,16 @@ export function cruzaCards(diagrama: Diagrama, fluxoId: string, pontos: Ponto[])
   const co = diagrama.caixas.get(fluxo?.attrs['sourceRef'] ?? ''), cd = diagrama.caixas.get(fluxo?.attrs['targetRef'] ?? '');
   if (!fluxo || !o || !d || !co || !cd) return false;
   return atravessa([centroDaFigura(o, co), ...pontos, centroDaFigura(d, cd)], obstaculos(diagrama, o.attrs['id']!, d.attrs['id']!));
+}
+
+/** Por quantas formas a linha com estas dobras passa (fora as pontas e os eventos presos a elas). */
+export function contarFormas(diagrama: Diagrama, fluxoId: string, pontos: Ponto[]): number {
+  const fluxo = objeto(diagrama, fluxoId);
+  const o = objeto(diagrama, fluxo?.attrs['sourceRef']), d = objeto(diagrama, fluxo?.attrs['targetRef']);
+  const co = diagrama.caixas.get(fluxo?.attrs['sourceRef'] ?? ''), cd = diagrama.caixas.get(fluxo?.attrs['targetRef'] ?? '');
+  if (!fluxo || !o || !d || !co || !cd) return 0;
+  const linha = [centroDaFigura(o, co), ...pontos, centroDaFigura(d, cd)];
+  return obstaculos(diagrama, o.attrs['id']!, d.attrs['id']!).filter((c) => atravessa(linha, [c])).length;
 }
 
 /** Os centros que as pontas de um fluxo miram. */

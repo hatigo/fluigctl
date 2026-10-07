@@ -144,8 +144,28 @@ test('o Organizar no acervo: quase nenhuma ligação por cima de forma, poucas s
     total.cruzamentos += m.cruzamentos;
   }
   assert.ok(total.diagramas > 50);
-  // 2026-10-07: 1, 0 e 142 (o desenho à mão: 204, 1 e 43; o Organizar antes: 18, 41 e 442).
+  // 2026-10-07, com a saída sempre pela direita: 1, 0 e 168 (o desenho à mão:
+  // 204, 1 e 43; o Organizar no começo do dia: 18, 41 e 442).
   assert.ok(total.cards <= 3, `por cima de forma: ${total.cards}`);
-  assert.ok(total.sobrepostas <= 10, `sobrepostas: ${total.sobrepostas}`);
-  assert.ok(total.cruzamentos <= 170, `cruzamentos: ${total.cruzamentos}`);
+  assert.ok(total.sobrepostas <= 5, `sobrepostas: ${total.sobrepostas}`);
+  assert.ok(total.cruzamentos <= 185, `cruzamentos: ${total.cruzamentos}`);
+});
+
+test('toda ligação sai pela direita, fora o desenho do padrão de recuperação', async () => {
+  const { pontasDoFluxo } = await import('../src/diagram/route.js');
+  const { ladoDoSegmento } = await import('../src/diagram/layout-medida.js');
+  const d = lerDiagrama(organizarNoXml(CONTRATACAO).xml);
+  const objeto = (id: string | undefined) => d.objetos.find((o) => o.attrs['id'] === id);
+  const fora: string[] = [];
+  for (const f of d.objetos.filter((o) => o.tipo === 'SequenceFlow')) {
+    const origem = objeto(f.attrs['sourceRef']);
+    // A diagonal do evento de erro e a vertical do tratamento de volta para a service task.
+    if (origem?.attrs['parentTask']) continue;
+    if (d.objetos.some((g) => g.tipo === 'SequenceFlow' && g.attrs['targetRef'] === f.attrs['sourceRef'] && objeto(g.attrs['sourceRef'])?.attrs['parentTask'] === f.attrs['targetRef'])) continue;
+    const [a, b] = pontasDoFluxo(d, f.attrs['id']!)!;
+    const primeiro = (d.dobras.get(f.attrs['id']!) ?? [])[0] ?? b;
+    const lado = ladoDoSegmento({ x: Math.round(a.x), y: Math.round(a.y) }, { x: Math.round(primeiro.x), y: Math.round(primeiro.y) });
+    if (lado !== 'direita') fora.push(`${f.attrs['id']}: ${lado}`);
+  }
+  assert.deepEqual(fora, []);
 });
