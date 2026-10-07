@@ -67,7 +67,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `process versions` / `release` (versões do processo e liberar a em edição) | pronto |
 | `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
 | `request start` / `show` / `move` / `cancel` (solicitações sem a tela do Fluig) | pronto, conferido no localdev com a contratação: recuperação, laço de aprovação e reprovação |
-| `form new` (pasta de formulário como a do Studio: style guide, `form name="form"`, campos e `validateForm` dos obrigatórios) | pronto; publicado com `push form --create` no localdev e usado por um processo criado pelo `diagram new` |
+| `form new` (pasta de formulário como a do Studio: style guide, `form name="form"`, campos — inclusive select e radio — e `validateForm` dos obrigatórios) | pronto; publicado com `push form --create` (que assume a pasta dos formulários, `ds<nome>` e a persistência do Studio) no localdev e usado por um processo criado pelo `diagram new` |
 | `diagram new` (processo novo como o Studio grava: pool, raias, início ligado ao fim) | pronto; abre no Studio sem alteração e passa no `diagram check` |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, textos sem fonte, losangos sem pontos e formas sem o visual do Studio (`--fix` acrescenta), elementos sem saída ou sem entrada e o padrão das service tasks; `--fix` também devolve ao canto da tarefa a bolinha de erro que o Studio deixou solta) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
