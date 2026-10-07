@@ -536,10 +536,10 @@ async function tratarEdicao(
       const destino = texto('destino');
       let id = '';
       const r = aplicarEdicao(arquivo, undoDir, (t) => {
+        // A ligação nova já nasce traçada e refinada pela receita (add.ts).
         const feito = ligarNoXml(t, origem, destino);
         id = feito.id;
-        // A ligação nova já nasce traçada pela receita.
-        return trocarDobrasNoXml(feito.xml, feito.id, rotaOrtogonal(lerDiagrama(feito.xml), feito.id));
+        return feito.xml;
       }, texto('hash'));
       const tipoOrigem = lerDiagrama(readFileSync(arquivo, 'utf8')).objetos.find((o) => o.attrs['id'] === origem)?.tipo;
       respostaJson(res, 200, { ok: true, criados: [id], avisos: r.avisos, deGateway: tipoOrigem === 'BpmnGateway' });

@@ -254,7 +254,7 @@ export function criarNoXml(xml: string, c: Criacao): { xml: string; id: string }
 }
 
 /** O tamanho com que a forma vai ficar: o do Studio para tarefa e gateway, o do modelo para o resto. */
-function tamanhoPrevisto(xml: string, d: Diagrama, tipo: Criacao['tipo'], nome: string): { w: number; h: number } {
+export function tamanhoPrevisto(xml: string, d: Diagrama, tipo: Criacao['tipo'], nome: string): { w: number; h: number } {
   const m = medidorDoStudio();
   if (tipo === 'humana' || tipo === 'servico') {
     const t = m.tarefa(nome);

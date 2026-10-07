@@ -165,10 +165,56 @@ safeguards:
   once someone else has written to the file.
 
 If the human edits, expect the file to change under you. Re-read it before your
-next write, so you do not overwrite their edit. Your own writes have none of
-these protections. Outside edit mode the viewer is read-only.
+next write, so you do not overwrite their edit. Outside edit mode the viewer is
+read-only.
 
 Do not claim the viewer can do more than this. The "+ Adicionar" menu creates only the types listed above.
+
+## Editing a diagram from the terminal
+
+**Never edit the `.process` XML by hand.** References are by position, fonts,
+styles, sizes and routes have to match what Studio writes, and a hand edit that
+passes `diagram check` can still break in Studio. Use the same operations as the
+viewer, from the terminal. They share its safeguards and its undo history, so an
+open viewer shows each change and its Desfazer undoes it.
+
+Every element argument takes the id or the exact name (`diagram show` lists
+both). Start by reading the diagram:
+
+```sh
+fluigctl diagram show workflow/diagrams/<p>.process          # in flow order: type, lane, assignment, links, conditions
+fluigctl diagram show workflow/diagrams/<p>.process --json
+```
+
+Then edit:
+
+```sh
+# insert a task between two linked elements: opens room, relinks a → new → b,
+# keeps the link's name and, after a gateway, its condition
+fluigctl diagram add <p>.process --type humana --name "Conferir pedido" --after "Aprovar pedido" --before "Aprovado?"
+# append after an element (opens room and links it), or place at a centre point
+fluigctl diagram add <p>.process --type recuperacao --name "Integrar no RM" --after "Aprovar pedido"
+fluigctl diagram add <p>.process --type fim --name "Cancelado" --at 900,450
+fluigctl diagram link <p>.process "Aprovado?" "Revisar" --name "Revisar" --when decisao=revisar
+fluigctl diagram condition <p>.process "Aprovado?" --to "Cancelado" --when decisao!=aprovado
+fluigctl diagram assign <p>.process "Conferir pedido" --mechanism "Executor Atividade" --field idNode="Preencher pedido" --field returns=1
+fluigctl diagram assign <p>.process "Analisar" --mechanism "Pool Grupo" --field groupId=compras
+fluigctl diagram assign <p>.process "Aprovar" --custom MEC_ALCADAS
+fluigctl diagram rename <p>.process "Conferir pedido" "Conferir documentos"
+fluigctl diagram remove <p>.process "Revisar"
+fluigctl diagram organize <p>.process        # the viewer's Organizar
+fluigctl diagram straighten <p>.process      # the viewer's Endireitar, every flow
+fluigctl diagram undo <p>.process            # and redo
+```
+
+- `--type`: humana, servico, gateway, paralelo, juncao, inicio, fim, or
+  **recuperacao** (service task with the whole recovery pattern). A plain
+  `servico` breaks the pattern; use `recuperacao` for service tasks.
+- `--lane <raia>` puts the new element in another lane.
+- A new service task gets a script skeleton in `workflow/scripts/`. Implement it
+  before pushing.
+- Each command prints what changed and the `diagram check` warnings left. A
+  structural error is never written.
 
 ## Pushing
 

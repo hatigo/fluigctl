@@ -648,6 +648,21 @@ function fluxosDe(xml: string, id: string): string[] {
     .filter((f) => d.dobras.has(f));
 }
 
+/**
+ * Traça as ligações pedidas pela rota da receita e refina contra as outras
+ * (rotas.ts); só as pedidas mudam. Devolve o texto e as que mudaram.
+ */
+export function endireitarNoXml(texto: string, alvos: string[]): { xml: string; fluxos: string[] } {
+  const d = lerDiagrama(texto);
+  const rotas = new Map(d.dobras);
+  const validos = alvos.filter((f) => d.dobras.has(f));
+  for (const f of validos) rotas.set(f, rotaOrtogonal(d, f));
+  refinarRotas(d, rotas, new Set(validos));
+  const fluxos = validos.filter((f) => JSON.stringify(rotas.get(f)) !== JSON.stringify(d.dobras.get(f) ?? []));
+  if (fluxos.length === 0) return { xml: texto, fluxos };
+  return { xml: trocarVariasDobrasNoXml(texto, new Map(fluxos.map((f) => [f, rotas.get(f)!]))), fluxos };
+}
+
 export function endireitar(pedido: PedidoEndireitar): ResultadoEndireitar {
   let fluxos: string[] = [];
   const r = aplicarEdicao(pedido.arquivo, pedido.undoDir, (texto) => {
@@ -656,13 +671,10 @@ export function endireitar(pedido: PedidoEndireitar): ResultadoEndireitar {
     // Cada ligação pela rota da receita e, depois, o refinamento contra as
     // outras (rotas.ts): sem cruzar à toa e sem chegar seta pelo mesmo ponto
     // de onde outra sai. Só as ligações pedidas mudam.
-    const d = lerDiagrama(texto);
-    const rotas = new Map(d.dobras);
-    for (const f of alvos) rotas.set(f, rotaOrtogonal(d, f));
-    refinarRotas(d, rotas, new Set(alvos));
-    fluxos = alvos.filter((f) => JSON.stringify(rotas.get(f)) !== JSON.stringify(d.dobras.get(f) ?? []));
+    const r = endireitarNoXml(texto, alvos);
+    fluxos = r.fluxos;
     if (fluxos.length === 0) throw new EdicaoInvalida('as ligações já estão retas');
-    return trocarVariasDobrasNoXml(texto, new Map(fluxos.map((f) => [f, rotas.get(f)!])));
+    return r.xml;
   }, pedido.hashBase);
   return { ...r, fluxos };
 }

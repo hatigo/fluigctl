@@ -55,6 +55,7 @@ import { garantirLosangos, poligonosSemPontos } from './diagram/gateways.js';
 import { formasSemEstilo, garantirVisual } from './diagram/visual.js';
 import { encaixarErros, errosForaDoCanto } from './diagram/erros.js';
 import { novoProcesso } from './diagram/novo.js';
+import { USO_EDICAO, comandoEdicaoDiagrama, ehComandoDeEdicao } from './commands/diagram-edit.js';
 import { criarFormulario, lerCampo as lerCampoDeFormulario } from './commands/form-new.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
@@ -102,6 +103,13 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       cria workflow/diagrams/<processId>.process como o Studio grava: a pool com
       as raias (padrão: Solicitante) e o início ligado ao fim; abre sem alteração
       no Studio e se edita pelo diagram open
+
+  fluigctl diagram show|add|link|condition|assign|rename|remove|organize|straighten|undo|redo <arquivo.process> ...
+      edita o diagrama pelo terminal, com as operações e o desfazer do visualizador
+      (os elementos por id ou nome exato; diagram show lista). Exemplos:
+        diagram add p.process --type humana --name "Conferir" --after "Aprovar" --before "Aprovado?"
+        diagram assign p.process "Conferir" --mechanism "Executor Atividade" --field idNode="Preencher" --field returns=1
+        diagram link p.process "Aprovado?" "Fim" --when decisao=aprovado
 
   fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]
       confere um .process editado fora do Studio: referências do Graphiti,
@@ -1287,6 +1295,8 @@ async function comandoDiagram(argv: string[]): Promise<void> {
     '     fluigctl diagram close <arquivo.process>\n' +
     '     fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]\n' +
     '     fluigctl diagram new <processId> --name <nome> [--lane <raia>]... [--form <id|nome>] [--category <c>] [--server <nome>] [--workflow <pasta>]';
+
+  if (ehComandoDeEdicao(sub)) return comandoEdicaoDiagrama(sub!, argv.slice(1));
 
   if (sub === 'new') {
     const { values, positionals } = parseArgs({
