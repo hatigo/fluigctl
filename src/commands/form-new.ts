@@ -11,29 +11,55 @@ import { ErroFluigctl } from '../errors.js';
  * `push form --create`.
  */
 
-export const TIPOS_CAMPO = ['text', 'textarea', 'number', 'date', 'email'] as const;
+export const TIPOS_CAMPO = ['text', 'textarea', 'number', 'date', 'email', 'select', 'radio'] as const;
 export type TipoCampo = (typeof TIPOS_CAMPO)[number];
+
+export interface Opcao {
+  valor: string;
+  texto: string;
+}
 
 export interface Campo {
   nome: string;
   tipo: TipoCampo;
   rotulo: string;
   obrigatorio: boolean;
+  /** Só em select e radio. */
+  opcoes?: Opcao[];
 }
 
 const NOME = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
 
-/** `campo[!][:tipo[:Rótulo]]`; o `!` marca obrigatório. */
+/**
+ * `campo[!][:tipo[:Rótulo]]`; o `!` marca obrigatório. Select e radio levam as
+ * opções no tipo: `decisao!:radio(aprovado=Aprovar|reprovado=Reprovar):Decisão`
+ * (sem `=`, o valor é o próprio texto). O rótulo pode ter dois-pontos.
+ */
 export function lerCampo(texto: string): Campo {
-  const [cabeca = '', tipo = 'text', ...resto] = texto.split(':');
+  const m = /^([^:]*?)(?::([a-z]+)(?:\(([^)]*)\))?)?(?::([\s\S]*))?$/.exec(texto);
+  const cabeca = m?.[1] ?? '';
+  const tipo = m?.[2] ?? 'text';
   const obrigatorio = cabeca.endsWith('!');
   const nome = obrigatorio ? cabeca.slice(0, -1) : cabeca;
-  if (!NOME.test(nome)) throw new ErroFluigctl(`--field "${texto}": o nome do campo usa letras, números e _ (começando por letra)`, 2);
+  if (!m || !NOME.test(nome)) throw new ErroFluigctl(`--field "${texto}": o nome do campo usa letras, números e _ (começando por letra)`, 2);
   if (!(TIPOS_CAMPO as readonly string[]).includes(tipo)) {
     throw new ErroFluigctl(`--field "${texto}": tipo "${tipo}" desconhecido; use ${TIPOS_CAMPO.join(', ')}`, 2);
   }
-  const rotulo = resto.join(':').trim() || nome;
-  return { nome, tipo: tipo as TipoCampo, rotulo, obrigatorio };
+  const rotulo = (m[4] ?? '').trim() || nome;
+  const campo: Campo = { nome, tipo: tipo as TipoCampo, rotulo, obrigatorio };
+  const comOpcoes = tipo === 'select' || tipo === 'radio';
+  if (m[3] !== undefined && !comOpcoes) throw new ErroFluigctl(`--field "${texto}": só select e radio têm opções`, 2);
+  if (comOpcoes) {
+    const opcoes = (m[3] ?? '').split('|').map((o) => o.trim()).filter(Boolean).map((o) => {
+      const i = o.indexOf('=');
+      return i < 0 ? { valor: o, texto: o } : { valor: o.slice(0, i).trim(), texto: o.slice(i + 1).trim() || o.slice(0, i).trim() };
+    });
+    if (opcoes.length < 2) throw new ErroFluigctl(`--field "${texto}": ${tipo} precisa de pelo menos duas opções, como ${tipo}(sim|nao)`, 2);
+    const repetidas = opcoes.map((o) => o.valor).filter((v, i, a) => a.indexOf(v) !== i);
+    if (repetidas.length) throw new ErroFluigctl(`--field "${texto}": opção repetida: ${repetidas.join(', ')}`, 2);
+    campo.opcoes = opcoes;
+  }
+  return campo;
 }
 
 const escapar = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -41,15 +67,39 @@ const escapar = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 function htmlDoCampo(c: Campo): string {
   const rotulo = `${escapar(c.rotulo)}${c.obrigatorio ? ' <span class="obrigatorio">*</span>' : ''}`;
   const comum = `class="form-control" id="${c.nome}" name="${c.nome}"`;
+  const r = '                            ';
+  const largura = c.tipo === 'textarea' ? 12 : 6;
+  if (c.tipo === 'radio') {
+    // Como no acervo: cada opção num label.radio-inline; o rótulo do grupo não aponta para um input.
+    const idDe = (o: Opcao) => `${c.nome}_${o.valor.replace(/[^\w-]/g, '_')}`;
+    return [
+      `                        <div class="form-group col-md-${largura}">`,
+      `${r}<label>${rotulo}</label>`,
+      `${r}<div>`,
+      ...c.opcoes!.flatMap((o) => [
+        `${r}    <label class="radio-inline">`,
+        `${r}        <input type="radio" name="${c.nome}" id="${idDe(o)}" value="${escapar(o.valor)}"> ${escapar(o.texto)}`,
+        `${r}    </label>`,
+      ]),
+      `${r}</div>`,
+      `                        </div>`,
+    ].join('\n');
+  }
   const controle =
     c.tipo === 'textarea'
-      ? `<textarea ${comum} rows="3"></textarea>`
-      : `<input type="${c.tipo}" ${comum}${c.tipo === 'text' || c.tipo === 'email' ? ` placeholder="${escapar(c.rotulo)}"` : ''}>`;
-  const largura = c.tipo === 'textarea' ? 12 : 6;
+      ? [`<textarea ${comum} rows="3"></textarea>`]
+      : c.tipo === 'select'
+      ? [
+          `<select ${comum}>`,
+          `    <option value="">Selecione</option>`,
+          ...c.opcoes!.map((o) => `    <option value="${escapar(o.valor)}">${escapar(o.texto)}</option>`),
+          `</select>`,
+        ]
+      : [`<input type="${c.tipo}" ${comum}${c.tipo === 'text' || c.tipo === 'email' ? ` placeholder="${escapar(c.rotulo)}"` : ''}>`];
   return [
     `                        <div class="form-group col-md-${largura}">`,
-    `                            <label for="${c.nome}">${rotulo}</label>`,
-    `                            ${controle}`,
+    `${r}<label for="${c.nome}">${rotulo}</label>`,
+    ...controle.map((l) => `${r}${l}`),
     `                        </div>`,
   ].join('\n');
 }

@@ -11,7 +11,19 @@ test('--field: nome, ! de obrigatório, tipo e rótulo (que pode ter dois-pontos
   assert.deepEqual(lerCampo('cargo'), { nome: 'cargo', tipo: 'text', rotulo: 'cargo', obrigatorio: false });
   assert.deepEqual(lerCampo('valor!:number:Valor: em reais'), { nome: 'valor', tipo: 'number', rotulo: 'Valor: em reais', obrigatorio: true });
   assert.throws(() => lerCampo('1campo'), /letras, números e _/);
-  assert.throws(() => lerCampo('campo:select'), /tipo "select" desconhecido/);
+  assert.throws(() => lerCampo('campo:checkbox'), /tipo "checkbox" desconhecido/);
+});
+
+test('select e radio: opções no tipo, valor=texto ou só o valor', () => {
+  assert.deepEqual(lerCampo('decisao!:radio(aprovado=Aprovar|reprovado=Reprovar):Decisão'), {
+    nome: 'decisao', tipo: 'radio', rotulo: 'Decisão', obrigatorio: true,
+    opcoes: [{ valor: 'aprovado', texto: 'Aprovar' }, { valor: 'reprovado', texto: 'Reprovar' }],
+  });
+  assert.deepEqual(lerCampo('unidade:select(Fabrica|Escritorio)').opcoes, [{ valor: 'Fabrica', texto: 'Fabrica' }, { valor: 'Escritorio', texto: 'Escritorio' }]);
+  assert.throws(() => lerCampo('a:radio(so)'), /pelo menos duas opções/);
+  assert.throws(() => lerCampo('a:select'), /pelo menos duas opções/);
+  assert.throws(() => lerCampo('a:select(x|x)'), /opção repetida: x/);
+  assert.throws(() => lerCampo('a:text(b|c)'), /só select e radio têm opções/);
 });
 
 test('form new: a pasta como a do Studio, com validateForm para os obrigatórios, e o push form a lê', async () => {
@@ -49,4 +61,17 @@ test('form new recusa nome inválido, campo repetido e formulário sem campo', (
   assert.throws(() => criarFormulario({ nome: 'form pedido', pasta: tmpdir(), campos: [lerCampo('a')] }), /nome de formulário inválido/);
   assert.throws(() => criarFormulario({ nome: 'formX', pasta: tmpdir(), campos: [lerCampo('a'), lerCampo('a!')] }), /campo repetido: a/);
   assert.throws(() => criarFormulario({ nome: 'formX', pasta: tmpdir(), campos: [] }), /pelo menos um --field/);
+});
+
+test('form new: radio como no acervo (label.radio-inline) e select com "Selecione"', () => {
+  const raiz = mkdtempSync(join(tmpdir(), 'form-new-'));
+  try {
+    criarFormulario({ nome: 'formEscolha', pasta: raiz, campos: [lerCampo('decisao!:radio(aprovado=Aprovar|reprovado=Reprovar):Decisão'), lerCampo('unidade:select(Fabrica|Escritorio=Escritório central)')] });
+    const html = readFileSync(join(raiz, 'formEscolha', 'formEscolha.html'), 'utf8');
+    assert.match(html, /<label class="radio-inline">\s*<input type="radio" name="decisao" id="decisao_aprovado" value="aprovado"> Aprovar\s*<\/label>/);
+    assert.match(html, /<select class="form-control" id="unidade" name="unidade">\s*<option value="">Selecione<\/option>\s*<option value="Fabrica">Fabrica<\/option>\s*<option value="Escritorio">Escritório central<\/option>/);
+    assert.match(readFileSync(join(raiz, 'formEscolha', 'events', 'validateForm.js'), 'utf8'), /\["decisao", "Decisão"\]/);
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
 });

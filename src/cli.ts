@@ -93,8 +93,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
 
   fluigctl form new <nome> --field <campo[!][:tipo[:Rótulo]]>... [--title T] [--forms <pasta>]
       cria forms/<nome>/<nome>.html como os formulários do Studio (style guide, form
-      name="form"); tipos text, textarea, number, date, email; o ! marca obrigatório
-      e gera events/validateForm.js; publica-se com push form --create
+      name="form"); tipos text, textarea, number, date, email, select e radio, com as
+      opções no tipo: decisao!:radio(aprovado=Aprovar|reprovado=Reprovar):Decisão;
+      o ! marca obrigatório e gera events/validateForm.js; publica-se com push form --create
 
   fluigctl diagram new <processId> --name <nome> [--lane <raia>]... [--form <id|nome>]
                       [--category <categoria>] [--server <nome>] [--workflow <pasta>]
