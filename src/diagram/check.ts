@@ -1,5 +1,6 @@
 import { lerDiagrama, type Caixa, type ObjetoBpmn } from '../push/diagram/modelo.js';
 import { filhos, lerXml, type No } from '../push/diagram/xml.js';
+import { foraDoCanto, soltaDaTarefa } from './erros.js';
 
 /**
  * Confere um `.process` editado fora do Studio.
@@ -344,10 +345,10 @@ function conferirPadrao(
     const ce = caixas.get(evento);
     const ct = caixas.get(tratamento);
     if (cs && ce) {
-      const cx = ce.absX + ce.largura / 2;
-      const cy = ce.absY + ce.altura / 2;
-      const dist = Math.hypot(cx - (cs.absX + cs.largura), cy - (cs.absY + cs.altura));
-      if (dist > ce.largura / 2) achar('aviso', nome(evento), 'a bolinha de erro não está sobre o canto inferior direito da service task');
+      if (foraDoCanto(cs, ce)) {
+        const dica = soltaDaTarefa(cs, ce) ? '; fluigctl diagram check --fix a devolve ao canto' : '';
+        achar('aviso', nome(evento), `a bolinha de erro não está sobre o canto inferior direito da service task${dica}`);
+      }
     }
     if (cs && ct) {
       const abaixo = ct.absY >= cs.absY + cs.altura;

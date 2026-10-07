@@ -280,6 +280,10 @@ fluigctl push diagram workflow/diagrams/<processo>.process --server <servidor>
   Studio look on every shape — without it Studio shows a grey canvas; `--fix`
   adds all three), elements with no outgoing or no
   incoming flow (a request that reaches a dead end stays stuck), and the service-task recovery pattern.
+- **Error dot left behind:** when Studio opens a diagram it resizes the tasks
+  but leaves the attached error events where they were. `--fix` moves a dot
+  that no longer touches its task back onto the bottom-right corner. A dot that
+  still touches the card is the author's choice and stays.
 - **Why it comes first:** the dry-run looks only at the model. A `.process`
   edited by an agent can pass the dry-run, publish, and still fail to open in
   Studio.

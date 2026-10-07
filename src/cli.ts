@@ -53,6 +53,7 @@ import { aplicarEdicao } from './diagram/edit.js';
 import { garantirFontes, textosSemFonte } from './diagram/fonts.js';
 import { garantirLosangos, poligonosSemPontos } from './diagram/gateways.js';
 import { formasSemEstilo, garantirVisual } from './diagram/visual.js';
+import { encaixarErros, errosForaDoCanto } from './diagram/erros.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -93,6 +94,7 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       fluxos x formas, textos sem fonte, losangos sem pontos, formas sem estilo,
       elementos sem saída ou sem entrada, e o padrão de recuperação das service
       tasks; --fix acrescenta fontes, pontos e o visual do Studio que faltam
+      e devolve ao canto da tarefa o evento de erro que ficou para trás
 
   fluigctl dataset run <nome> --server <nome> [--where campo=valor]... [--fields a,b]
                               [--order a,b] [--limit N] [--json]
@@ -1264,14 +1266,16 @@ async function comandoDiagram(argv: string[]): Promise<void> {
     if (!arquivo || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
     if (values.fix) {
       // Só os reparos que não mudam o desenho de ninguém: as fontes que
-      // faltam, os losangos sem pontos e a parte visual das formas que não têm
-      // estilo nenhum. Passa pelo histórico do visualizador, então o Desfazer
-      // de lá volta o arquivo.
+      // faltam, os losangos sem pontos, a parte visual das formas que não têm
+      // estilo nenhum e a bolinha de erro que ficou fora do canto da tarefa.
+      // Passa pelo histórico do visualizador, então o Desfazer de lá volta o
+      // arquivo.
       const antes = readFileSync(arquivo, 'latin1');
       const fontes = textosSemFonte(antes);
       const losangos = poligonosSemPontos(antes);
       const semEstilo = formasSemEstilo(antes);
-      const reparar = (xml: string) => garantirVisual(garantirLosangos(garantirFontes(xml)));
+      const soltos = errosForaDoCanto(antes);
+      const reparar = (xml: string) => encaixarErros(garantirVisual(garantirLosangos(garantirFontes(xml))));
       if (reparar(antes) === antes) console.log(`--fix: nada a reparar em ${arquivo}`);
       else {
         aplicarEdicao(arquivo, join(diretorioDeEstado(), 'edicoes'), reparar);
@@ -1279,6 +1283,7 @@ async function comandoDiagram(argv: string[]): Promise<void> {
           fontes ? `fonte em ${fontes} texto(s)` : '',
           losangos ? `pontos em ${losangos} polígono(s)` : '',
           semEstilo ? `estilo do Studio em ${semEstilo} forma(s) e ligação(ões)` : '',
+          soltos ? `${soltos} evento(s) de erro de volta ao canto da tarefa` : '',
         ].filter(Boolean).join(', ');
         console.log(`--fix: ${feito || 'cores do fundo'} em ${arquivo} (desfaz pelo visualizador)`);
       }
