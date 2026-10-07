@@ -1182,6 +1182,7 @@ async function comandoDataset(argv: string[]): Promise<void> {
   }
   console.log(formatarTabela(r));
   console.log(`\n${r.linhas.length} linha(s)`);
+  for (const aviso of r.avisos) console.log(`aviso: ${aviso}`);
 }
 
 async function comandoRequest(argv: string[]): Promise<void> {

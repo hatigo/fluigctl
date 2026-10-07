@@ -26,6 +26,28 @@ test('content vazio: diz se o dataset não existe ou se o script falhou', async 
   );
 });
 
+test('dataset que existe e não responde à consulta: diz qual campo pedido não é coluna dele', async () => {
+  // Os internos (colleague) não estão na lista dos customizados: antes, isso virava "não existe".
+  const colleague = { colunas: ['login', 'colleagueName', 'active'], linhas: [{ login: 'admin', colleagueName: 'admin', active: true }] };
+  await assert.rejects(
+    rodarDataset({ server: SERVIDOR, senha: 's', campos: ['login', 'naoExiste'], consultar: async () => undefined, sondar: async () => colleague, customizados: async () => [] }, 'colleague'),
+    (e: Error & { codigo?: number }) => /"colleague" existe.*naoExiste \(--fields\) não é coluna dele.*Colunas: login, colleagueName, active/.test(e.message) && e.codigo === 2,
+  );
+});
+
+test('--where e --order numa coluna que não existe viram aviso, sem falso aviso quando --fields corta as colunas', async () => {
+  const completo = { colunas: ['login', 'active'], linhas: [] };
+  const r = await rodarDataset({ server: SERVIDOR, senha: 's', restricoes: [lerRestricao('naoExiste=1')], ordem: ['outro'], consultar: async () => completo }, 'colleague');
+  assert.deepEqual(r.avisos, ['naoExiste (--where) não é coluna do dataset: confira o nome', 'outro (--order) não é coluna do dataset: confira o nome']);
+  // Com --fields login a resposta só traz login; active existe, e a sonda confirma.
+  const soLogin = { colunas: ['login'], linhas: [{ login: 'admin' }] };
+  const r2 = await rodarDataset(
+    { server: SERVIDOR, senha: 's', campos: ['login'], restricoes: [lerRestricao('active=true')], consultar: async () => soLogin, sondar: async () => completo },
+    'colleague',
+  );
+  assert.deepEqual(r2.avisos, []);
+});
+
 test('--limit corta as linhas, e a tabela alinha e encurta valores longos', async () => {
   const linhas = [{ A: 'um', B: 'x'.repeat(80) }, { A: 'dois', B: null }, { A: 'três', B: 3 }];
   const r = await rodarDataset({ server: SERVIDOR, senha: 's', limite: 2, consultar: async () => ({ colunas: ['A', 'B'], linhas }) }, 'ds');
