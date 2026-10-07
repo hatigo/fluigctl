@@ -20,7 +20,7 @@ import { codificarAtributo, estiloDoArquivo } from './props.js';
 
 const TOKEN = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*"[^"]*")*)\s*(\/?)>/g;
 
-interface Elemento {
+export interface Elemento {
   nome: string;
   /** Atributos como estão no arquivo, sem decodificar. */
   attrs: Map<string, string>;
@@ -53,8 +53,8 @@ function arvore(xml: string, de = 0, ate = xml.length): Elemento[] {
   return raiz.filhos;
 }
 
-const filhos = (e: Elemento, nome: string) => e.filhos.filter((f) => f.nome === nome);
-const primeiro = (e: Elemento, nome: string) => e.filhos.find((f) => f.nome === nome);
+export const filhos = (e: Elemento, nome: string) => e.filhos.filter((f) => f.nome === nome);
+export const primeiro = (e: Elemento, nome: string) => e.filhos.find((f) => f.nome === nome);
 
 function temEstilo(xml: string, e: Elemento): boolean {
   return /\sstyle="/.test(xml.slice(e.inicio, e.fim));
@@ -456,7 +456,7 @@ function recuoDa(xml: string, pos: number): string {
   return /^[ \t]*/.exec(xml.slice(xml.lastIndexOf('\n', pos - 1) + 1))![0];
 }
 
-function diagramaDe(xml: string): Elemento | undefined {
+export function diagramaDe(xml: string): Elemento | undefined {
   const raizes = arvore(xml);
   const xmi = raizes.find((e) => e.nome === 'xmi:XMI');
   return xmi ? primeiro(xmi, 'pi:Diagram') : undefined;

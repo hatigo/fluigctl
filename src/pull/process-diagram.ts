@@ -1,3 +1,5 @@
+import { lerDiagrama } from '../push/diagram/modelo.js';
+import { ajustarAoNome } from '../diagram/tamanho.js';
 import { garantirVisual } from '../diagram/visual.js';
 import { ErroFluigctl } from '../errors.js';
 import { escaparTexto, filhos, lerXml, type No } from '../push/diagram/xml.js';
@@ -494,5 +496,8 @@ export function gerarProcess(definicao: string, nomeDoArquivo?: string): { proce
   const process = `<?xml version="1.0" encoding="ASCII"?>\n<xmi:XMI xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:al="http://eclipse.org/graphiti/mm/algorithms" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL-XMI" xmlns:pi="http://eclipse.org/graphiti/mm/pictograms">\n  <pi:Diagram visible="true" gridUnit="10" diagramTypeId="BPMNdiagram" name="${nome}" snapToGrid="true" version="0.16.0"><graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1200" height="1000"/>\n${shapes.join('\n')}\n${connections.join('\n')}\n  </pi:Diagram>\n${objetos.join('\n')}\n</xmi:XMI>\n`;
   // O pictograma acima é só a geometria; o visual (estilos, cores, rótulos,
   // setas) é o mesmo reparo do diagram check --fix, para o Studio mostrar as formas.
-  return { processId, process: garantirVisual(process) };
+  // Com o visual, o tamanho e os rótulos que o Studio daria ao abrir.
+  const visual = garantirVisual(process);
+  const ids = lerDiagrama(visual).objetos.map((o) => o.attrs['id']).filter((id): id is string => id !== undefined);
+  return { processId, process: ajustarAoNome(visual, ids) };
 }

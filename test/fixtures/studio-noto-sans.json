@@ -1,0 +1,845 @@
+{
+ "origem": "Studio no Linux, Arial substituída por Noto Sans Bold (fc-match), três diagramas de calibração e a contratação abertos e salvos",
+ "medidas": [
+  {
+   "tipo": "tarefa",
+   "nome": "Preencher > revisar",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aprovação Automática",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro juntar medições",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avaliar projeto complementar - Projetista de ar-condicionado",
+   "largura": 106,
+   "altura": 108
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Notifica Integrações Realizadas",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aguarda fornecedor",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Validação Operacional",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aprova Movimento",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Realiza Integração com Prothues",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro ao enviar email sobre ajuste ao projetista1",
+   "largura": 106,
+   "altura": 108
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Informa Aprovação ao Solicitante",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Enviar documentos restantes",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tratativa interna",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Envia e-mail contrato liberado",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro ao gerar relatório de obras",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro aguarda treinamento",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Informa Cancelamento do Pedido",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Validação do analista DHO",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aguarda fornecedores",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Atribui Contrato",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Preparar medição para cliente",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Preenche medição",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Juntar medições",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tarefa realizada?",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Criar insumo no RM",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Informa ao supervisor que usuário não recebeu",
+   "largura": 106,
+   "altura": 108
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Preenche informações",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aprovação do ger. de obras",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Enviar email com relatório para o setor de obras",
+   "largura": 106,
+   "altura": 108
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro ao integrar itens",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Atualizar Dados Movimento",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Verificar Aprovações",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Alteração do status",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Envia e-mail resultado",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro ao enviar email sobre fim da solicitação",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro ao cancelar pedido",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Gestor",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aprovador Gestor",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aceite na solicitação",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Elaborar Projetos e memoriais",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro ao criar a nota de débito",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tratar erro: Integrar fornecedor ao RM",
+   "largura": 106,
+   "altura": 108
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Vagas abertas",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tipo de solicitação",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avaliar",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tomar decisão",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Notificar o gestor imediato sobre a decisão final",
+   "largura": 106,
+   "altura": 108
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aprovação",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Validar pedido de compra no RM",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Conferir documentos",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Serviços recusa?",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "fornecedor área",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "gerar Financeiro",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "usuário verificar",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Movimento Dois",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Mediato Parallel",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "recusa Inspecao",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Realizado tarefa",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Aprovar",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovação",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Analisar a viabilidade do projeto de personalização do cliente final com urgência e cuidado redobrado",
+   "largura": 106,
+   "altura": 172
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Erro ao enviar email sobre análise de novo projeto ao setor de customização",
+   "largura": 106,
+   "altura": 140
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Enviar email sobre projeto complementar projetista",
+   "largura": 106,
+   "altura": 108
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tratar erro de alçada",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Superlongapalavrasemespacos",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovaiiiiiiii",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovaiiiiiii",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovaiiiiii",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovaiiiii",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovaiiii",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovaiii",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovaii",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovai",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprova",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovadoreszz",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovadoresz",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovadores",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovadore",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovador",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovado",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprovad",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar aprov",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar apro",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar apr",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar ap",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar a",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Revisar",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Integrar fornecedor ao RM",
+   "largura": 106,
+   "altura": 92
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Obter alçadas",
+   "largura": 106,
+   "altura": 60
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Ok?",
+   "altura": 92,
+   "rotulo": "Ok?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "dir. area é aprovador?",
+   "altura": 124,
+   "rotulo": "dir. area\né\napro...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Fim integrações",
+   "altura": 124,
+   "rotulo": "Fim\nintegraç\nões\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Validação do valor",
+   "altura": 124,
+   "rotulo": "Validaçã\no do\nvalor\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "ger. Fábrica é aprovador?",
+   "altura": 124,
+   "rotulo": "ger.\nFábrica\n...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Gerente DHO é aprovador?",
+   "altura": 124,
+   "rotulo": "Gerente\nDHO é\napro...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Aprovado ?",
+   "altura": 108,
+   "rotulo": "Aprovad\no ?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Conforme ?",
+   "altura": 108,
+   "rotulo": "Conform\ne ?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Parallel",
+   "altura": 92,
+   "rotulo": "Parallel\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Verifica tipo Solicitação",
+   "altura": 124,
+   "rotulo": "Verifica\ntipo\nSolici...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Comprovantes Válidos ?",
+   "altura": 124,
+   "rotulo": "Compro\nvantes\nVálidos ?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Compra Direta Autorizada?",
+   "altura": 124,
+   "rotulo": "Compra\nDireta\nAutor...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Deve ir para o projetista 1?",
+   "altura": 124,
+   "rotulo": "Deve ir\npara o\nprojet...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Ajuste projetista3?",
+   "altura": 124,
+   "rotulo": "Ajuste\nprojetist\na3?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Deve ir para o projetista 3?",
+   "altura": 124,
+   "rotulo": "Deve ir\npara o\nprojet...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Existe situações?",
+   "altura": 124,
+   "rotulo": "Existe\nsituaçõe\ns?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "precisa de ajuste?",
+   "altura": 124,
+   "rotulo": "precisa\nde\najuste?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Ajuste Realizado",
+   "altura": 124,
+   "rotulo": "Ajuste\nRealizad\no\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Aguarda treinamento",
+   "altura": 124,
+   "rotulo": "Aguarda\ntreinam\nento\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Aceite?",
+   "altura": 92,
+   "rotulo": "Aceite?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Solicitação validada?",
+   "altura": 124,
+   "rotulo": "Solicitaç\não\nvalid...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Exclusive",
+   "altura": 108,
+   "rotulo": "Exclusiv\ne\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Fornecedor aprovou?",
+   "altura": 124,
+   "rotulo": "Fornece\ndor\napro...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Precisa de outro aprovador?",
+   "altura": 124,
+   "rotulo": "Precisa\nde outro\napro...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Tipo?",
+   "altura": 92,
+   "rotulo": "Tipo?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Avaliado?",
+   "altura": 108,
+   "rotulo": "Avaliado\n?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Vagas?",
+   "altura": 92,
+   "rotulo": "Vagas?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Tomou?",
+   "altura": 92,
+   "rotulo": "Tomou?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "aprovado",
+   "altura": 108,
+   "rotulo": "aprovad\no\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "adicionar",
+   "altura": 108,
+   "rotulo": "adiciona\nr\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Protheus",
+   "altura": 108,
+   "rotulo": "Protheu\ns\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Materiais",
+   "altura": 108,
+   "rotulo": "Materiai\ns\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Recursos",
+   "altura": 108,
+   "rotulo": "Recurso\ns\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Processo",
+   "altura": 92,
+   "rotulo": "Processo\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Resumos",
+   "altura": 108,
+   "rotulo": "Resumo\ns\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Superior",
+   "altura": 92,
+   "rotulo": "Superior\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Aprovado?",
+   "altura": 108,
+   "rotulo": "Aprovad\no?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Todos os documentos foram enviados corretamente?",
+   "altura": 124,
+   "rotulo": "Todos os\ndocume\nn...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Precisa de outra aprovação?",
+   "altura": 124,
+   "rotulo": "Precisa\nde outra\napro...\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Ajustar?",
+   "altura": 92,
+   "rotulo": "Ajustar?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Decisão",
+   "altura": 92,
+   "rotulo": "Decisão\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Tem mais?",
+   "altura": 108,
+   "rotulo": "Tem\nmais?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Aprovados?",
+   "altura": 108,
+   "rotulo": "Aprovad\nos?\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Aprovado",
+   "altura": 108,
+   "rotulo": "Aprovad\no\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Aprovad",
+   "altura": 92,
+   "rotulo": "Aprovad\n"
+  },
+  {
+   "tipo": "gateway",
+   "nome": "Aprova",
+   "altura": 92,
+   "rotulo": "Aprova\n"
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Preencher requisição",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tratar erro do aviso",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Avisar reprovação",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tratar erro de reprovação",
+   "largura": 106,
+   "altura": 76
+  },
+  {
+   "tipo": "tarefa",
+   "nome": "Tratar erro de aprovação",
+   "largura": 106,
+   "altura": 76
+  }
+ ]
+}

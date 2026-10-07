@@ -297,6 +297,13 @@ an error.
     signal, conditional, cancel and terminate end), annotations with their
     dotted association, subprocesses and automatic flows (green, with the
     icon).
+  - Tasks and gateways have the size Studio recomputes on open: a task is
+    always 106 wide and as tall as its wrapped name; a gateway label is stored
+    already wrapped (one line per `&#xA;`, at most 3, the last ending in
+    "..."). Any other size makes Studio resize the shape on open and mark the
+    file dirty, and whatever was attached to the old corner (the error dot, a
+    bendpoint) is left behind. fluigctl creates, renames and pulls shapes at
+    that size, measured with the font Studio uses on the machine.
   - A broken style or colour reference is only a warning: Studio writes some
     and still opens the file.
 - **Elements:** every element has an outgoing flow (except end events and link

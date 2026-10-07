@@ -47,7 +47,7 @@ test('criar cada tipo dá ids inéditos, formas no fim e nenhum erro de estrutur
   assert.equal(objeto(xml, 'exclusivegateway39')!.attrs['condition'], '<list/>');
   assert.equal(lerAtribuicao(objeto(xml, 'task37')!).mecanismo, '', 'não herda a atribuição do modelo');
   const c = lerDiagrama(xml).caixas.get('task37')!;
-  assert.deepEqual([c.absX + c.largura / 2, c.absY + c.altura / 2], [300, 500.5], 'centrado no ponto');
+  assert.deepEqual([c.absX + c.largura / 2, c.absY + c.altura / 2], [300, 500], 'centrado no ponto');
   assert.equal(objeto(xml, 'task37')!.attrs['name'], 'Nova tarefa');
 });
 

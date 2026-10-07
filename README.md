@@ -1175,6 +1175,15 @@ restam são defeitos dos próprios arquivos (seta duplicada, estilo que não
 existe ou de outro tipo de forma). O teste `fidelidade ao acervo do Studio` roda
 a mesma comparação quando o acervo está na máquina.
 
+Tarefas e gateways criados (visualizador, `diagram pull`) ou renomeados saem no
+tamanho que o Studio recalcula ao abrir, então abrir e salvar no Studio não muda
+o arquivo. O Studio mede o nome com a fonte da máquina (Arial 8 negrito, ou a
+que o sistema põe no lugar: no Linux, a do `fc-match`), e o fluigctl lê a mesma
+fonte (`src/diagram/medida.ts`). A regra foi medida em diagramas de calibração
+abertos e salvos pelo Studio: 209 de 209 formas iguais, inclusive 60 nomes
+sorteados do acervo que não entraram no ajuste. `FLUIGCTL_FONTE_STUDIO` aponta
+outra fonte (um `.ttf`, ou `arial` para as larguras embutidas do Windows).
+
 ## Códigos de saída
 
 | | |

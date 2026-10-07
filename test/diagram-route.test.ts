@@ -93,8 +93,10 @@ test('a rota ortogonal segue a receita', () => {
 test('a rota desvia de um card no caminho, pelo corredor de cima', async () => {
   const { criarNoXml, ligarNoXml } = await import('../src/diagram/add.js');
   // Na linha da raia Solicitante (centro y=100): um card no meio e um destino depois dele.
-  const meio = criarNoXml(ORIGINAL, { tipo: 'humana', nome: 'No caminho', x: 500, y: 67 });
-  const fim = criarNoXml(meio.xml, { tipo: 'humana', nome: 'Destino', x: 800, y: 67 });
+  const { medidorDoStudio } = await import('../src/diagram/medida.js');
+  const topo = (nome: string) => 100 - medidorDoStudio().tarefa(nome).altura / 2;
+  const meio = criarNoXml(ORIGINAL, { tipo: 'humana', nome: 'No caminho', x: 500, y: topo('No caminho') });
+  const fim = criarNoXml(meio.xml, { tipo: 'humana', nome: 'Destino', x: 800, y: topo('Destino') });
   const f = ligarNoXml(fim.xml, 'task2', fim.id);
   const d = lerDiagrama(f.xml);
   const r = rotaOrtogonal(d, f.id);

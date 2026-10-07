@@ -1,6 +1,8 @@
 import { garantirFontes } from './fonts.js';
 import { garantirLosangos } from './gateways.js';
 import { garantirVisual } from './visual.js';
+import { medidorDoStudio } from './medida.js';
+import { ajustarAoNome } from './tamanho.js';
 import { basename, dirname, join } from 'node:path';
 
 import { lerDiagrama, type Diagrama, type ObjetoBpmn } from '../push/diagram/modelo.js';
@@ -244,8 +246,20 @@ export function criarNoXml(xml: string, c: Criacao): { xml: string; id: string }
   novo = inserirModelo(novo, tag, doArquivo ? modelo.id : undefined, false);
   // Texto sem fonte e losango sem pontos impedem o Studio de abrir, e forma sem
   // estilo aparece sem cor: o que entra sai certo, e o arquivo inteiro é
-  // acertado junto (veja fonts.ts, gateways.ts e visual.ts).
-  return { xml: garantirVisual(garantirLosangos(garantirFontes(novo))), id };
+  // acertado junto (veja fonts.ts, gateways.ts e visual.ts). O tamanho e o
+  // rótulo saem como o Studio os recalcula ao abrir (tamanho.ts).
+  return { xml: ajustarAoNome(garantirVisual(garantirLosangos(garantirFontes(novo))), [id]), id };
+}
+
+/** O tamanho com que a forma vai ficar: o do Studio para tarefa e gateway, o do modelo para o resto. */
+function tamanhoPrevisto(xml: string, d: Diagrama, tipo: Criacao['tipo'], nome: string): { w: number; h: number } {
+  const m = medidorDoStudio();
+  if (tipo === 'humana' || tipo === 'servico') {
+    const t = m.tarefa(nome);
+    return { w: t.largura, h: t.altura };
+  }
+  if (tipo === 'gateway' || tipo === 'paralelo' || tipo === 'juncao') return { w: 60, h: 60 + m.rotuloDoGateway(nome).altura };
+  return tamanho(modeloPara(xml, d, tipo).forma);
 }
 
 function anexarALista(xml: string, id: string, attr: 'incoming' | 'outgoing', valor: string): string {
@@ -362,7 +376,7 @@ export function adicionarNoXml(xml: string, p: PedidoAdicionar): { xml: string; 
     !limites || (x >= limites.absX && y >= limites.absY && x + w <= limites.absX + limites.largura && y + h <= limites.absY + limites.altura);
 
   const tipoBase = p.tipo === 'recuperacao' ? 'servico' : p.tipo;
-  const { w, h } = tamanho(modeloPara(xml, d, tipoBase).forma);
+  const { w, h } = tamanhoPrevisto(xml, d, tipoBase, nome);
   // No gateway, o (x, y) é o centro do losango, que é o quadrado de cima da forma.
   const x = Math.round(p.x - w / 2);
   const ehGateway = tipoBase === 'gateway' || tipoBase === 'paralelo' || tipoBase === 'juncao';
@@ -375,8 +389,7 @@ export function adicionarNoXml(xml: string, p: PedidoAdicionar): { xml: string; 
   const servico = r.id;
   const grupo = (p.grupo ?? 'suporte_processos').trim();
   if (!/^[\w.@-]+$/.test(grupo)) throw new EdicaoInvalida(`grupo inválido: ${grupo}`);
-  const modeloTratamento = modeloPara(r.xml, lerDiagrama(r.xml), 'humana');
-  const t = tamanho(modeloTratamento.forma);
+  const t = tamanhoPrevisto(r.xml, lerDiagrama(r.xml), 'humana', `Tratar erro: ${nome}`);
   const ty = y + h + GAP;
   if (!dentro(x + w / 2 - t.w / 2, ty, t.w, t.h)) throw new EdicaoInvalida('a tarefa de tratamento ficaria fora da pool; escolha um ponto mais acima');
   // O padrão pede o tratamento na mesma raia da service task (sem raia de suporte).

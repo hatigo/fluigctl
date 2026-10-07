@@ -6,6 +6,7 @@ import { lerDiagrama, type Caixa, type Ponto } from '../push/diagram/modelo.js';
 import { decodificarEntidades, escaparTexto } from '../push/diagram/xml.js';
 import { checarDiagrama, type Achado } from './check.js';
 import { rotaOrtogonal } from './route.js';
+import { ajustarAoNome } from './tamanho.js';
 
 export type MotivoConflito = 'elemento-removido' | 'nome-alterado' | 'arquivo-alterado' | 'sem-desfazer' | 'sem-refazer';
 
@@ -300,22 +301,28 @@ export function renomearElemento(pedido: PedidoRenomear): ResultadoEdicao {
       throw new ConflitoEdicao('nome-alterado', `o nome de ${pedido.id} mudou enquanto você editava`, objeto.attrs['name']);
     }
     let novo = trocarNomeNoXml(texto, pedido.id, pedido.nomeOriginal, pedido.nomeNovo);
+    const renomeados = [pedido.id];
     // Os nomes que a criação da service task com recuperação gerou acompanham o
     // renomear. Só esses: um nome que alguém mudou à mão não é tocado.
     if (objeto.tipo === 'BpmnTask' && objeto.attrs['type'] === '82') {
       const d = lerDiagrama(texto);
       for (const ev of (objeto.attrs['attachedEvents'] ?? '').split(/\s+/).filter(Boolean)) {
         const evento = d.objetos.find((o) => o.attrs['id'] === ev);
-        if (evento?.attrs['name'] === `Erro: ${pedido.nomeOriginal}`) novo = trocarNomeNoXml(novo, ev, evento.attrs['name'], `Erro: ${pedido.nomeNovo}`);
+        if (evento?.attrs['name'] === `Erro: ${pedido.nomeOriginal}`) {
+          novo = trocarNomeNoXml(novo, ev, evento.attrs['name'], `Erro: ${pedido.nomeNovo}`);
+          renomeados.push(ev);
+        }
         for (const f of (evento?.attrs['outgoing'] ?? '').split(/\s+/).filter(Boolean)) {
           const alvo = d.objetos.find((o) => o.attrs['id'] === d.objetos.find((x) => x.attrs['id'] === f)?.attrs['targetRef']);
           if (alvo?.attrs['name'] === `Tratar erro: ${pedido.nomeOriginal}`) {
             novo = trocarNomeNoXml(novo, alvo.attrs['id']!, alvo.attrs['name'], `Tratar erro: ${pedido.nomeNovo}`);
+            renomeados.push(alvo.attrs['id']!);
           }
         }
       }
     }
-    return novo;
+    // O rótulo desenhado e o tamanho acompanham o nome, como o Studio refaz ao abrir.
+    return ajustarAoNome(novo, renomeados);
   };
   const r = aplicarEdicao(pedido.arquivo, pedido.undoDir, verificar);
   return { arquivo: r.arquivo, id: pedido.id, nome: pedido.nomeNovo, hash: r.hash, avisos: r.avisos };
