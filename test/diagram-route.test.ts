@@ -205,3 +205,20 @@ test('o visualizador entrega as dobras, troca e endireita pelos endpoints', asyn
     p.limpar();
   }
 });
+
+test('a ligação nova já sai em ângulo reto, e a que fica reta sai sem dobra', async () => {
+  const { criarNoXml, ligarNoXml } = await import('../src/diagram/add.js');
+  // Em outra raia e mais à direita: degrau no meio do vão.
+  const t = criarNoXml(ORIGINAL, { tipo: 'humana', nome: 'Destino', x: 700, y: 440 });
+  const f = ligarNoXml(t.xml, 'task2', t.id);
+  const pts = dobras(f.xml, f.id)!;
+  assert.equal(pts.length, 2);
+  assert.equal(pts[0]!.x, pts[1]!.x, 'o degrau é vertical');
+  assert.deepEqual(pts, rotaOrtogonal(lerDiagrama(f.xml), f.id), 'a mesma rota do endireitar');
+  assert.deepEqual(checarDiagrama(f.xml).filter((a) => a.grupo === 'estrutura'), []);
+  // Alinhada com a origem: reta, sem dobra.
+  const { medidorDoStudio } = await import('../src/diagram/medida.js');
+  const alinhada = criarNoXml(ORIGINAL, { tipo: 'humana', nome: 'Ao lado', x: 1500, y: 99.5 - medidorDoStudio().tarefa('Ao lado').altura / 2 });
+  const reta = ligarNoXml(alinhada.xml, 'task2', alinhada.id);
+  assert.deepEqual(dobras(reta.xml, reta.id) ?? [], []);
+});

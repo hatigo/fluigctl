@@ -6,7 +6,8 @@ import { ajustarAoNome } from './tamanho.js';
 import { basename, dirname, join } from 'node:path';
 
 import { lerDiagrama, type Diagrama, type ObjetoBpmn } from '../push/diagram/modelo.js';
-import { ConflitoEdicao, EdicaoInvalida } from './edit.js';
+import { ConflitoEdicao, EdicaoInvalida, trocarDobrasNoXml } from './edit.js';
+import { rotaOrtogonal } from './route.js';
 import { MODELOS, type Modelo } from './modelos.js';
 import { blobDeAtribuicao, codificarAtributo, estiloDoArquivo, trocarAtributosNaTag, type EstiloAtributo } from './props.js';
 
@@ -344,7 +345,12 @@ export function ligarNoXml(xml: string, origem: string, destino: string, nome = 
   // Texto sem fonte e losango sem pontos impedem o Studio de abrir, e forma sem
   // estilo aparece sem cor: o que entra sai certo, e o arquivo inteiro é
   // acertado junto (veja fonts.ts, gateways.ts e visual.ts).
-  return { xml: garantirVisual(garantirLosangos(garantirFontes(novo))), id };
+  let pronto = garantirVisual(garantirLosangos(garantirFontes(novo)));
+  // A ligação já sai traçada em ângulo reto, pela rota do endireitar (route.ts);
+  // a que já fica reta (formas alinhadas, saída do evento de erro) fica sem dobra.
+  const pontos = rotaOrtogonal(lerDiagrama(pronto), id);
+  if (pontos.length) pronto = trocarDobrasNoXml(pronto, id, pontos);
+  return { xml: pronto, id };
 }
 
 const GAP = 33;
