@@ -55,6 +55,7 @@ import { garantirLosangos, poligonosSemPontos } from './diagram/gateways.js';
 import { formasSemEstilo, garantirVisual } from './diagram/visual.js';
 import { encaixarErros, errosForaDoCanto } from './diagram/erros.js';
 import { novoProcesso } from './diagram/novo.js';
+import { criarFormulario, lerCampo as lerCampoDeFormulario } from './commands/form-new.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -89,6 +90,11 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
   fluigctl process versions <processId> --server <nome>
   fluigctl process release <processId> --server <nome> [--dry-run]
       as versões do processo (qual roda, quais ficaram em edição) e liberar a em edição
+
+  fluigctl form new <nome> --field <campo[!][:tipo[:Rótulo]]>... [--title T] [--forms <pasta>]
+      cria forms/<nome>/<nome>.html como os formulários do Studio (style guide, form
+      name="form"); tipos text, textarea, number, date, email; o ! marca obrigatório
+      e gera events/validateForm.js; publica-se com push form --create
 
   fluigctl diagram new <processId> --name <nome> [--lane <raia>]... [--form <id|nome>]
                       [--category <categoria>] [--server <nome>] [--workflow <pasta>]
@@ -1252,6 +1258,27 @@ async function comandoRequest(argv: string[]): Promise<void> {
   return mostrar(id);
 }
 
+function comandoForm(argv: string[]): void {
+  const uso = 'uso: fluigctl form new <nome> --field <campo[!][:tipo[:Rótulo]]>... [--title T] [--forms <pasta>]';
+  if (argv[0] !== 'new') throw new ErroFluigctl(uso, 2);
+  const { values, positionals } = parseArgs({
+    args: argv.slice(1),
+    allowPositionals: true,
+    options: {
+      field: { type: 'string', multiple: true },
+      title: { type: 'string' },
+      forms: { type: 'string', default: 'forms' },
+    },
+  });
+  const nome = positionals[0];
+  if (!nome || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+  const campos = (values.field ?? []).map(lerCampoDeFormulario);
+  const criados = criarFormulario({ nome, campos, pasta: values.forms, ...(values.title === undefined ? {} : { titulo: values.title }) });
+  console.log(`criado o formulário ${nome}: ${campos.length} campo(s)`);
+  for (const c of criados) console.log(`  ${c}`);
+  console.log(`  próximo passo: fluigctl push form ${values.forms}/${nome} --server <nome> --create --parent-id <pasta> --dataset-name ds_${nome} --persistence-type form`);
+}
+
 async function comandoDiagram(argv: string[]): Promise<void> {
   const sub = argv[0];
   const uso =
@@ -1416,6 +1443,7 @@ async function main(argv: string[]): Promise<void> {
   if (comando === 'server') return comandoServer(argv.slice(1));
   if (comando === 'skill') return comandoSkill(argv.slice(1));
   if (comando === 'diagram') return comandoDiagram(argv.slice(1));
+  if (comando === 'form') return comandoForm(argv.slice(1));
   if (comando === 'group') return comandoGroup(argv.slice(1));
   if (comando === 'process') return comandoProcess(argv.slice(1));
   if (comando === 'dataset') return comandoDataset(argv.slice(1));

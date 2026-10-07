@@ -72,16 +72,18 @@ export interface OpcoesSolicitacao {
 const igual = (campo: string, valor: string | number): Restricao => ({ campo, inicial: String(valor), final: String(valor), tipo: 1 });
 
 /** Erro do REST v2: `{"code","message","detailedMessage"}`. */
-function erroDoRest(texto: string, status: number, contexto: string): ErroFluigctl {
+export function erroDoRest(texto: string, status: number, contexto: string): ErroFluigctl {
   let m = texto.trim().slice(0, 300);
   try {
     const e = JSON.parse(texto) as { code?: string; message?: string; detailedMessage?: string };
     m = [e.message || e.code, e.detailedMessage].filter(Boolean).join(' — ') || m;
-    // A recusa do validateForm vem em HTML (a lista que a tela mostra).
-    m = m.replace(/<[^>]+>/g, '').replace(/\s*\n\s*/g, ' ').trim();
   } catch {
-    // corpo que não é JSON vai como veio
+    // Corpo que não é JSON: a recusa do validateForm vem como texto entre chaves,
+    // "{Erro ao salvar dados de formulário: \n\nPreencha: ...}".
+    m = m.replace(/^\{([\s\S]*)\}$/, '$1');
   }
+  // A recusa do validateForm vem em HTML (a lista que a tela mostra) e com quebras de linha.
+  m = m.replace(/<[^>]+>/g, '').replace(/\s*\n\s*/g, ' ').trim();
   return new ErroFluigctl(`o servidor recusou ${contexto}: ${m} (HTTP ${status})`, 7);
 }
 

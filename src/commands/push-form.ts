@@ -14,9 +14,11 @@ import { lerMetadataStudio } from '../push/studio-metadata.js';
  *
  * A documentação SOAP da TOTVS diz 0 = Formulário e 1 = Lista; o swagger da API
  * REST diz o inverso. Como aqui falamos SOAP, seguimos a documentação SOAP.
- * NÃO VERIFICADO contra um servidor: confirmar em homologação criando um de
- * cada. Escolher errado não é corrigível por update — `persistenceType` não
- * existe na operação de atualização.
+ * Conferido no localdev (2026-10-07) para o 0: o formulário criado fica como o
+ * que o Studio cria (metaListId 0, tipo 4) e serve de formulário de processo,
+ * com dataset e validateForm funcionando. O 1 (lista) não foi testado. Escolher
+ * errado não é corrigível por update — `persistenceType` não existe na operação
+ * de atualização.
  */
 const PERSISTENCE_TYPE = { form: 0, list: 1 } as const;
 

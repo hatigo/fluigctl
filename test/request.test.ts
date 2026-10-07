@@ -148,3 +148,11 @@ test('cancel confere no servidor; campo da linha de comando separa no primeiro =
   assert.deepEqual(lerCampo('obs=a=b'), ['obs', 'a=b']);
   assert.throws(() => lerCampo('=x'), /campo=valor/);
 });
+
+test('a recusa do validateForm sai numa linha, venha em JSON ou em texto entre chaves', async () => {
+  const { erroDoRest } = await import('../src/commands/request.js');
+  const texto = erroDoRest('{Erro ao salvar dados de formulário: \n\nPreencha: Pedido, Valor.}', 500, 'abrir a solicitação de teste_form');
+  assert.equal(texto.message, 'o servidor recusou abrir a solicitação de teste_form: Erro ao salvar dados de formulário: Preencha: Pedido, Valor. (HTTP 500)');
+  const json = erroDoRest(JSON.stringify({ message: 'Erro', detailedMessage: "<ul class='alert'>Preencha:\n- Cargo</ul>" }), 500, 'mover');
+  assert.equal(json.message, 'o servidor recusou mover: Erro — Preencha: - Cargo (HTTP 500)');
+});

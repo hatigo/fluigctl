@@ -213,16 +213,31 @@ push and only shows when the dataset runs:
 fluigctl dataset run dsFoo --server <servidor> --where CAMPO=valor [--fields a,b] [--json]
 ```
 
-It only reads. Empty content means the dataset does not exist or its script
-threw; the command tells which one.
+It only reads. Empty content means the dataset does not exist, its script
+threw, or the query names a column the dataset does not have; the command tells
+which one, and lists the columns.
 
-Creating a form needs three things that cannot be guessed, and
-`persistenceType` cannot be changed afterwards:
+A new form starts from `form new`, which writes the folder the way Studio does
+(style guide, `<form name="form">`, one panel with the fields, and
+`events/validateForm.js` for the fields marked `!`):
+
+```sh
+fluigctl form new formNovo --title "Pedido" --field "pedido!:text:Pedido" \
+  --field "valor!:number:Valor" --field "obs:textarea:Observação"
+```
+
+Creating it on the server needs three things that cannot be guessed, and
+`persistenceType` cannot be changed afterwards. `form` is what Studio creates;
+the parent is the forms folder (on a fresh server, "Formulários Fluig"):
 
 ```sh
 fluigctl push form forms/formNovo --server <servidor> \
   --create --parent-id <pasta> --dataset-name dsformNovo --persistence-type form
 ```
+
+A new process links to it by name: `fluigctl diagram new <processId> --name
+"<nome>" --form formNovo`; `push diagram --create` resolves the name to the
+form's documentId on the target server.
 
 A process push publishes only the scripts in `workflow/scripts/` into a process
 that already exists on the server. Like Studio, the script prefix is the name of
