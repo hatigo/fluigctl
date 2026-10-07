@@ -30,7 +30,7 @@ test('aumentar a raia de cima empurra a de baixo, os elementos e as dobras, e a 
   assert.equal(caixa(novo, 'task2').absY, caixa(CONTRATACAO, 'task2').absY, 'elemento da própria raia fica');
   // flow17 desce da raia de cima para a de baixo: a dobra de cima fica, a de baixo desce.
   assert.deepEqual(lerDiagrama(novo).dobras.get('flow17'), [{ x: 390, y: 100 }, { x: 390, y: 300 }]);
-  assert.match(novo, /al:Text" width="30" height="200" font="\/0\/@fonts\.0" value="Solicitante"/, 'o rótulo acompanha');
+  assert.match(novo, /al:Text"[^>]* height="200"[^>]* value="Solicitante"/, 'o rótulo acompanha');
   assert.deepEqual(checarDiagrama(novo), []);
   assert.doesNotThrow(() => converterDiagrama(novo, { companyId: 1, formId: 1 }));
   assert.equal(redimensionarRaiaNoXml(novo, 'bpmnswimlane2', 160), CONTRATACAO, 'ida e volta byte a byte');

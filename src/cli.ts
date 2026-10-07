@@ -52,6 +52,7 @@ import { abrirVisualizador, diretorioDeEstado, executarServidor, fecharVisualiza
 import { aplicarEdicao } from './diagram/edit.js';
 import { garantirFontes, textosSemFonte } from './diagram/fonts.js';
 import { garantirLosangos, poligonosSemPontos } from './diagram/gateways.js';
+import { formasSemEstilo, garantirVisual } from './diagram/visual.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -89,9 +90,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
 
   fluigctl diagram check <arquivo.process> [--except <id>]... [--group <id>] [--json] [--fix]
       confere um .process editado fora do Studio: referências do Graphiti,
-      fluxos x formas, textos sem fonte, losangos sem pontos, elementos sem saída
-      ou sem entrada, e o padrão de recuperação das service tasks; --fix acrescenta
-      as fontes e os pontos que faltam
+      fluxos x formas, textos sem fonte, losangos sem pontos, formas sem estilo,
+      elementos sem saída ou sem entrada, e o padrão de recuperação das service
+      tasks; --fix acrescenta fontes, pontos e o visual do Studio que faltam
 
   fluigctl dataset run <nome> --server <nome> [--where campo=valor]... [--fields a,b]
                               [--order a,b] [--limit N] [--json]
@@ -1262,17 +1263,24 @@ async function comandoDiagram(argv: string[]): Promise<void> {
     const arquivo = positionals[0];
     if (!arquivo || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
     if (values.fix) {
-      // Só os reparos seguros, que não mudam o desenho de ninguém: as fontes
-      // que faltam e os losangos sem pontos. Passa pelo histórico do
-      // visualizador, então o Desfazer de lá volta o arquivo.
+      // Só os reparos que não mudam o desenho de ninguém: as fontes que
+      // faltam, os losangos sem pontos e a parte visual das formas que não têm
+      // estilo nenhum. Passa pelo histórico do visualizador, então o Desfazer
+      // de lá volta o arquivo.
       const antes = readFileSync(arquivo, 'latin1');
       const fontes = textosSemFonte(antes);
       const losangos = poligonosSemPontos(antes);
-      if (fontes === 0 && losangos === 0) console.log(`--fix: nada a reparar em ${arquivo}`);
+      const semEstilo = formasSemEstilo(antes);
+      const reparar = (xml: string) => garantirVisual(garantirLosangos(garantirFontes(xml)));
+      if (reparar(antes) === antes) console.log(`--fix: nada a reparar em ${arquivo}`);
       else {
-        aplicarEdicao(arquivo, join(diretorioDeEstado(), 'edicoes'), (xml) => garantirLosangos(garantirFontes(xml)));
-        const feito = [fontes ? `fonte em ${fontes} texto(s)` : '', losangos ? `pontos em ${losangos} polígono(s)` : ''].filter(Boolean).join(', ');
-        console.log(`--fix: ${feito} de ${arquivo} (desfaz pelo visualizador)`);
+        aplicarEdicao(arquivo, join(diretorioDeEstado(), 'edicoes'), reparar);
+        const feito = [
+          fontes ? `fonte em ${fontes} texto(s)` : '',
+          losangos ? `pontos em ${losangos} polígono(s)` : '',
+          semEstilo ? `estilo do Studio em ${semEstilo} forma(s) e ligação(ões)` : '',
+        ].filter(Boolean).join(', ');
+        console.log(`--fix: ${feito || 'cores do fundo'} em ${arquivo} (desfaz pelo visualizador)`);
       }
     }
     const achados = checarDiagrama(readFileSync(arquivo, 'utf8'), {

@@ -83,6 +83,10 @@ const MULTIPLOS = new Set([
   'graphicsAlgorithmChildren', 'properties', 'points',
 ]);
 
+function temEstilo(no: No): boolean {
+  return no.attrs['style'] !== undefined || no.filhos.some(temEstilo);
+}
+
 function lista(valor: string | undefined): string[] {
   return (valor ?? '').split(/\s+/).filter(Boolean);
 }
@@ -107,6 +111,20 @@ function conferirEstrutura(raiz: No, diagrama: No, objetos: Map<string, ObjetoBp
     if (/^graphicsAlgorithm(Children)?$/.test(no.nome) && no.attrs['xsi:type'] === 'al:Polygon' && filhos(no, 'points').length === 0) {
       erro(caminho, 'polígono sem pontos: o Studio não desenha o diagrama (IndexOutOfBoundsException); fluigctl diagram check --fix redesenha o losango');
     }
+  }
+
+  // 0c. Forma e ligação têm estilo. Sem ele o Studio abre, mas pinta a forma
+  //     sem cor sobre o fundo cinza e só os ícones aparecem; no acervo, toda
+  //     forma e toda ligação têm.
+  for (const no of [...filhos(diagrama, 'children'), ...filhos(diagrama, 'connections')]) {
+    const id = filhos(no, 'link')[0]?.attrs['businessObjects'];
+    if (!id || temEstilo(no)) continue;
+    achados.push({
+      nivel: 'aviso',
+      grupo: 'estrutura',
+      onde: id,
+      mensagem: `${no.nome === 'connections' ? 'ligação' : 'forma'} sem estilo: o Studio a mostra sem cor; fluigctl diagram check --fix redesenha como o Studio grava`,
+    });
   }
 
   // 1. Toda referência por caminho resolve.

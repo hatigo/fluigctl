@@ -276,8 +276,9 @@ fluigctl push diagram workflow/diagrams/<processo>.process --server <servidor>
 `diagram check` comes first.
 - **What it checks:** the pictogram (references by position, anchors against
   connections, connections against flows, a font on every text and points on
-  every gateway diamond — without them Studio cannot open the file; `--fix` adds
-  them), elements with no outgoing or no
+  every gateway diamond — without them Studio cannot open the file — and the
+  Studio look on every shape — without it Studio shows a grey canvas; `--fix`
+  adds all three), elements with no outgoing or no
   incoming flow (a request that reaches a dead end stays stuck), and the service-task recovery pattern.
 - **Why it comes first:** the dry-run looks only at the model. A `.process`
   edited by an agent can pass the dry-run, publish, and still fail to open in
@@ -450,7 +451,8 @@ fluigctl pull mechanism [<id>] --server <servidor> --dry-run
 name are refused (exit 6). `pull diagram` converts the published definition back
 into `workflow/diagrams/<id>.process`, covering states, assignments, gateways,
 events, subprocesses, extended properties, form fields, attachment rules,
-graphical components, lanes, flows and bends. It refuses (exit 6) a definition
+graphical components, lanes, flows and bends, drawn with the Studio look
+(annotations and subprocesses still show without colour). It refuses (exit 6) a definition
 carrying data the `.process` cannot represent — an error event bound to a state
 that does not exist, or a terminal end event with `notifyAuthorityDelay=true`.
 That refusal is deliberate: Studio would silently drop the event or write

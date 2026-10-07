@@ -59,7 +59,8 @@ test('o que já existia continua byte a byte; só entram as linhas novas', () =>
   let j = 0;
   for (const l of novo) if (j < velho.length && l === velho[j]) j++;
   assert.equal(j, velho.length, 'nenhuma linha antiga mudou');
-  assert.ok(novo.length - velho.length <= 8, `${novo.length - velho.length} linhas novas`);
+  // A forma (12 linhas) e o estilo próprio dela, como o Studio grava (o do fim tem 32).
+  assert.ok(novo.length - velho.length <= 45, `${novo.length - velho.length} linhas novas`);
   assert.equal(objeto(xml, 'endevent37')!.attrs['name'], 'Cancelado');
 });
 

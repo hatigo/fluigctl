@@ -67,7 +67,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `process versions` / `release` (versões do processo e liberar a em edição) | pronto |
 | `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
 | `request start` / `show` / `move` / `cancel` (solicitações sem a tela do Fluig) | pronto, conferido no localdev com a contratação: recuperação, laço de aprovação e reprovação |
-| `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, textos sem fonte e losangos sem pontos (`--fix` acrescenta), elementos sem saída ou sem entrada e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
+| `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, textos sem fonte, losangos sem pontos e formas sem o visual do Studio (`--fix` acrescenta), elementos sem saída ou sem entrada e o padrão das service tasks) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
 | `changed` (o que mudou no git, como comandos) | pronto |
 | `push dataset` | pronto |
@@ -77,7 +77,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
 | `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 95 de 95 diagramas dos workspaces convertem |
 | `pull process` / `pull dataset` / `pull form` (scripts de processo, código de dataset, anexos e eventos de formulário) | pronto |
-| `pull diagram` (definição publicada → `.process`) | pronto: estados, atribuições, gateways, eventos, subprocessos, propriedades/configurações avançadas, componentes gráficos, raias, fluxos e bendpoints |
+| `pull diagram` (definição publicada → `.process`) | pronto: estados, atribuições, gateways, eventos, subprocessos, propriedades/configurações avançadas, componentes gráficos, raias, fluxos e bendpoints, com o visual do Studio (anotações e subprocessos ainda sem cor) |
 | `pull widget` (widget instalada → `wcm/widget/<code>`) | pronto; lê pela widget auxiliar do Fluiggers, que o `--instalar-helper` publica |
 | `push event` / `pull event` (evento global, `events/<id>.js`) | pronto |
 | `push mechanism` / `pull mechanism` (mecanismo de atribuição customizado, `mechanisms/<id>.js`) | pronto |

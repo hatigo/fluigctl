@@ -1,3 +1,4 @@
+import { garantirVisual } from '../diagram/visual.js';
 import { ErroFluigctl } from '../errors.js';
 import { escaparTexto, filhos, lerXml, type No } from '../push/diagram/xml.js';
 
@@ -445,12 +446,19 @@ export function gerarProcess(definicao: string, nomeDoArquivo?: string): { proce
     objetos.push(`  <bpmn2:SequenceFlow id="flow${seq}" name="" sourceRef="${de.id}" targetRef="${para.id}" atividadeFluxo="" atividadeRetorno="" extendedFields="&lt;list/>"/>`);
   });
 
+  const indiceDaLigacao = new Map([
+    ...links.map((l) => `flow${numero(filhos(l, 'processLinkPK')[0], 'linkSequence')}`),
+    ...associacoes.map((l) => `flow${numero(filhos(l, 'processLinkAssocPK')[0], 'linkSequence')}`),
+  ].map((f, i) => [f, i]));
   const shapes: string[] = [];
   const shapeIndex = new Map<string, number>();
   const addShape = (id: string, x: number, y: number, w: number, h: number, forma: 'Rectangle'|'Ellipse' = 'Rectangle') => {
     const i = shapes.length; shapeIndex.set(id, i);
-    const inc = entrada.get(id)?.map((_, j) => `/0/@connections.${links.findIndex((l) => porSeq.get(numero(l,'finalStateSequence'))?.id === id) + j}`).join(' ');
-    shapes.push(`    <children xsi:type="pi:ContainerShape" visible="true" active="true"><graphicsAlgorithm xsi:type="al:${forma}" lineWidth="1" width="${w}" height="${h}" x="${x}" y="${y}"/><link businessObjects="${id}"/><anchors xsi:type="pi:ChopboxAnchor"${inc ? ` incomingConnections="${inc}"` : ''}/></children>`);
+    // A âncora lista as ligações dos dois lados, como o Studio grava; o índice
+    // é a posição do fluxo em connections (os links, depois as associações).
+    const refs = (fluxos: string[] | undefined) => fluxos?.map((f) => `/0/@connections.${indiceDaLigacao.get(f)}`).join(' ');
+    const out = refs(saida.get(id)), inc = refs(entrada.get(id));
+    shapes.push(`    <children xsi:type="pi:ContainerShape" visible="true" active="true"><graphicsAlgorithm xsi:type="al:${forma}" lineWidth="1" width="${w}" height="${h}" x="${x}" y="${y}"/><link businessObjects="${id}"/><anchors xsi:type="pi:ChopboxAnchor"${out ? ` outgoingConnections="${out}"` : ''}${inc ? ` incomingConnections="${inc}"` : ''}/></children>`);
   };
   const lanesPorPool = new Map<number, No[]>();
   for (const r of raias.filter((x) => numero(x, 'type') === 2)) {
@@ -484,5 +492,7 @@ export function gerarProcess(definicao: string, nomeDoArquivo?: string): { proce
   }));
   const nome = attr(nomeDoArquivo ?? processId);
   const process = `<?xml version="1.0" encoding="ASCII"?>\n<xmi:XMI xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:al="http://eclipse.org/graphiti/mm/algorithms" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL-XMI" xmlns:pi="http://eclipse.org/graphiti/mm/pictograms">\n  <pi:Diagram visible="true" gridUnit="10" diagramTypeId="BPMNdiagram" name="${nome}" snapToGrid="true" version="0.16.0"><graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1200" height="1000"/>\n${shapes.join('\n')}\n${connections.join('\n')}\n  </pi:Diagram>\n${objetos.join('\n')}\n</xmi:XMI>\n`;
-  return { processId, process };
+  // O pictograma acima é só a geometria; o visual (estilos, cores, rótulos,
+  // setas) é o mesmo reparo do diagram check --fix, para o Studio mostrar as formas.
+  return { processId, process: garantirVisual(process) };
 }

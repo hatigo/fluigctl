@@ -1,5 +1,6 @@
 import { garantirFontes } from './fonts.js';
 import { garantirLosangos } from './gateways.js';
+import { garantirVisual } from './visual.js';
 import { basename, dirname, join } from 'node:path';
 
 import { lerDiagrama, type Diagrama, type ObjetoBpmn } from '../push/diagram/modelo.js';
@@ -122,11 +123,16 @@ function modeloPara(xml: string, d: Diagrama, chave: keyof typeof TIPOS | 'fluxo
   return MODELOS[chave]!;
 }
 
-/** Reescreve um bloco clonado: índice próprio, id, sem ligações e sem dobras. */
+/**
+ * Reescreve um bloco clonado: índice próprio, id, sem ligações, sem dobras e
+ * sem estilos. Os estilos o garantirVisual refaz, um conjunto por forma como o
+ * Studio grava: dividir os da forma copiada amarraria uma à outra.
+ */
 function clonarForma(m: Modelo, tipoLista: 'children' | 'connections', indice: number, id: string): string {
   const proprio = new RegExp(`/0/@${tipoLista}\\.${m.indice}(?=[/"\\s])`, 'g');
   return m.forma
     .replace(proprio, `/0/@${tipoLista}.${indice}`)
+    .replace(/ style="[^"]*"/g, '')
     .replace(/ (outgoingConnections|incomingConnections)="[^"]*"/g, '')
     .replace(/\n\s*<bendpoints\b[^>]*\/>/g, '')
     .replace(`businessObjects="${m.id}"`, `businessObjects="${id}"`);
@@ -236,9 +242,10 @@ export function criarNoXml(xml: string, c: Criacao): { xml: string; id: string }
   novo = acrescentarAoDiagrama(novo, `/0/@children.${indice}/@link`);
   const doArquivo = d.objetos.some((o) => o.attrs['id'] === modelo.id);
   novo = inserirModelo(novo, tag, doArquivo ? modelo.id : undefined, false);
-  // Texto sem fonte e losango sem pontos impedem o Studio de abrir: o que entra
-  // sai certo, e o arquivo inteiro é acertado junto (veja fonts.ts e gateways.ts).
-  return { xml: garantirLosangos(garantirFontes(novo)), id };
+  // Texto sem fonte e losango sem pontos impedem o Studio de abrir, e forma sem
+  // estilo aparece sem cor: o que entra sai certo, e o arquivo inteiro é
+  // acertado junto (veja fonts.ts, gateways.ts e visual.ts).
+  return { xml: garantirVisual(garantirLosangos(garantirFontes(novo))), id };
 }
 
 function anexarALista(xml: string, id: string, attr: 'incoming' | 'outgoing', valor: string): string {
@@ -320,9 +327,10 @@ export function ligarNoXml(xml: string, origem: string, destino: string, nome = 
   novo = inserirModelo(novo, tag, ultimoFluxo, true);
   novo = anexarALista(novo, origem, 'outgoing', id);
   novo = anexarALista(novo, destino, 'incoming', id);
-  // Texto sem fonte e losango sem pontos impedem o Studio de abrir: o que entra
-  // sai certo, e o arquivo inteiro é acertado junto (veja fonts.ts e gateways.ts).
-  return { xml: garantirLosangos(garantirFontes(novo)), id };
+  // Texto sem fonte e losango sem pontos impedem o Studio de abrir, e forma sem
+  // estilo aparece sem cor: o que entra sai certo, e o arquivo inteiro é
+  // acertado junto (veja fonts.ts, gateways.ts e visual.ts).
+  return { xml: garantirVisual(garantirLosangos(garantirFontes(novo))), id };
 }
 
 const GAP = 33;

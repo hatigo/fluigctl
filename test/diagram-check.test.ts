@@ -36,10 +36,10 @@ test('referência por posição que não resolve é erro de estrutura', () => {
 });
 
 test('estilo quebrado só muda a aparência: aviso, não erro', () => {
-  const comEstilo = trocar(CONTRATACAO, '<graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" width="1700"', '<graphicsAlgorithm xsi:type="al:Rectangle" style="/0/@styles.7" lineWidth="1" width="1700"');
+  const comEstilo = trocar(CONTRATACAO, 'style="/0/@styles.0"', 'style="/0/@styles.999"');
   const a = checarDiagrama(comEstilo, { grupo: 'suporte_processos' });
   assert.deepEqual(erros(a), []);
-  assert.ok(a.some((x) => x.nivel === 'aviso' && /@styles\.7/.test(x.mensagem)));
+  assert.ok(a.some((x) => x.nivel === 'aviso' && /@styles\.999/.test(x.mensagem)));
 });
 
 test('âncora que não lista a conexão é acusada nos dois sentidos', () => {
@@ -110,7 +110,7 @@ test('tratamento fora do Pool Grupo é erro', () => {
 
 test('desenho fora da receita: bolinha longe do canto e tratamento em outra raia', () => {
   // Bolinha de servicetask3 longe do canto: aviso.
-  const longe = trocar(CONTRATACAO, 'width="35" height="35" x="573" y="276">', 'width="35" height="35" x="20" y="276">');
+  const longe = trocar(CONTRATACAO, 'width="30" height="30" x="576" y="279">', 'width="30" height="30" x="20" y="279">');
   const a = checarDiagrama(longe);
   assert.deepEqual(erros(a), []);
   assert.ok(a.some((x) => x.nivel === 'aviso' && x.onde.startsWith('intermediateerror12') && /canto inferior direito/.test(x.mensagem)));
@@ -132,7 +132,7 @@ test('elemento sem saída ou sem entrada é erro: a solicitação para ou nunca 
 });
 
 test('texto sem fonte é erro de estrutura, e garantirFontes acerta como o Studio grava', () => {
-  const semFonte = trocar(CONTRATACAO, ' font="/0/@fonts.0" value="Aprovar"', ' value="Aprovar"');
+  const semFonte = trocar(CONTRATACAO, ' font="/0/@fonts.0" horizontalAlignment="ALIGNMENT_CENTER" value="Aprovar"', ' horizontalAlignment="ALIGNMENT_CENTER" value="Aprovar"');
   assert.deepEqual(
     erros(checarDiagrama(semFonte)).map((a) => a.mensagem.split(':')[0]),
     ['texto sem fonte'],
@@ -141,19 +141,19 @@ test('texto sem fonte é erro de estrutura, e garantirFontes acerta como o Studi
   assert.equal(garantirFontes(semFonte), CONTRATACAO);
   assert.equal(garantirFontes(CONTRATACAO), CONTRATACAO, 'sem nada a fazer, não mexe');
   // Sem nenhuma <fonts>, cria a negrito para formas e a normal só se houver rótulo de fluxo.
-  const nenhuma = CONTRATACAO.replace(/ font="\/0\/@fonts\.0"/g, '').replace(/\n\s*<fonts [^>]*\/>/, '');
-  assert.equal(textosSemFonte(nenhuma), 14);
+  const nenhuma = CONTRATACAO.replace(/ font="\/0\/@fonts\.\d"/g, '').replace(/\n\s*<fonts [^>]*\/>/g, '');
+  assert.equal(textosSemFonte(nenhuma), 34);
   assert.equal(garantirFontes(nenhuma), CONTRATACAO);
   // Fonte quebrada também impede o Studio de abrir.
-  const quebrada = trocar(CONTRATACAO, ' font="/0/@fonts.0" value="Aprovar"', ' font="/0/@fonts.7" value="Aprovar"');
+  const quebrada = trocar(CONTRATACAO, ' font="/0/@fonts.0" horizontalAlignment="ALIGNMENT_CENTER" value="Aprovar"', ' font="/0/@fonts.7" horizontalAlignment="ALIGNMENT_CENTER" value="Aprovar"');
   assert.match(erros(checarDiagrama(quebrada))[0]!.mensagem, /font aponta para \/0\/@fonts\.7/);
 });
 
 test('losango sem pontos é erro de estrutura, e garantirLosangos o redesenha como o Studio grava', () => {
   // Como a contratação nasceu: o polígono era a própria forma e não tinha pontos.
   const semPontos = CONTRATACAO.replace(
-    /<graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" filled="false" lineVisible="false" transparency="0.0" (width="\d+" height="\d+" x="\d+" y="\d+")>\n(\s*)<graphicsAlgorithmChildren xsi:type="al:Polygon" lineWidth="1" filled="true" transparency="0.0" width="60" height="60">(?:\n\s*<points[^>]*\/>)+\n\s*<\/graphicsAlgorithmChildren>/g,
-    '<graphicsAlgorithm xsi:type="al:Polygon" lineWidth="1" $1>\n$2<graphicsAlgorithmChildren xsi:type="al:Polygon" lineWidth="1"/>',
+    /<graphicsAlgorithm xsi:type="al:Rectangle" lineWidth="1" filled="false" lineVisible="false" transparency="0.0" (width="\d+" height="\d+" x="\d+" y="\d+")>\n(\s*)<graphicsAlgorithmChildren xsi:type="al:Polygon" lineWidth="1" filled="true" transparency="0.0" width="60" height="60"( style="[^"]*")>(?:\n\s*<points[^>]*\/>)+\n\s*<\/graphicsAlgorithmChildren>/g,
+    '<graphicsAlgorithm xsi:type="al:Polygon" lineWidth="1" $1>\n$2<graphicsAlgorithmChildren xsi:type="al:Polygon" lineWidth="1"$3/>',
   );
   assert.equal(poligonosSemPontos(semPontos), 4);
   assert.deepEqual(

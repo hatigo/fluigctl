@@ -281,6 +281,16 @@ an error.
     below it at `y="60"`. A polygon without points opens as a blank editor: the
     flow anchor asks for the shape's outline and throws IndexOutOfBoundsException.
     `diagram check --fix` redraws it.
+  - every shape and flow has the Studio look: `style="/0/@styles.N"` on its
+    figures, the `<styles>` (after the shapes, before the connections) and
+    `<colors>` (before the fonts) they point to, a task drawn as an invisible
+    rectangle with a `RoundedRectangle` and the label inside, a flow with the
+    label and the arrow as `connectionDecorators`. Without it Studio opens the
+    file but paints the shapes without colour on a grey canvas and only the
+    icons show. This is a warning, not an error. `diagram check --fix` redraws
+    every shape that has no style at all, as Studio writes it, keeping position,
+    size, label, links and bendpoints; `diagram pull` and new elements already
+    come out that way. Each shape gets its own styles, as Studio writes them.
   - A broken style or colour reference is only a warning: Studio writes some
     and still opens the file.
 - **Elements:** every element has an outgoing flow (except end events and link
