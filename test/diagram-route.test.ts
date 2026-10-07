@@ -130,14 +130,14 @@ test('endireitar um elemento traça todas as ligações dele, e passa no diagram
   }
 });
 
-test('endireitar tudo traça só as ligações tortas, numa edição só', () => {
+test('endireitar tudo traça as ligações tortas e as que não saem pela direita, numa edição só', () => {
   const p = projeto();
   try {
     const torto = moverNoXml(moverNoXml(ORIGINAL, 'task5', 0, 60).xml, 'servicetask10', 0, -40).xml;
     writeFileSync(p.arquivo, torto);
     const r = endireitar({ arquivo: p.arquivo, hashBase: hash(torto), undoDir: p.undo });
-    // flow24: o corredor vai de 207 (relayout.py) para 206, 20 px acima da tarefa.
-    assert.deepEqual(r.fluxos.sort(), ['flow19', 'flow20', 'flow24', 'flow25', 'flow26']);
+    // As tortas, e mais as que saíam por cima ou por baixo e passam a sair pela direita.
+    for (const f of ['flow19', 'flow20', 'flow24', 'flow25', 'flow26']) assert.ok(r.fluxos.includes(f), `${f} foi endireitado`);
     const depois = readFileSync(p.arquivo, 'utf8');
     assert.deepEqual(checarDiagrama(depois).filter((a) => a.nivel === 'erro'), []);
     assert.deepEqual(dobras(depois, 'flow27'), [], 'a diagonal do evento de erro fica');
@@ -191,13 +191,18 @@ test('o visualizador entrega as dobras, troca e endireita pelos endpoints', asyn
     const e = await postar(v.url, 'straighten', { id: 'flow24', hash: v.estado().hash });
     assert.equal(e.status, 200);
     assert.deepEqual(e.dados['fluxos'], ['flow24']);
-    await esperar(() => v.estado().elementos.find((x) => x.id === 'flow24')?.dobras?.[0]?.y === 206);
+    // O retorno do gateway (centro em x 1260) passa a sair pela direita e dar a volta.
+    await esperar(() => (v.estado().elementos.find((x) => x.id === 'flow24')?.dobras?.[0]?.x ?? 0) > 1260);
 
     assert.equal((await postar(v.url, 'bends', { id: 'flow24', pontos: 'x', hash: v.estado().hash })).status, 400);
     const html = await (await fetch(v.url)).text();
     assert.match(html, /pedir\('bends'/);
     assert.match(html, /Endireitar ligações/);
     assert.match(html, /id="straighten-all"/);
+    // As ligações do fixture que saem por cima ou por baixo passam a sair pela direita; depois, nada a fazer.
+    const antes = v.estado().hash;
+    assert.equal((await postar(v.url, 'straighten-all', { hash: antes })).status, 200);
+    await esperar(() => v.estado().hash !== antes);
     assert.equal((await postar(v.url, 'straighten-all', { hash: v.estado().hash })).status, 400, 'tudo já reto');
     assert.match(html, /Clique duplo na linha cria uma dobra/);
   } finally {

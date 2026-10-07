@@ -136,17 +136,19 @@ Flows:
 - **A flow to another lane runs its vertical through a column that is empty in
   every lane it crosses.** It then turns into the target from the left on the
   row, or drops into it from above at its centre.
-- **Gateway exits:**
-  - to the lane above, or a loop: from the top;
-  - next on the same row: from the right;
-  - to a lane below: from the right, with a bend a few dozen px out, when that
-    keeps the vertical clear. The bottom exit crosses the gateway's label, so it
-    is the last choice.
+- **Flows leave from the right** (the human's preference, 2026-10-07): next on
+  the row, to another lane, and loops too. Top or bottom only when the right
+  would cross another flow; the left is the last choice. The bottom exit of a
+  gateway crosses its label.
+- **An arrow never arrives at the point another one leaves.** Each end aims at
+  the centre, so a straight end lands in the middle of a side: every side of a
+  shape is either for arrivals or for departures.
 - **A branch that leaves the main row** (e.g. "Reprovada") drops from the
   gateway to its own row below, and keeps its own pair beneath it.
-- **A loop back** (e.g. "Tem mais? → Sim") leaves the gateway from the top. It
-  runs in the corridor 20 px above the tallest task of the target's row, and
-  drops into the target from above, at its centre.
+- **A loop back** (e.g. "Tem mais? → Sim") leaves from the right, turns up a
+  few dozen px out, runs in the corridor above the tallest task of the
+  target's row (or below the row, when that crosses less), and drops into the
+  target from above, at its centre.
   - It never passes under the row or through the error pairs.
   - Several loops into the same target share the corridor.
   - A flow from a gateway that climbs from its own row to a target further right

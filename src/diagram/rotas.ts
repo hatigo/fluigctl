@@ -10,12 +10,15 @@ import { cruzaCards, pontasDoFluxo } from './route.js';
  * sai (a ponta mira o centro da figura: a linha reta que chega pelo lado
  * encosta no meio dele, como a que sai por ali).
  *
- * Aqui cada ligação que pode mudar procura, em passos de 10 px e nas duas
- * formas de rota com duas dobras (degrau: o trecho do meio vertical; corredor:
- * o trecho do meio horizontal), a que tem o menor custo: lado em que uma chega
- * e outra sai (4), correr em cima de outra (3), cruzar outra (1). Nunca passa
- * por forma, não entra na figura das pontas e não sai da pool. No empate, fica
- * como estava. Usado pelo Organizar (todas mudam), pelo Endireitar (as do
+ * Aqui cada ligação que pode mudar procura, em passos de 10 px, entre as
+ * formas de rota ortogonal (degrau: o trecho do meio vertical; corredor: o
+ * trecho do meio horizontal; e as de três dobras que saem pela direita e dão a
+ * volta), a que tem o menor custo: lado em que uma chega e outra sai (4),
+ * correr em cima de outra (3), cruzar outra (1) e não sair pela direita (0,5
+ * por cima ou por baixo, 0,8 pela esquerda: a saída pela direita é a
+ * preferida, mas não a ponto de cruzar outra ligação). Nunca passa por forma,
+ * não entra na figura das pontas e não sai da pool. No empate, fica como
+ * estava. Usado pelo Organizar (todas mudam), pelo Endireitar (as do
  * elemento) e pela ligação nova (só ela).
  */
 export function refinarRotas(d: Diagrama, dobrasPorFluxo: Map<string, Ponto[]>, moveis?: ReadonlySet<string>): void {
@@ -80,9 +83,11 @@ export function refinarRotas(d: Diagrama, dobrasPorFluxo: Map<string, Ponto[]>, 
     if (!t) tracados.set(r, (t = tracar(r, r.dobras)));
     return t;
   };
+  const PELA_SAIDA: Record<Lado, number> = { direita: 0, cima: 0.5, baixo: 0.5, esquerda: 0.8 };
   const custo = (r: Rota, dobras: Ponto[]) => {
     const eu = tracar(r, dobras);
-    let n = mistos(r, dobras) * 4;
+    const sai = lados(r, dobras).sai;
+    let n = mistos(r, dobras) * 4 + (sai ? PELA_SAIDA[sai] : 0);
     for (const outra of rotas) {
       if (outra === r) continue;
       const ela = tracadoDe(outra);
@@ -100,7 +105,8 @@ export function refinarRotas(d: Diagrama, dobrasPorFluxo: Map<string, Ponto[]>, 
   const naPool = (y: number) => !cp || (y > cp.absY + 10 && y < cp.absY + cp.altura - 10);
   const comprimento = (r: Rota, dobras: Ponto[]) => segmentos(r, dobras).reduce((t, [p, q]) => t + Math.abs(q.x - p.x) + Math.abs(q.y - p.y), 0);
   // Linha reta sem dobra só se mexe se for reta de verdade (a diagonal curta do evento de erro fica).
-  const ortogonal = (r: Rota) => r.dobras.length === 2 || (r.dobras.length === 0 && (Math.abs(r.a.x - r.b.x) <= 1 || Math.abs(r.a.y - r.b.y) <= 1));
+  const ortogonal = (r: Rota) =>
+    r.dobras.length === 2 || r.dobras.length === 3 || (r.dobras.length === 0 && (Math.abs(r.a.x - r.b.x) <= 1 || Math.abs(r.a.y - r.b.y) <= 1));
 
   for (let passada = 0; passada < 3; passada++) {
     let mudou = false;
@@ -126,6 +132,18 @@ export function refinarRotas(d: Diagrama, dobrasPorFluxo: Map<string, Ponto[]>, 
       // Do lado de fora das duas figuras: entra pela lateral e sai por cima/baixo, ou o contrário.
       for (const x of [fa.absX - 30, fa.absX + fa.largura + 30, fb.absX - 30, fb.absX + fb.largura + 30].map((v) => Math.round(v / 10) * 10)) {
         if (x >= 0 && foraEmX(x)) candidatas.push([{ x, y: Math.round(r.a.y) }, { x, y: Math.round(r.b.y) }]);
+      }
+      // Saindo pela direita e dando a volta, para quem não tem o destino à
+      // direita (retorno, mesma coluna): sai pela lateral direita, sobe ou
+      // desce até um corredor e chega no destino por cima ou por baixo; ou
+      // desce/sobe pela direita e entra no destino pela lateral direita.
+      const direita = fa.absX + fa.largura;
+      for (const xr of [20, 30, 40, 60].map((m) => Math.round((direita + m) / 10) * 10)) {
+        if (!foraEmX(xr) || (xr > Math.min(r.a.x, r.b.x) && xr < Math.max(r.a.x, r.b.x) && r.b.x > direita)) continue;
+        for (let y = Math.floor((topo - 120) / 10) * 10; y <= fundo + 120; y += 10) {
+          if (foraEmY(y)) candidatas.push([{ x: xr, y: Math.round(r.a.y) }, { x: xr, y }, { x: Math.round(r.b.x), y }]);
+        }
+        if (r.b.x < xr && Math.abs(r.a.y - r.b.y) > 1) candidatas.push([{ x: xr, y: Math.round(r.a.y) }, { x: xr, y: Math.round(r.b.y) }]);
       }
       let melhor = { dobras: r.dobras, custo: atual, comprimento: comprimento(r, r.dobras) };
       for (const tentativa of candidatas) {
