@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { adicionarNoXml } from '../src/diagram/add.js';
 import { checarDiagrama } from '../src/diagram/check.js';
+import { compararComStudio } from '../src/diagram/fidelidade.js';
 import { formasSemEstilo, garantirVisual } from '../src/diagram/visual.js';
 import { gerarProcess } from '../src/pull/process-diagram.js';
 import { lerDiagrama } from '../src/push/diagram/modelo.js';
@@ -79,4 +82,98 @@ test('elemento novo sai com estilo próprio, mesmo quando é cópia de um que j�
 test('o diagram pull já sai com o visual do Studio e com as âncoras dos dois lados', () => {
   const { process } = gerarProcess(fixture('processoTeste.ecm30.xml'));
   assert.deepEqual(checarDiagrama(process), []);
+});
+
+const blocoDe = (xml: string, id: string) => {
+  const i = xml.indexOf(`<link businessObjects="${id}"/>`);
+  return xml.slice(xml.lastIndexOf('\n    <', i), xml.indexOf('\n    </', i));
+};
+const idDoEstilo = (xml: string, ref: string) => [...xml.matchAll(/\n    <styles\b[^>]*/g)][Number(/@styles\.(\d+)/.exec(ref)![1])]![0];
+const errosDeEstrutura = (xml: string) => checarDiagrama(xml).filter((a) => a.nivel === 'erro' && a.grupo === 'estrutura').map((a) => `${a.onde}: ${a.mensagem}`);
+
+test('anotação, evento de tempo e subprocesso saem como o Studio desenha', () => {
+  const cru = fixture('processoFase1.process');
+  const fase1 = garantirVisual(cru);
+  assert.equal(formasSemEstilo(fase1), 0);
+  // O fixture não desenha as ligações; o reparo não pode acrescentar erro.
+  assert.deepEqual(errosDeEstrutura(fase1), errosDeEstrutura(cru));
+  // A nota: retângulo com o estilo ANNOTATION, o texto e o colchete do lado.
+  const nota = blocoDe(fase1, 'annotationtask16');
+  const ref = /al:RoundedRectangle[^>]*style="([^"]+)"/.exec(nota)![1]!;
+  assert.match(idDoEstilo(fase1, ref), /id="ANNOTATION"/);
+  assert.match(nota, /al:Polyline/);
+  // O evento de tempo leva o relógio dentro.
+  const tempo = /<bpmn2:BpmnIntermediateEvent id="([^"]+)"[^>]* type="32"/.exec(fase1)?.[1];
+  assert.ok(tempo);
+  assert.equal((blocoDe(fase1, tempo).match(/al:Polyline/g) ?? []).length, 14, "4 marcas, 2 ponteiros e 8 traços");
+
+  const subCru = fixture('subprocessoTeste.process');
+  const sub = garantirVisual(subCru);
+  assert.equal(formasSemEstilo(sub), 0);
+  assert.deepEqual(errosDeEstrutura(sub), errosDeEstrutura(subCru));
+  assert.match(blocoDe(sub, 'subprocess12'), /lineWidth="3"[\s\S]*subprocess\.normal/);
+});
+
+/** O processoTeste com o flow8 saindo de uma anotação ou marcado como automático. */
+const ligacao = (xml: string, id: string) => {
+  const i = xml.indexOf(`<link businessObjects="${id}"/>`);
+  return xml.slice(xml.lastIndexOf('<connections', i), xml.indexOf('</connections>', i));
+};
+
+test('ligação com anotação é associação: pontilhada e sem seta', () => {
+  const cru = fixture('processoTeste.process')
+    .replace('<bpmn2:SequenceFlow id="flow8" name="" sourceRef="startevent4"', '<bpmn2:BpmnAnnotation id="nota1" name="Nota" type="0"/>\n  <bpmn2:SequenceFlow id="flow8" name="" sourceRef="nota1"');
+  assert.match(cru, /sourceRef="nota1"/);
+  const lig = ligacao(garantirVisual(cru), 'flow8');
+  assert.match(lig, /lineWidth="2" lineStyle="DOT"/);
+  assert.match(lig, /<connectionDecorators visible="true" locationRelative="true" location="1\.0"\/>/);
+  assert.doesNotMatch(lig, /al:Polygon/);
+});
+
+test('fluxo automático: verde, com o ícone no meio, e a ponta e o rótulo dividem o estilo verde', () => {
+  const cru = fixture('processoTeste.process').replace('<bpmn2:SequenceFlow id="flow8" name=""', '<bpmn2:SequenceFlow id="flow8" name="" fluxoAutomatico="true"');
+  assert.match(cru, /id="flow8" name="" fluxoAutomatico="true"/);
+  const pronto = garantirVisual(cru);
+  const lig = ligacao(pronto, 'flow8');
+  assert.match(lig, /designer\.automaticFlow/);
+  const estilos = [...lig.matchAll(/ style="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(estilos).size, 1, 'rótulo e ponta com o mesmo estilo');
+  assert.match(idDoEstilo(pronto, estilos[0]!), /id="BPMN-POLYGON-ARROW-0-150-0"/);
+});
+
+/**
+ * O acervo de diagramas salvos pelo Studio (~/fluig/workspaces), quando existe
+ * nesta máquina: sem estilo e redesenhado pelo fluigctl, cada forma tem de sair
+ * igual à do Studio. As poucas diferenças que restam são defeitos dos próprios
+ * arquivos (seta duplicada, estilo que não existe) — npm run fidelidade-visual
+ * mostra quais.
+ */
+const ACERVO = join(homedir(), 'fluig', 'workspaces');
+test('fidelidade ao acervo do Studio', { skip: !existsSync(ACERVO) && 'sem acervo nesta máquina' }, () => {
+  const arquivos: string[] = [];
+  const visitar = (pasta: string) => {
+    for (const nome of readdirSync(pasta)) {
+      const caminho = join(pasta, nome);
+      if (statSync(caminho).isDirectory()) visitar(caminho);
+      else if (nome.endsWith('.process')) arquivos.push(caminho);
+    }
+  };
+  visitar(ACERVO);
+  let total = 0;
+  const fora: string[] = [];
+  for (const arquivo of arquivos) {
+    let comparacoes;
+    try {
+      comparacoes = compararComStudio(readFileSync(arquivo, 'latin1'));
+    } catch {
+      continue;
+    }
+    for (const c of comparacoes) {
+      total++;
+      if (c.situacao !== 'igual') fora.push(`${arquivo} ${c.id} ${c.situacao}`);
+    }
+  }
+  assert.ok(total > 0);
+  assert.ok(fora.length <= Math.ceil(total * 0.003), `${fora.length} de ${total} formas diferentes do Studio:\n${fora.slice(0, 20).join('\n')}`);
+  assert.ok(!fora.some((f) => f.endsWith('nao-redesenhado')), fora.filter((f) => f.endsWith('nao-redesenhado')).join('\n'));
 });

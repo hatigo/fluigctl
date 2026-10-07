@@ -77,7 +77,7 @@ atribuição já são publicados pelo `fluigctl`.
 | `push process` (scripts de um processo que já existe; `--base` para importar uma definição) | pronto |
 | `push diagram` (o diagrama `.process` inteiro; `--create` para processo novo) | pronto, conferido no HML; 95 de 95 diagramas dos workspaces convertem |
 | `pull process` / `pull dataset` / `pull form` (scripts de processo, código de dataset, anexos e eventos de formulário) | pronto |
-| `pull diagram` (definição publicada → `.process`) | pronto: estados, atribuições, gateways, eventos, subprocessos, propriedades/configurações avançadas, componentes gráficos, raias, fluxos e bendpoints, com o visual do Studio (anotações e subprocessos ainda sem cor) |
+| `pull diagram` (definição publicada → `.process`) | pronto: estados, atribuições, gateways, eventos, subprocessos, propriedades/configurações avançadas, componentes gráficos, raias, fluxos e bendpoints, com o visual do Studio em todos os tipos de forma do acervo (`npm run fidelidade-visual` compara com os 94 diagramas salvos pelo Studio) |
 | `pull widget` (widget instalada → `wcm/widget/<code>`) | pronto; lê pela widget auxiliar do Fluiggers, que o `--instalar-helper` publica |
 | `push event` / `pull event` (evento global, `events/<id>.js`) | pronto |
 | `push mechanism` / `pull mechanism` (mecanismo de atribuição customizado, `mechanisms/<id>.js`) | pronto |
@@ -1165,6 +1165,15 @@ solicitação aberta e movida pela API. O plano, as fases e o que foi medido est
 em `docs/plano-push-diagrama.md`. `npm run diff-diagramas [raiz]` compara a
 conversão com os `.ecm30.xml` do Studio de uma pasta de workspaces, sem escrever
 nela.
+
+`npm run fidelidade-visual [raiz] [--tipo <tipo>] [--exemplos <n>]` mede o
+visual que o fluigctl desenha (`diagram check --fix`, elementos novos, `diagram
+pull`) contra o que o Studio grava: cada `.process` da raiz perde os estilos, é
+redesenhado e comparado forma por forma, com estilo, cor e fonte resolvidos. No
+acervo de 94 diagramas, 4.691 de 4.700 formas e ligações saem iguais; as 9 que
+restam são defeitos dos próprios arquivos (seta duplicada, estilo que não
+existe ou de outro tipo de forma). O teste `fidelidade ao acervo do Studio` roda
+a mesma comparação quando o acervo está na máquina.
 
 ## Códigos de saída
 

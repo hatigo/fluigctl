@@ -291,6 +291,12 @@ an error.
     every shape that has no style at all, as Studio writes it, keeping position,
     size, label, links and bendpoints; `diagram pull` and new elements already
     come out that way. Each shape gets its own styles, as Studio writes them.
+    The redraw keeps what the author chose: label font, lane colour, flow
+    colour and a dragged flow label. It covers every shape type in the 94
+    Studio diagrams of the collection, including the event icons (timer, link,
+    signal, conditional, cancel and terminate end), annotations with their
+    dotted association, subprocesses and automatic flows (green, with the
+    icon).
   - A broken style or colour reference is only a warning: Studio writes some
     and still opens the file.
 - **Elements:** every element has an outgoing flow (except end events and link

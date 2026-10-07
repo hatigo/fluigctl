@@ -1,6 +1,7 @@
 import { lerDiagrama, type ObjetoBpmn } from '../push/diagram/modelo.js';
 import { ESTILOS_STUDIO } from './estilos-studio.js';
 import { garantirFontes } from './fonts.js';
+import { ICONES_STUDIO } from './icones-studio.js';
 import { codificarAtributo, estiloDoArquivo } from './props.js';
 
 /**
@@ -65,7 +66,7 @@ type Rgb = [number, number, number];
 class Paleta {
   readonly estilos: string[] = [];
   readonly cores: Rgb[] = [];
-  private seta: string | undefined;
+  private readonly compartilhados = new Map<string, string>();
   constructor(
     private readonly qtdEstilos: number,
     private readonly coresExistentes: Rgb[],
@@ -87,12 +88,17 @@ class Paleta {
     return `/0/@styles.${this.qtdEstilos + this.estilos.length - 1}`;
   }
 
-  /** A ponta da seta: o Studio grava uma e todas as ligações apontam para ela. */
-  estiloDaSeta(existentes: Elemento[]): string {
-    if (this.seta) return this.seta;
-    const i = existentes.findIndex((e) => e.attrs.get('id') === 'BPMN-POLYGON-ARROW');
-    this.seta = i >= 0 ? `/0/@styles.${i}` : this.estilo('BPMN-POLYGON-ARROW');
-    return this.seta;
+  /**
+   * Estilo que o Studio grava uma vez e todas as ligações usam: a ponta da seta
+   * (BPMN-POLYGON-ARROW) e a do fluxo automático, que serve também ao rótulo.
+   */
+  compartilhado(id: string, existentes: Elemento[]): string {
+    let ref = this.compartilhados.get(id);
+    if (ref) return ref;
+    const i = existentes.findIndex((e) => e.attrs.get('id') === id);
+    ref = i >= 0 ? `/0/@styles.${i}` : this.estilo(id);
+    this.compartilhados.set(id, ref);
+    return ref;
   }
 }
 
@@ -100,6 +106,7 @@ const PRETO: Rgb = [0, 0, 0];
 const BRANCO: Rgb = [255, 255, 255];
 const FUNDO: Rgb = [227, 238, 249];
 const RAIO: Rgb = [153, 153, 0];
+const VERDE: Rgb = [0, 150, 0];
 
 function attrs(pares: [string, string | undefined][]): string {
   return pares.filter(([, v]) => v !== undefined).map(([k, v]) => `${k}="${v}"`).join(' ');
@@ -121,15 +128,24 @@ interface Contexto {
   estilosExistentes: Elemento[];
 }
 
-/** O texto do rótulo como está no arquivo (codificado), ou o nome do objeto. */
-function rotulo(ctx: Contexto, forma: Elemento, id: string): string {
+function textoDaForma(forma: Elemento): Elemento | undefined {
   for (const c of filhos(forma, 'children')) {
     if (primeiro(c, 'link')) continue;
     const ga = primeiro(c, 'graphicsAlgorithm');
     const tipo = ga?.attrs.get('xsi:type');
-    if (tipo === 'al:Text' || tipo === 'al:MultiText') return ga!.attrs.get('value') ?? '';
+    if (tipo === 'al:Text' || tipo === 'al:MultiText') return ga;
   }
-  return ctx.codificar(ctx.objetos.get(id)?.attrs['name'] ?? '');
+  return undefined;
+}
+
+/** O texto do rótulo como está no arquivo (codificado), ou o nome do objeto. */
+function rotulo(ctx: Contexto, forma: Elemento, id: string): string {
+  return textoDaForma(forma)?.attrs.get('value') ?? ctx.codificar(ctx.objetos.get(id)?.attrs['name'] ?? '');
+}
+
+/** A fonte que o rótulo já usa (o diagrama pode ter outra que não a Arial 8); sem ela, garantirFontes põe a do Studio. */
+function fonteDoRotulo(forma: Elemento): string | undefined {
+  return textoDaForma(forma)?.attrs.get('font');
 }
 
 const ancoraCaixa = (recuo: string, ref: string, w: string, h: string) =>
@@ -184,11 +200,15 @@ function redesenharForma(ctx: Contexto, forma: Elemento, caminho: string, r: str
   const c = caixaDe(forma);
   const fim = `${r}</children>`;
 
-  // Os outros tipos de evento (tempo, link, sinal, fim com mensagem...) têm um
-  // ícone desenhado dentro; sem ele, ficam com o círculo e as cores do Studio.
-  if (o.tipo === 'BpmnStartEvent' && tipo !== 'BpmnStartEvent/10') return [evento(ctx, forma, caminho, r, id, 'START-EVENT', '1'), fim].join('\n');
-  if (o.tipo === 'BpmnEndEvent' && tipo !== 'BpmnEndEvent/60') return [evento(ctx, forma, caminho, r, id, 'END-EVENT', '3'), fim].join('\n');
-  if (o.tipo === 'BpmnIntermediateEvent' && tipo !== 'BpmnIntermediateEvent/43') return [evento(ctx, forma, caminho, r, id, 'INTERMEDIATE-EVENT', '1'), fim].join('\n');
+  // Os outros tipos de evento (tempo, link, sinal, condicional, fim com
+  // cancelamento...) levam dentro o ícone que o Studio desenha; um tipo que o
+  // acervo não tem fica com o círculo e as cores do Studio.
+  const icone = ICONES_STUDIO[tipo];
+  const comIcone = (base: string) =>
+    [base, ...(icone ? [icone.replace(/\{\{(\d+),(\d+),(\d+)\}\}/g, (_, vr, vg, vb) => p.cor([+vr, +vg, +vb])).split('\n').map((l) => `${r}  ${l}`).join('\n')] : []), fim].join('\n');
+  if (o.tipo === 'BpmnStartEvent' && tipo !== 'BpmnStartEvent/10') return comIcone(evento(ctx, forma, caminho, r, id, 'START-EVENT', '1'));
+  if (o.tipo === 'BpmnEndEvent' && tipo !== 'BpmnEndEvent/60') return comIcone(evento(ctx, forma, caminho, r, id, 'END-EVENT', '3'));
+  if (o.tipo === 'BpmnIntermediateEvent' && tipo !== 'BpmnIntermediateEvent/43') return comIcone(evento(ctx, forma, caminho, r, id, 'INTERMEDIATE-EVENT', '1'));
 
   switch (tipo) {
     case 'BpmnStartEvent/10':
@@ -240,7 +260,7 @@ function redesenharForma(ctx: Contexto, forma: Elemento, caminho: string, r: str
         `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:RoundedRectangle'], ['lineWidth', '1'], ['transparency', '0.0'], ['width', String(c.w)], ['height', String(c.h)], ['style', p.estilo('TASK')], ['cornerHeight', '5'], ['cornerWidth', '5']])}/>`,
         `${r}  </children>`,
         `${r}  <children visible="true">`,
-        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:MultiText'], ['lineWidth', '1'], ['filled', 'false'], ['lineVisible', 'true'], ['transparency', '0.0'], ['width', String(c.w - 10)], ['height', String(c.h - 10)], ['x', '5'], ['y', '5'], ['style', p.estilo('BPMNCLASS-TEXT')], ['horizontalAlignment', 'ALIGNMENT_CENTER'], ['value', texto]])}/>`,
+        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:MultiText'], ['lineWidth', '1'], ['filled', 'false'], ['lineVisible', 'true'], ['transparency', '0.0'], ['width', String(c.w - 10)], ['height', String(c.h - 10)], ['x', '5'], ['y', '5'], ['style', p.estilo('BPMNCLASS-TEXT')], ['font', fonteDoRotulo(forma)], ['horizontalAlignment', 'ALIGNMENT_CENTER'], ['value', texto]])}/>`,
         `${r}  </children>`,
         ...icone,
         fim,
@@ -290,7 +310,7 @@ function redesenharForma(ctx: Contexto, forma: Elemento, caminho: string, r: str
         `${r}  <anchors xsi:type="pi:ChopboxAnchor"/>`,
         ancoraCaixa(`${r}  `, losangoRef, '0.51', '0.93'),
         `${r}  <children visible="true">`,
-        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:MultiText'], ['lineWidth', '1'], ['filled', 'false'], ['lineVisible', 'true'], ['transparency', '0.0'], ['width', '60'], ['height', String(Math.max(c.h - 60, 0))], ['y', '60'], ['style', p.estilo('BPMNCLASS-TEXT')], ['horizontalAlignment', 'ALIGNMENT_CENTER'], ['value', texto]])}/>`,
+        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:MultiText'], ['lineWidth', '1'], ['filled', 'false'], ['lineVisible', 'true'], ['transparency', '0.0'], ['width', '60'], ['height', String(Math.max(c.h - 60, 0))], ['y', '60'], ['style', p.estilo('BPMNCLASS-TEXT')], ['font', fonteDoRotulo(forma)], ['horizontalAlignment', 'ALIGNMENT_CENTER'], ['value', texto]])}/>`,
         `${r}  </children>`,
         fim,
       ].join('\n');
@@ -301,16 +321,71 @@ function redesenharForma(ctx: Contexto, forma: Elemento, caminho: string, r: str
       const raias = filhos(forma, 'children').filter((f) => primeiro(f, 'link'));
       const desenhadas = raias.map((raia, i) => redesenharForma(ctx, raia, `${caminho}/@children.${i}`, `${r}  `) ?? ctx.xml.slice(raia.inicio, raia.fim));
       const texto = rotulo(ctx, forma, id);
+      // A cor de fundo da raia é escolha de quem desenhou: fica a que já tem.
+      const ga = primeiro(forma, 'graphicsAlgorithm');
       return [
         `${r}<children xsi:type="pi:ContainerShape" visible="true" active="true">`,
-        `${r}  <graphicsAlgorithm ${attrs([['xsi:type', 'al:Rectangle'], ['background', p.cor(BRANCO)], ['foreground', p.cor(PRETO)], ['lineWidth', '1'], ['transparency', '0.0'], ['width', String(c.w)], ['height', String(c.h)], ['x', c.x], ['y', c.y], ['style', p.estilo('BPMN-SWIM_LANE-NOSTYLE')]])}/>`,
+        `${r}  <graphicsAlgorithm ${attrs([['xsi:type', 'al:Rectangle'], ['background', ga?.attrs.get('background') ?? p.cor(BRANCO)], ['foreground', ga?.attrs.get('foreground') ?? p.cor(PRETO)], ['lineWidth', '1'], ['transparency', '0.0'], ['width', String(c.w)], ['height', String(c.h)], ['x', c.x], ['y', c.y], ['style', p.estilo('BPMN-SWIM_LANE-NOSTYLE')]])}/>`,
         `${r}  <link businessObjects="${id}"/>`,
         `${r}  <anchors xsi:type="pi:ChopboxAnchor"/>`,
         `${r}  <anchors xsi:type="pi:ChopboxAnchor"/>`,
         ancoraCaixa(`${r}  `, `${caminho}/@graphicsAlgorithm`, '1.0', '0.51'),
         ...desenhadas.map((d) => d.replace(/^[ \t]*/, `${r}  `)),
         `${r}  <children visible="true">`,
-        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:Text'], ['lineWidth', '1'], ['filled', 'false'], ['lineVisible', 'true'], ['transparency', '0.0'], ['width', '30'], ['height', String(c.h)], ['style', p.estilo('BPMNCLASS-TEXT-67-67-67')], ['horizontalAlignment', 'ALIGNMENT_CENTER'], ['verticalAlignment', 'ALIGNMENT_MIDDLE'], ['angle', '270'], ['value', texto], ['rotation', '270.0']])}/>`,
+        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:Text'], ['lineWidth', '1'], ['filled', 'false'], ['lineVisible', 'true'], ['transparency', '0.0'], ['width', '30'], ['height', String(c.h)], ['style', p.estilo('BPMNCLASS-TEXT-67-67-67')], ['font', fonteDoRotulo(forma)], ['horizontalAlignment', 'ALIGNMENT_CENTER'], ['verticalAlignment', 'ALIGNMENT_MIDDLE'], ['angle', '270'], ['value', texto], ['rotation', '270.0']])}/>`,
+        `${r}  </children>`,
+        fim,
+      ].join('\n');
+    }
+    case 'BpmnSubProcess/100':
+    case 'BpmnSubProcess/101': {
+      // Borda grossa e o ícone do subprocesso embaixo, no meio; o ad hoc tem o
+      // til ao lado. As âncoras ficam como estão: no subprocesso a das
+      // ligações é a segunda, e as ligações apontam para ela pela posição.
+      const ancoras = filhos(forma, 'anchors').map((a) => `${r}  ${ctx.xml.slice(a.inicio, a.fim).replace(/\n[ \t]*/g, (q) => `\n${r}  ${q.slice(1).replace(/^ {6}/, '')}`)}`);
+      const adhoc = tipo === 'BpmnSubProcess/101';
+      const xIcone = Math.round(c.w / 2 - 8) - (adhoc ? 6 : 0);
+      const imagem = (w: number, h: number, x: number, y: number, nome: string) => [
+        `${r}  <children visible="true">`,
+        `${r}    <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="${w}" height="${h}" x="${x}" y="${y}" id="com.totvs.tds.ecm.designer.subprocess.${nome}" stretchH="false" stretchV="false" proportional="false"/>`,
+        `${r}  </children>`,
+      ];
+      return [
+        `${r}<children xsi:type="pi:ContainerShape" visible="true" active="true">`,
+        `${r}  <graphicsAlgorithm ${attrs([['xsi:type', 'al:RoundedRectangle'], ['lineWidth', '3'], ['transparency', '0.0'], ['width', String(c.w)], ['height', String(c.h)], ['x', c.x], ['y', c.y], ['style', p.estilo('TASK')], ['cornerHeight', '5'], ['cornerWidth', '5']])}/>`,
+        `${r}  <link businessObjects="${id}"/>`,
+        ...(ancoras.length ? ancoras : [ancoraCaixa(`${r}  `, `${caminho}/@graphicsAlgorithm`, '1.0', '0.51'), ancoraDasLigacoes(forma, `${r}  `)]),
+        `${r}  <children visible="true">`,
+        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:MultiText'], ['lineWidth', '1'], ['filled', 'false'], ['lineVisible', 'true'], ['transparency', '0.0'], ['width', String(c.w - 10)], ['height', String(c.h - 10)], ['x', '5'], ['y', '5'], ['style', p.estilo('BPMNCLASS-TEXT')], ['font', fonteDoRotulo(forma)], ['horizontalAlignment', 'ALIGNMENT_CENTER'], ['value', rotulo(ctx, forma, id)]])}/>`,
+        `${r}  </children>`,
+        ...imagem(16, 16, xIcone, c.h - 17, 'normal'),
+        ...(adhoc ? imagem(11, 8, xIcone + 17, c.h - 13, 'adhoc') : []),
+        fim,
+      ].join('\n');
+    }
+    case 'BpmnAnnotation/0': {
+      // A nota amarela: o retângulo leva o estilo; o texto e o colchete do
+      // lado esquerdo não. Texto e colchete ficam como estavam, se havia.
+      const t = textoDaForma(forma)?.attrs;
+      const colchete = filhos(forma, 'children')
+        .map((f) => primeiro(f, 'graphicsAlgorithm'))
+        .find((g) => g?.attrs.get('xsi:type') === 'al:Polyline');
+      const pontos = colchete
+        ? filhos(colchete, 'points').map((pt) => `${r}      ${ctx.xml.slice(pt.inicio, pt.fim)}`)
+        : [`${r}      <points x="20"/>`, `${r}      <points/>`, `${r}      <points y="${c.h}"/>`, `${r}      <points x="20" y="${c.h}"/>`];
+      return [
+        `${r}<children xsi:type="pi:ContainerShape" visible="true" active="true">`,
+        `${r}  <graphicsAlgorithm ${attrs([['xsi:type', 'al:RoundedRectangle'], ['lineWidth', '1'], ['lineVisible', 'false'], ['transparency', '0.0'], ['width', String(c.w)], ['height', String(c.h)], ['x', c.x], ['y', c.y], ['style', p.estilo('ANNOTATION')], ['cornerHeight', '5'], ['cornerWidth', '5']])}/>`,
+        `${r}  <link businessObjects="${id}"/>`,
+        ancoraDasLigacoes(forma, `${r}  `),
+        ancoraCaixa(`${r}  `, `${caminho}/@graphicsAlgorithm`, '1.0', '0.51'),
+        `${r}  <children visible="true">`,
+        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:MultiText'], ['lineWidth', '1'], ['filled', 'false'], ['lineVisible', 'false'], ['transparency', '0.0'], ['width', t?.get('width') ?? String(c.w)], ['height', t?.get('height') ?? String(c.h)], ['x', t ? t.get('x') : '10'], ['y', t?.get('y')], ['font', t?.get('font')], ['verticalAlignment', 'ALIGNMENT_MIDDLE'], ['value', rotulo(ctx, forma, id)]])}/>`,
+        `${r}  </children>`,
+        `${r}  <children visible="true">`,
+        `${r}    <graphicsAlgorithm xsi:type="al:Polyline" lineWidth="1" filled="false" transparency="0.0">`,
+        ...pontos,
+        `${r}    </graphicsAlgorithm>`,
         `${r}  </children>`,
         fim,
       ].join('\n');
@@ -322,26 +397,56 @@ function redesenharForma(ctx: Contexto, forma: Elemento, caminho: string, r: str
 
 function redesenharLigacao(ctx: Contexto, lig: Elemento, r: string): string | undefined {
   const id = primeiro(lig, 'link')?.attrs.get('businessObjects');
-  if (!id || !ctx.objetos.has(id)) return undefined;
+  const fluxo = id ? ctx.objetos.get(id) : undefined;
+  if (!id || !fluxo) return undefined;
   const p = ctx.paleta;
-  const nome = ctx.codificar(ctx.objetos.get(id)!.attrs['name'] ?? '');
+  const nome = ctx.codificar(fluxo.attrs['name'] ?? '');
   const dobras = filhos(lig, 'bendpoints').map((b) => `${r}  ${ctx.xml.slice(b.inicio, b.fim)}`);
-  const preto = p.cor(PRETO);
+  // O que é de quem desenhou fica: a cor da linha, da seta e do rótulo, e o
+  // lugar para onde o rótulo foi arrastado.
+  const linha = primeiro(lig, 'graphicsAlgorithm');
+  const decoradores = filhos(lig, 'connectionDecorators').map((c) => primeiro(c, 'graphicsAlgorithm'));
+  const textoAntigo = decoradores.find((g) => g?.attrs.get('xsi:type') === 'al:Text');
+  const setaAntiga = decoradores.find((g) => g?.attrs.get('xsi:type') === 'al:Polygon');
+  // Ligação com anotação é associação: o Studio a desenha pontilhada e sem seta.
+  const anotacao = [fluxo.attrs['sourceRef'], fluxo.attrs['targetRef']].some((ref) => ref !== undefined && ctx.objetos.get(ref)?.tipo === 'BpmnAnnotation');
+  // O fluxo automático é verde, com o ícone no meio; a ponta e o rótulo dividem o estilo verde.
+  const automatico = !anotacao && fluxo.attrs['fluxoAutomatico'] === 'true';
+  const corDaLinha = linha?.attrs.get('foreground') ?? p.cor(automatico ? VERDE : PRETO);
+  const estiloDaSeta = anotacao ? undefined : p.compartilhado(automatico ? 'BPMN-POLYGON-ARROW-0-150-0' : 'BPMN-POLYGON-ARROW', ctx.estilosExistentes);
+  const desenhoDaLinha: [string, string | undefined][] = anotacao
+    ? [['xsi:type', 'al:Polyline'], ['foreground', corDaLinha], ['lineWidth', '2'], ['lineStyle', 'DOT'], ['filled', 'false'], ['transparency', '0.0']]
+    : [['xsi:type', 'al:Polyline'], ['foreground', corDaLinha], ['lineWidth', '1'], ['filled', 'false'], ['transparency', '0.0']];
+  const seta = anotacao
+    ? [`${r}  <connectionDecorators visible="true" locationRelative="true" location="1.0"/>`]
+    : [
+        `${r}  <connectionDecorators visible="true" locationRelative="true" location="1.0">`,
+        `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:Polygon'], ['background', setaAntiga?.attrs.get('background') ?? corDaLinha], ['foreground', setaAntiga?.attrs.get('foreground') ?? corDaLinha], ['lineWidth', '1'], ['filled', 'true'], ['transparency', '0.0'], ['style', estiloDaSeta]])}>`,
+        `${r}      <points x="-10" y="-5" before="3" after="3"/>`,
+        `${r}      <points/>`,
+        `${r}      <points x="-10" y="5" before="3" after="3"/>`,
+        `${r}      <points x="-8" before="3" after="3"/>`,
+        `${r}    </graphicsAlgorithm>`,
+        `${r}  </connectionDecorators>`,
+      ];
+  const t = textoAntigo?.attrs;
+  const corDoTexto = (k: string) => t?.get(k) ?? (automatico ? corDaLinha : undefined);
+  const icone = automatico
+    ? [
+        `${r}  <connectionDecorators visible="true" active="true" locationRelative="true" location="0.5">`,
+        `${r}    <graphicsAlgorithm xsi:type="al:Image" lineWidth="1" transparency="0.0" width="16" height="16" id="com.totvs.tds.ecm.designer.automaticFlow" stretchH="false" stretchV="false" proportional="false"/>`,
+        `${r}  </connectionDecorators>`,
+      ]
+    : [];
   return [
     `${r}<connections ${attrs([['xsi:type', 'pi:FreeFormConnection'], ['visible', 'true'], ['active', 'true'], ['start', lig.attrs.get('start')], ['end', lig.attrs.get('end')]])}>`,
-    `${r}  <graphicsAlgorithm ${attrs([['xsi:type', 'al:Polyline'], ['foreground', preto], ['lineWidth', '1'], ['filled', 'false'], ['transparency', '0.0']])}/>`,
+    `${r}  <graphicsAlgorithm ${attrs(desenhoDaLinha)}/>`,
     `${r}  <link businessObjects="${id}"/>`,
     `${r}  <connectionDecorators visible="true" active="true" locationRelative="true" location="0.5">`,
-    `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:Text'], ['lineWidth', '1'], ['filled', 'false'], ['transparency', '0.0'], ['x', '10'], ['style', p.estilo('BPMNCLASS-TEXT')], ['value', nome]])}/>`,
+    `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:Text'], ['background', corDoTexto('background')], ['foreground', corDoTexto('foreground')], ['lineWidth', '1'], ['filled', 'false'], ['transparency', '0.0'], ['x', t ? t.get('x') : '10'], ['y', t?.get('y')], ['style', automatico ? estiloDaSeta : p.estilo('BPMNCLASS-TEXT')], ['font', t?.get('font')], ['value', nome]])}/>`,
     `${r}  </connectionDecorators>`,
-    `${r}  <connectionDecorators visible="true" locationRelative="true" location="1.0">`,
-    `${r}    <graphicsAlgorithm ${attrs([['xsi:type', 'al:Polygon'], ['background', preto], ['foreground', preto], ['lineWidth', '1'], ['filled', 'true'], ['transparency', '0.0'], ['style', p.estiloDaSeta(ctx.estilosExistentes)]])}>`,
-    `${r}      <points x="-10" y="-5" before="3" after="3"/>`,
-    `${r}      <points/>`,
-    `${r}      <points x="-10" y="5" before="3" after="3"/>`,
-    `${r}      <points x="-8" before="3" after="3"/>`,
-    `${r}    </graphicsAlgorithm>`,
-    `${r}  </connectionDecorators>`,
+    ...seta,
+    ...icone,
     ...dobras,
     `${r}</connections>`,
   ].join('\n');
