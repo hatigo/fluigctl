@@ -140,6 +140,11 @@ Flows:
   the row, to another lane, and loops too. The only exceptions are the recovery
   pattern's own lines: the short diagonal from the error circle and the
   vertical from the handling task back up to the service task.
+- **Flows enter from the left whenever possible** (the human's preference,
+  2026-10-07): a loop back or a target that is not straight ahead goes around
+  and turns into the target from its left. Top or bottom only when the left
+  would cross a shape or cost much more crossings. The pattern's vertical from
+  the handling task enters the service task from below.
 - **An arrow never arrives at the point another one leaves.** Each end aims at
   the centre, so a straight end lands in the middle of a side: every side of a
   shape is either for arrivals or for departures.
@@ -147,9 +152,10 @@ Flows:
   gateway to its own row below, and keeps its own pair beneath it.
 - **A loop back** (e.g. "Tem mais? → Sim") leaves from the right, turns up or
   down a few dozen px out, runs in the corridor above the tallest task of the
-  target's row (or below the row, when that crosses less), and drops into the
-  target from above, at its centre. A flow to a target far to the right on the
-  same row does the same instead of running through the shapes in between.
+  target's row (or below the row, when that crosses less), passes the target's
+  left side, and turns into it from the left. A flow to a target far to the
+  right on the same row goes around the same way instead of running through
+  the shapes in between.
   - It never passes under the row or through the error pairs.
   - Several loops into the same target share the corridor.
   - A flow from a gateway that climbs from its own row to a target further right

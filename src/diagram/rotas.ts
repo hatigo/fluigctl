@@ -14,9 +14,10 @@ import { contarFormas, cruza, cruzaCards, pontasDoFluxo } from './route.js';
  * formas de rota ortogonal (degrau: o trecho do meio vertical; corredor: o
  * trecho do meio horizontal; e as de três dobras que saem pela direita e dão a
  * volta), a que tem o menor custo. A saída é sempre pela direita (regra do
- * humano, 2026-10-07): outra saída custa mais que tudo o resto junto. Depois,
- * lado em que uma chega e outra sai (4), correr em cima de outra (3) e cruzar
- * outra (1). Não passa por forma, não entra na figura das pontas e não sai da
+ * humano, 2026-10-07): outra saída custa mais que tudo o resto junto. A entrada
+ * é pela esquerda sempre que possível: por cima ou por baixo custa 5, pela
+ * direita 8. Depois, lado em que uma chega e outra sai (4), correr em cima de
+ * outra (3) e cruzar outra (1). Não passa por forma, não entra na figura das pontas e não sai da
  * pool; se nenhuma rota pela direita escapa de passar por forma, fica a que
  * passa por menos. No empate, fica como estava. O desenho do padrão de
  * recuperação não muda: a diagonal curta do evento de erro para o tratamento
@@ -82,6 +83,7 @@ export function refinarRotas(d: Diagrama, dobrasPorFluxo: Map<string, Ponto[]>, 
   const tracadoDe = (r: Rota) => (r.tracado ??= tracar(r, r.dobras));
   const FORA_DA_DIREITA = 1000;
   const PELA_SAIDA: Record<Lado, number> = { direita: 0, cima: FORA_DA_DIREITA, baixo: FORA_DA_DIREITA, esquerda: FORA_DA_DIREITA };
+  const PELA_ENTRADA: Record<Lado, number> = { esquerda: 0, cima: 5, baixo: 5, direita: 8 };
   /**
    * A rota volta por dentro da própria origem ou do destino? O teste de forma
    * (cruzaCards) não olha as pontas; aqui, fora o trecho que sai da origem e o
@@ -96,8 +98,8 @@ export function refinarRotas(d: Diagrama, dobrasPorFluxo: Map<string, Ponto[]>, 
   /** O custo da rota com estas dobras; para de contar assim que passa do `limite` (já perdeu). */
   const custo = (r: Rota, dobras: Ponto[], limite = Infinity) => {
     const eu = tracar(r, dobras);
-    const sai = lados(r, dobras).sai;
-    let n = mistos(r, dobras) * 4 + (sai ? PELA_SAIDA[sai] : 0) + (dobras.length && pelasPontas(r, dobras) ? 500 : 0);
+    const { sai, entra } = lados(r, dobras);
+    let n = mistos(r, dobras) * 4 + (sai ? PELA_SAIDA[sai] : 0) + (entra ? PELA_ENTRADA[entra] : 0) + (dobras.length && pelasPontas(r, dobras) ? 500 : 0);
     for (const outra of rotas) {
       if (outra === r) continue;
       const ela = tracadoDe(outra);
@@ -128,7 +130,7 @@ export function refinarRotas(d: Diagrama, dobrasPorFluxo: Map<string, Ponto[]>, 
   // Linha reta sem dobra só se mexe se for reta de verdade (a diagonal curta do evento de erro fica).
   const ortogonal = (r: Rota) =>
     !retentativa(r) &&
-    (r.dobras.length === 2 || r.dobras.length === 3 || (r.dobras.length === 0 && (Math.abs(r.a.x - r.b.x) <= 1 || Math.abs(r.a.y - r.b.y) <= 1)));
+    (r.dobras.length >= 2 && r.dobras.length <= 4 || (r.dobras.length === 0 && (Math.abs(r.a.x - r.b.x) <= 1 || Math.abs(r.a.y - r.b.y) <= 1)));
 
   for (let passada = 0; passada < 3; passada++) {
     let mudou = false;
@@ -169,6 +171,19 @@ export function refinarRotas(d: Diagrama, dobrasPorFluxo: Map<string, Ponto[]>, 
           if (foraEmY(y)) candidatas.push([{ x: xr, y: Math.round(r.a.y) }, { x: xr, y }, { x: Math.round(r.b.x), y }]);
         }
 
+      }
+      // Entrando pela esquerda quando o destino não está logo à direita da saída:
+      // sai pela direita, vai a um corredor, passa à esquerda do destino, vai à
+      // altura dele e entra pela esquerda (quatro dobras).
+      const esquerdaDoDestino = fb.absX;
+      for (const xr of [20, 40, 60, 100].map((m) => Math.round((direita + m) / 10) * 10)) {
+        if (!foraEmX(xr) || !naPoolX(xr)) continue;
+        for (const xl of [20, 40, 60].map((m) => Math.round((esquerdaDoDestino - m) / 10) * 10)) {
+          if (xl < 0 || !naPoolX(xl) || !foraEmX(xl) || xl >= xr) continue;
+          for (let y = Math.floor((topo - 120) / 20) * 20; y <= fundo + 120; y += 20) {
+            if (foraEmY(y)) candidatas.push([{ x: xr, y: Math.round(r.a.y) }, { x: xr, y }, { x: xl, y }, { x: xl, y: Math.round(r.b.y) }]);
+          }
+        }
       }
       let melhor = { dobras: r.dobras, custo: atual, comprimento: comprimento(r, r.dobras) };
       const porForma: { dobras: Ponto[]; custo: number }[] = [];
