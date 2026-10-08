@@ -14,6 +14,8 @@ export interface FormNoServidor {
   descriptionField?: string;
   /** A pasta (documentId) onde o formulário está; ausente quando o servidor não a informou. */
   pasta?: number;
+  /** O arquivo principal (HTML) do formulário publicado. */
+  arquivoPrincipal?: string;
 }
 
 export interface ParametrosUpdate {
@@ -102,6 +104,7 @@ export async function cardIndexClient(
         ...(Number.isInteger(Number((f as { parentDocumentId?: unknown }).parentDocumentId)) && (f as { parentDocumentId?: unknown }).parentDocumentId != null
           ? { pasta: Number((f as { parentDocumentId?: unknown }).parentDocumentId) }
           : {}),
+        ...(typeof (f as { phisicalFile?: unknown }).phisicalFile === 'string' ? { arquivoPrincipal: String((f as { phisicalFile?: unknown }).phisicalFile) } : {}),
         // Tag vazia chega como null (o formulário não tem descritor); só a tag ausente é "não sei".
         ...(Object.prototype.hasOwnProperty.call(f, 'cardDescription')
           ? { descriptionField: f.cardDescription === null ? '' : String(f.cardDescription) }

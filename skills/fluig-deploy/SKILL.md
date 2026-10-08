@@ -236,6 +236,14 @@ fluigctl push form forms/formFoo --server <servidor> --keep-version   # overwrit
 fluigctl push form forms/formFoo --server <servidor> --new-version    # next version, previous stays readable
 ```
 
+**A new field needs a new version.** Each field is a column in the form's
+database table, and Fluig refuses a new field with `--keep-version` ("O
+formulário possui alterações na estrutura e precisa ter a versão alterada").
+Without a new field (layout, events, a new option in an existing select or
+radio), keep the version. The push compares the local HTML with the published
+form, so the dry-run already refuses `--keep-version` with a new field and names
+it; `--new-version` prints the new fields.
+
 The target form is resolved by `--document-id`, then the folder's numeric
 prefix, then the Fluig Studio `.metadata` in the folder (the documentId of each
 past export, checked against the server), then the folder name. The folder name

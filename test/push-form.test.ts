@@ -444,3 +444,38 @@ test('anexos só com nome ASCII não geram o aviso', async () => {
     await a.fluig.close();
   }
 });
+
+test('campo novo exige versão nova: --keep-version é recusado antes de escrever, até no dry-run', async () => {
+  // O publicado não tem "campo" (só o "form"); o local tem.
+  const a = await ambiente();
+  try {
+    const semCampo = async () => '<form name="form"></form>';
+    for (const dryRun of [true, false]) {
+      await assert.rejects(
+        () => pushForm({ server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '0', dryRun, prompt: async () => '', htmlPublicado: semCampo }),
+        (e: ErroFluigctl) => /campo\(s\) novo\(s\) em formSolicitacaoCompras: campo\. Cada campo é uma coluna.*--new-version/s.test(e.message) && e.codigo === 2,
+      );
+    }
+    assert.equal(escritas(a.fluig).length, 0);
+    // Com --new-version passa, e diz qual é o campo novo.
+    const r = await pushForm({ server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '2', dryRun: true, prompt: async () => '', htmlPublicado: semCampo });
+    assert.deepEqual(r.camposNovos, ['campo']);
+  } finally {
+    await a.fluig.close();
+  }
+});
+
+test('sem campo novo, manter a versão passa; sem conseguir ler o publicado, avisa e não bloqueia', async () => {
+  const a = await ambiente();
+  try {
+    const igual = async () => '<form name="form"><input name="campo"></form>';
+    const r = await pushForm({ server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '0', prompt: async () => '', htmlPublicado: igual });
+    assert.deepEqual(r.camposNovos, []);
+    assert.equal(escritas(a.fluig).length, 1);
+    const cego = await pushForm({ server: a.server, senha: 's', pasta: pasta('formSolicitacaoCompras'), versionOption: '0', dryRun: true, prompt: async () => '', htmlPublicado: async () => undefined });
+    assert.equal(cego.camposNovos, undefined);
+    assert.ok(cego.avisos.some((x) => /não deu para ler o formulário publicado/.test(x)));
+  } finally {
+    await a.fluig.close();
+  }
+});

@@ -16,7 +16,7 @@ test('sem nenhuma das duas, o push é recusado', () => {
   // Sobrescrever a versão ativa não pode ser o que acontece por silêncio.
   assert.throws(
     () => decideVersionOption({}),
-    /--keep-version.*--new-version/s,
+    /--keep-version.*--new-version.*campo novo/s,
   );
 });
 

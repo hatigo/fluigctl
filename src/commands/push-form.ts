@@ -8,6 +8,9 @@ import { join } from 'node:path';
 import { decideForm } from '../push/form-resolve.js';
 import { readForm } from '../push/form-source.js';
 import { lerMetadataStudio } from '../push/studio-metadata.js';
+import { versaoAtiva } from '../fluig/document-service.js';
+import { login } from '../fluig/session.js';
+import { camposDoHtml } from './changed.js';
 
 /**
  * Tipo de persistência na criação do formulário.
@@ -42,6 +45,8 @@ export interface OpcoesPushForm {
   versionOption?: '0' | '2';
   dryRun?: boolean;
   prompt: PromptSenha;
+  /** Para testes: o HTML principal do formulário publicado (undefined: não deu para ler). */
+  htmlPublicado?: () => Promise<string | undefined>;
 }
 
 export interface ResultadoPushForm {
@@ -56,6 +61,8 @@ export interface ResultadoPushForm {
   descritorEnviado?: string;
   /** Numa criação: onde e como o formulário é (ou seria) criado. */
   criacao?: { pasta: number; dataset: string; persistencia: 'form' | 'list' };
+  /** Num update: os campos do HTML local que o formulário publicado não tem. */
+  camposNovos?: string[];
 }
 
 /**
@@ -189,6 +196,34 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
     );
   }
 
+  // Campo novo é coluna nova na tabela do formulário: o Fluig só o aceita numa
+  // versão nova ("O formulário possui alterações na estrutura e precisa ter a
+  // versão alterada"). Compara com o publicado, não com o git: é o que o
+  // servidor tem que decide. Sem campo novo, manter a versão é o normal.
+  let camposNovos: string[] | undefined;
+  if (decisao.acao === 'update') {
+    const principal = fonte.anexos.find((a) => a.principal);
+    const publicado = await (opcoes.htmlPublicado ?? (async () => {
+      const url = serverUrl(server);
+      const versao = await versaoAtiva(url, await login(url, server.username, senha), decisao.documentId);
+      const nome = noServidor?.arquivoPrincipal ?? principal?.fileName;
+      return nome ? (await cliente.attachmentContent(decisao.documentId, versao, nome)).toString('latin1') : undefined;
+    }))().catch(() => undefined);
+    if (publicado === undefined || !principal) {
+      base.avisos.push('não deu para ler o formulário publicado e comparar os campos: com campo novo, use --new-version');
+    } else {
+      const doServidor = camposDoHtml(publicado);
+      camposNovos = [...camposDoHtml(Buffer.from(principal.filecontent, 'base64').toString('latin1'))].filter((c) => !doServidor.has(c)).sort();
+      if (camposNovos.length && opcoes.versionOption === '0') {
+        throw new ErroFluigctl(
+          `campo(s) novo(s) em ${fonte.nome}: ${camposNovos.join(', ')}. Cada campo é uma coluna na tabela do formulário, ` +
+            'e o Fluig só aceita campo novo numa versão nova: use --new-version (--keep-version só serve para mudança sem campo novo).',
+          2,
+        );
+      }
+    }
+  }
+
   if (opcoes.dryRun) {
     return decisao.acao === 'update'
       ? {
@@ -197,6 +232,7 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
           documentId: decisao.documentId,
           nomeEnviado: nomeEnviado!,
           descritorEnviado: descritorEnviado!,
+          ...(camposNovos === undefined ? {} : { camposNovos }),
         }
       : { ...base, acao: 'create', criacao: criacao! };
   }
@@ -251,6 +287,7 @@ export async function pushForm(opcoes: OpcoesPushForm): Promise<ResultadoPushFor
       documentId: decisao.documentId,
       nomeEnviado: nomeEnviado!,
       descritorEnviado: descritorEnviado!,
+      ...(camposNovos === undefined ? {} : { camposNovos }),
     };
   }
 

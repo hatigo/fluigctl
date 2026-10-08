@@ -252,8 +252,10 @@ export function decideVersionOption(escolha: EscolhaVersao): '0' | '2' | undefin
 
   throw new ErroFluigctl(
     'escolha o que fazer com a versão do formulário:\n' +
-      '  --keep-version  sobrescreve a versão ativa no lugar\n' +
-      '  --new-version   cria a próxima versão, preservando a atual',
+      '  --keep-version  sobrescreve a versão ativa no lugar (layout, eventos, campo que já existe)\n' +
+      '  --new-version   cria a próxima versão, preservando a atual (obrigatório com campo novo:\n' +
+      '                  cada campo é uma coluna na tabela do formulário)\n' +
+      'O --dry-run compara os campos com o formulário publicado e diz se há campo novo.',
     2,
   );
 }

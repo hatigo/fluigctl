@@ -565,6 +565,8 @@ async function pushFormCli(values: ValoresPush, positionals: string[]): Promise<
   });
 
   for (const aviso of r.avisos) console.log(`aviso: ${aviso}`);
+  if (r.camposNovos?.length) console.log(`campo(s) novo(s): ${r.camposNovos.join(', ')} (colunas novas na tabela do formulário: por isso a versão nova)`);
+  else if (r.camposNovos && values['new-version']) console.log('sem campo novo: --keep-version também serviria, sem criar versão');
 
   const alvo = `${values.server} (${serverUrl(servidor)})`;
   const detalhe =
