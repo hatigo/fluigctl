@@ -54,6 +54,28 @@ Fica para o Studio: diagrama com o que a conversão ainda recusa (o `--dry-run`
 lista o motivo) e widget com código Java. Layout, evento global e mecanismo de
 atribuição já são publicados pelo `fluigctl`.
 
+### Benchmark com agentes
+
+Medido em 07/10/2026 no servidor de desenvolvimento: 48 runs com o DeepSeek 4.1
+Flash, 8 tarefas, cada uma 3 vezes com fluigctl e 3 vezes só com skills e as APIs
+do Fluig. Uma run só conta como acerto quando o resultado no servidor confere.
+
+| 24 runs de cada lado | com fluigctl | sem fluigctl | |
+|---|---:|---:|---:|
+| Acerto | 24/24 | 23/24 | |
+| Tempo somado | 104 min | 311 min | 3,0× |
+| Custo | US$ 0,61 | US$ 2,01 | 3,3× |
+| Tokens processados | 42,0 M | 142,0 M | 3,4× |
+| Chamadas de ferramenta | 876 | 1.817 | 2,1× |
+| Defeitos (`.process` inválido, versão a mais, timeout) | 0 | 3 | |
+
+O acerto empata; tempo e tokens não. Nas edições de diagrama, sem fluigctl o agente
+levou de 6 a 8× mais tempo e de 7 a 10× mais tokens.
+
+O acerto sem fluigctl está inflado: ele leu arquivos do Studio nos testes deste
+repositório. O relatório completo, com tarefas, método e lacunas, está em
+[docs/benchmark-agentes-2026-10.md](docs/benchmark-agentes-2026-10.md).
+
 ## Estado
 
 | | |
