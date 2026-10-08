@@ -62,6 +62,15 @@ test('lê a atribuição do diagrama, e o blob regravado é o do Studio', () => 
   assert.equal(t5.mecanismo, 'MEC_ALCADAS');
 });
 
+test('o blob compacto do diagrama baixado do servidor se lê, mas não se regrava', () => {
+  // O pull devolve o blob sem a indentação do Studio; o diagram show e o verificador precisam dos campos.
+  const compacto = ORIGINAL.replace(/(id="task13"[^\n]*?managerAssignmentControllerString=")([^"]*)"/, (_, a: string, b: string) => `${a}${b.replace(/&#xA;\s*/g, '')}"`);
+  assert.notEqual(compacto, ORIGINAL);
+  const t13 = lerAtribuicao(objeto(compacto, 'task13'));
+  assert.deepEqual(t13.campos, { groupId: 'suporte_processos' });
+  assert.equal(t13.editavel, false);
+});
+
 test('trocar a atribuição grava o blob certo, e Nenhum tira o controlador', () => {
   const papel = trocarAtribuicaoNoXml(ORIGINAL, 'task13', { mecanismo: 'Pool Papel', customizado: false, campos: { roleId: 'suporte' } });
   assert.equal(linhasMudadas(ORIGINAL, papel), 1);

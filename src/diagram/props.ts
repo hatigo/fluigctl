@@ -163,8 +163,14 @@ export function lerAtribuicao(o: ObjetoBpmn): Atribuicao {
   }
   const no = lerBlob(blob);
   const classe = no?.nome.startsWith(PREFIXO) ? no.nome.slice(PREFIXO.length) : '';
-  if (!no || serializarX(no) !== blob) {
+  if (!no) {
     return { mecanismo, customizado: false, campos: {}, editavel: false, motivo: 'configuração em um formato que o painel não regrava; altere no XML' };
+  }
+  if (serializarX(no) !== blob) {
+    // O diagrama baixado do servidor traz o blob compacto, sem a indentação do Studio:
+    // os campos se leem, mas regravar mudaria o formato.
+    const campos = nativo && nativo.classe === classe ? Object.fromEntries(nativo.campos.map((c) => [c, texto(no, c) ?? ''])) : {};
+    return { mecanismo, customizado: false, campos, editavel: false, motivo: 'configuração em um formato que o painel não regrava; altere no XML' };
   }
   if (classe === 'AssignmentControllerCustom') return { mecanismo, customizado: true, campos: {}, editavel: true };
   if (!nativo || nativo.classe !== classe) {
