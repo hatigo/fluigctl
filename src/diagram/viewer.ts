@@ -641,7 +641,7 @@ header{min-height:64px;flex:0 0 auto;flex-wrap:wrap;row-gap:8px;display:flex;ali
 button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 11px;cursor:pointer;color:var(--ink)}button:hover{border-color:#9aabc5;background:#f8faff}button:focus-visible{outline:3px solid #93b4ff;outline-offset:2px}
 .banner{display:none;position:absolute;left:50%;top:76px;transform:translateX(-50%);max-width:min(760px,calc(100% - 32px));padding:10px 14px;border-radius:9px;box-shadow:0 5px 20px #43140720;z-index:6}.banner.show{display:block}
 #error{border:1px solid #fdba74;background:#fff7ed;color:var(--warn)}#notice{border:1px solid #bfdbfe;background:#eff6ff;color:#1e40af}
-#workspace{flex:1;min-height:0;display:flex;min-width:0;position:relative}#canvas{height:100%;min-width:0;flex:1;overflow:hidden;cursor:grab;background-color:#f7f9fc;background-image:radial-gradient(#cbd5e1 1px,transparent 1px);background-size:20px 20px}#canvas.drag{cursor:grabbing}#canvas svg{display:block;width:100%;height:100%;user-select:none}.empty{height:100%;display:grid;place-items:center;color:var(--muted)}
+#workspace{flex:1;min-height:0;display:flex;min-width:0;position:relative}#canvas{height:100%;min-width:0;flex:1;overflow:hidden;cursor:grab;background-color:#f7f9fc;background-image:radial-gradient(#cbd5e1 1px,transparent 1px);background-size:20px 20px}#canvas.drag{cursor:grabbing}#canvas svg{display:block;width:100%;height:100%;user-select:none}.empty{height:100%;display:grid;place-items:center;color:var(--muted)}.desconectado{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:32px;background:var(--panel);color:var(--muted)}.desconectado h1{font-size:28px;color:var(--ink);margin:0}.desconectado p{font-size:17px;line-height:1.6;margin:0}.dot.offline{background:#64748b}
 #inspector{width:360px;flex:0 0 360px;height:100%;overflow:auto;background:var(--panel);border-left:1px solid var(--line);box-shadow:-3px 0 14px #17203312;padding:18px;display:none;z-index:4}#inspector.open{display:block}.panel-head{display:flex;align-items:flex-start;gap:12px}.panel-head>div{min-width:0;flex:1}.panel-head h2{font-size:18px;line-height:1.25;margin:7px 0 2px;overflow-wrap:anywhere}.badge{display:inline-block;color:#1e40af;background:#dbeafe;border-radius:999px;padding:3px 8px;font-size:12px;font-weight:700}.id{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--muted);overflow-wrap:anywhere}.close{font-size:18px;line-height:1;padding:6px 9px}dl{margin:22px 0}dt{font-size:12px;color:var(--muted);margin-top:13px}dd{margin:3px 0 0;overflow-wrap:anywhere}details{border-top:1px solid var(--line);padding-top:14px}summary{cursor:pointer;font-weight:700}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th,td{text-align:left;vertical-align:top;padding:7px 5px;border-bottom:1px solid #edf0f5;overflow-wrap:anywhere;word-break:break-word}th{width:36%;color:var(--muted);font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
 .fluig-hit{fill:transparent;stroke:transparent;pointer-events:all;cursor:pointer;vector-effect:non-scaling-stroke}.fluig-hit.flow{fill:none;stroke-width:14}.fluig-hit:focus{outline:none;stroke:#7c3aed;stroke-width:3;stroke-dasharray:5 3}.fluig-hit.selected{stroke:var(--brand);stroke-width:4;stroke-dasharray:none;fill:#2457d619}.fluig-hit.flow.selected{fill:none;stroke-width:6}
 .name-form{margin:20px 0 0;border-top:1px solid var(--line);padding-top:14px}.name-form label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
@@ -675,7 +675,7 @@ button.perigo{color:#b91c1c;border-color:#fecaca}button.perigo:hover{background:
 #script-code.vazio{background:#f8fafc;color:var(--muted);white-space:normal;font-family:system-ui,sans-serif}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
-<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><span id="save-state" class="save" role="status" aria-live="polite" title="As edições são gravadas no .process assim que você as faz">Tudo salvo</span><select id="add-menu" aria-label="Adicionar elemento" title="Escolha o tipo e clique no diagrama onde ele vai ficar"><option value="">+ Adicionar…</option><option value="humana">Tarefa humana</option><option value="recuperacao">Service task com recuperação</option><option value="servico">Service task sozinha</option><option value="gateway">Gateway exclusivo</option><option value="paralelo">Gateway paralelo (abre)</option><option value="juncao">Junção paralela (fecha)</option><option value="inicio">Início</option><option value="fim">Fim</option></select><button id="organize" type="button" title="Reorganiza o diagrama inteiro pela receita de layout: ordem cronológica, pares de recuperação, raias do tamanho do conteúdo e ligações retas (desfaz numa vez só)">Organizar</button><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button></header>
+<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><span id="save-state" class="save" role="status" aria-live="polite" title="As edições são gravadas no .process assim que você as faz">Tudo salvo</span><select id="add-menu" aria-label="Adicionar elemento" title="Escolha o tipo e clique no diagrama onde ele vai ficar"><option value="">+ Adicionar…</option><option value="humana">Tarefa humana</option><option value="recuperacao">Service task com recuperação</option><option value="servico">Service task sozinha</option><option value="gateway">Gateway exclusivo</option><option value="paralelo">Gateway paralelo (abre)</option><option value="juncao">Junção paralela (fecha)</option><option value="inicio">Início</option><option value="fim">Fim</option></select><button id="organize" type="button" title="Reorganiza o diagrama inteiro pela receita de layout: ordem cronológica, pares de recuperação, raias do tamanho do conteúdo e ligações retas (desfaz numa vez só)">Organizar</button><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button><button id="refresh-viewer" type="button" title="Reler o arquivo e atualizar o diagrama">Atualizar</button><button id="shutdown-viewer" type="button" title="Encerrar o servidor local e desconectar o visualizador">Encerrar</button></header>
 <section id="script-view" role="dialog" aria-label="Script da service task" hidden><header><div><strong id="script-title">Script</strong><small id="script-path"></small></div><button id="script-copy" type="button" title="Copiar o caminho do arquivo">Copiar caminho</button><button id="script-close" class="close" type="button" aria-label="Fechar o script">×</button></header><pre id="script-code"></pre></section>
 <div id="error" class="banner" role="alert"></div><div id="notice" class="banner" role="status"></div>
 <div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div>
@@ -1059,9 +1059,34 @@ function cancelarEdicao(){limparConflito();if(editando)input.value=editando.base
 document.querySelector('#cancel-name').addEventListener('click',cancelarEdicao);
 document.querySelector('#close-panel').addEventListener('click',clearSelection);
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!scriptView.hidden){fecharScript();return}if(colocando){pararDeColocar();flash('Adição cancelada.');return}if(ligando){pararDeLigar();flash('Ligação cancelada.');return}if(editando&&sujo()){cancelarEdicao();return}clearSelection()});
-async function update(){try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();elements=s.elementos||[];hashAtual=s.hash;sugestoes=s.sugestoes||sugestoes;if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}if(selecionarDepois&&elements.some(x=>x.id===selecionarDepois)){select(selecionarDepois);selecionarDepois=undefined;document.querySelector('#name-input')?.focus()}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
+let encerrado=false;
+const refreshViewer=document.querySelector('#refresh-viewer'),shutdownViewer=document.querySelector('#shutdown-viewer');
+refreshViewer.addEventListener('click',async()=>{
+  if(ocupado||encerrado)return;
+  if(pendencias()){flash('Salve ou cancele as alterações do painel antes de atualizar.');return}
+  ocupado=true;refreshViewer.disabled=true;
+  try{const r=await fetch('refresh',{method:'POST'});if(!r.ok)throw new Error('HTTP '+r.status);await update()}
+  catch{flash('Não foi possível atualizar: sem conexão com o visualizador.')}
+  finally{ocupado=false;refreshViewer.disabled=false}
+});
+shutdownViewer.addEventListener('click',async()=>{
+  if(ocupado||encerrado)return;
+  if(pendencias()&&!window.confirm('Há alterações não salvas no painel. Encerrar e descartá-las?'))return;
+  ocupado=true;shutdownViewer.disabled=true;
+  try{
+    const r=await fetch('shutdown',{method:'POST'});if(!r.ok)throw new Error('HTTP '+r.status);
+    encerrado=true;events.close();setEditMode(false);refreshViewer.disabled=true;editToggle.disabled=true;
+    clearSelection();fecharScript();svg=undefined;
+    status.textContent='desconectado';dot.classList.remove('bad');dot.classList.add('offline');error.classList.remove('show');
+    document.querySelector('#fit').disabled=true;shutdownViewer.textContent='Encerrado';
+    canvas.innerHTML='<section class="desconectado" role="status" aria-live="polite" tabindex="-1"><h1>Visualizador desconectado</h1><p>O servidor local foi encerrado.<br>O diagrama não receberá mais atualizações.</p><p>Você pode fechar esta aba do navegador.</p></section>';
+    canvas.querySelector('.desconectado').focus();
+  }catch{flash('Não foi possível encerrar o servidor. Tente novamente.');shutdownViewer.disabled=false}
+  finally{ocupado=false}
+});
+async function update(){if(encerrado)return;try{const r=await fetch('state',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const s=await r.json();if(encerrado)return;elements=s.elementos||[];hashAtual=s.hash;sugestoes=s.sugestoes||sugestoes;if(!svg||Number(svg.dataset.revision)!==s.revisao){const anterior=box,selectionBefore=selectedId;canvas.innerHTML=s.svg;svg=canvas.querySelector('svg');svg.dataset.revision=String(s.revisao);original=dimensions(svg);box=anterior||{...original};addInteractions();apply();if(selectionBefore&&!elements.some(x=>x.id===selectionBefore)){clearSelection();flash('O elemento selecionado foi removido.')}else if(selectionBefore)select(selectionBefore)}if(selecionarDepois&&elements.some(x=>x.id===selecionarDepois)){select(selecionarDepois);selecionarDepois=undefined;document.querySelector('#name-input')?.focus()}const when=new Date(s.atualizadoEm);status.textContent='atualizado às '+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});error.textContent=s.erro||'';error.classList.toggle('show',Boolean(s.erro));dot.classList.toggle('bad',Boolean(s.erro))}catch(e){if(encerrado)return;status.textContent='sem conexão';error.textContent='O visualizador perdeu a conexão com o fluigctl.';error.classList.add('show');dot.classList.add('bad')}}
 try{if(localStorage.getItem('fluigctl-edicao')==='1')setEditMode(true)}catch{}
-update();const events=new EventSource('events');events.addEventListener('change',update);events.onerror=()=>{dot.classList.add('bad');status.textContent='reconectando…'};
+update();const events=new EventSource('events');events.addEventListener('change',update);events.onerror=()=>{if(encerrado)return;dot.classList.add('bad');status.textContent='reconectando…'};
 </script></body></html>`;
 }
 /**
@@ -1118,10 +1143,10 @@ export async function servirDiagrama(opcoes: OpcoesServidor): Promise<ServidorVi
   const avisar = () => {
     for (const res of clientes) res.write(`event: change\ndata: ${estado.revisao}\n\n`);
   };
-  const reler = () => {
+  const reler = (forcar = false) => {
     try {
       const texto = readFileSync(arquivo, 'utf8');
-      if (texto === ultimoTexto && estado.erro === undefined) return;
+      if (!forcar && texto === ultimoTexto && estado.erro === undefined) return;
       const renderizado = renderizar(texto, arquivo);
       ultimoTexto = texto;
       estado = {
@@ -1154,6 +1179,21 @@ export async function servirDiagrama(opcoes: OpcoesServidor): Promise<ServidorVi
     }
     if (req.method === 'POST') {
       const porta = (server.address() as { port: number } | null)?.port ?? 0;
+      if (rota === 'refresh' || rota === 'shutdown') {
+        if (!origemLocal(req, porta)) {
+          respostaJson(res, 403, { ok: false, mensagem: 'pedido recusado: a origem não é esta página' });
+          return;
+        }
+        if (rota === 'refresh') {
+          reler(true);
+          respostaJson(res, 200, { ok: true });
+        } else {
+          // Devolve a confirmação antes de encerrar HTTP, SSE, watcher e registro.
+          res.once('finish', () => { void fechar(); });
+          respostaJson(res, 200, { ok: true });
+        }
+        return;
+      }
       void tratarEdicao(req, res, rota, arquivo, undoDir, porta);
       return;
     }
@@ -1210,11 +1250,15 @@ export async function servirDiagrama(opcoes: OpcoesServidor): Promise<ServidorVi
     if (nome === null || nome.toString() === basename(arquivo)) reler();
   });
 
-  const fechar = async () => {
-    watcher.close();
-    for (const cliente of clientes) cliente.end();
-    await new Promise<void>((ok) => server.close(() => ok()));
-    rmSync(arquivoDoRegistro(arquivo, opcoes.registroDir), { force: true });
+  let fechamento: Promise<void> | undefined;
+  const fechar = (): Promise<void> => {
+    fechamento ??= (async () => {
+      watcher.close();
+      for (const cliente of clientes) cliente.end();
+      await new Promise<void>((ok) => server.close(() => ok()));
+      rmSync(arquivoDoRegistro(arquivo, opcoes.registroDir), { force: true });
+    })();
+    return fechamento;
   };
   return { server, registro, url: urlDoRegistro(registro), estado: () => estado, fechar };
 }

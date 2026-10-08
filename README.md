@@ -332,6 +332,14 @@ O desenho vem sempre do `.process`, nunca do `.processimage.svg` do Studio, que
 pode estar velho. A interface enquadra o processo ao abrir, aceita zoom pela
 roda, pan arrastando o fundo e tem o botão **Ajustar**.
 
+**Atualizar** relê o arquivo e redesenha o diagrama, preservando enquadramento e
+seleção. Salve ou cancele campos pendentes antes de atualizar. **Encerrar** desliga
+o servidor local, fecha as conexões de atualização e remove seu registro; depois
+substitui o diagrama por uma mensagem em destaque: **Visualizador desconectado**.
+A aba permanece aberta, informa que o servidor foi encerrado e que você pode
+fechá-la manualmente. Alterações do painel ainda não salvas pedem confirmação
+antes de encerrar.
+
 Clique em qualquer pool, raia, atividade, evento, gateway, fluxo ou artefato
 para destacá-lo e abrir o painel de propriedades. O painel traduz os campos
 úteis e deixa atributos simples em **Detalhes técnicos**; blobs XML internos do
