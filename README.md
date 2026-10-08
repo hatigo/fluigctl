@@ -56,24 +56,22 @@ atribuição já são publicados pelo `fluigctl`.
 
 ### Benchmark com agentes
 
-Medido em 07/10/2026 no servidor de desenvolvimento: 48 runs com o DeepSeek 4.1
-Flash, 8 tarefas, cada uma 3 vezes com fluigctl e 3 vezes só com skills e as APIs
-do Fluig. Uma run só conta como acerto quando o resultado no servidor confere.
+Medido em 07 e 08/10/2026 no servidor de desenvolvimento: 144 runs, 8 tarefas,
+cada uma 3 vezes com fluigctl e 3 vezes só com skills e as APIs do Fluig, em três
+modelos. Uma run só conta como acerto quando o resultado no servidor confere.
 
-| 24 runs de cada lado | com fluigctl | sem fluigctl | |
-|---|---:|---:|---:|
-| Acerto | 24/24 | 23/24 | |
-| Tempo somado | 104 min | 311 min | 3,0× |
-| Custo | US$ 0,61 | US$ 2,01 | 3,3× |
-| Tokens processados | 42,0 M | 142,0 M | 3,4× |
-| Chamadas de ferramenta | 876 | 1.817 | 2,1× |
-| Defeitos (`.process` inválido, versão a mais, timeout) | 0 | 3 | |
+| Modelo | Acerto | Tempo somado | Tokens processados | Custo (US$) |
+|---|---|---:|---:|---:|
+| DeepSeek 4.1 Flash | 24/24 · 23/24 | 104 · 311 min | 42 · 142 M | 0,61 · 2,01 |
+| Claude Haiku 5.5 | 24/24 · 19/24 | 36 · 109 min | 17 · 84 M | 0,48 · 5,31 |
+| Claude Sonnet 5.5 | 24/24 · 21/24 | 26 · 70 min | 7 · 32 M | 4,44 · 14,95 |
 
-O acerto empata; tempo e tokens não. Nas edições de diagrama, sem fluigctl o agente
-levou de 6 a 8× mais tempo e de 7 a 10× mais tokens.
+Cada célula traz "com fluigctl · sem fluigctl". Com fluigctl o agente acertou 72
+de 72 runs, levou 2,8 a 3,0× menos tempo e processou 3,4 a 5,0× menos tokens.
+Sem ele, os erros se concentram onde o agente escreve o `.process` sozinho. Com o
+Haiku, as 3 runs que criaram um processo do zero falharam.
 
-O acerto sem fluigctl está inflado: ele leu arquivos do Studio nos testes deste
-repositório. O relatório completo, com tarefas, método e lacunas, está em
+O relatório completo, com tarefas, defeitos, método e limitações, está em
 [docs/benchmark-agentes-2026-10.md](docs/benchmark-agentes-2026-10.md).
 
 ## Estado

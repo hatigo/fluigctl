@@ -1,19 +1,81 @@
 # Benchmark: agente com e sem fluigctl
 
-Medido em 07/10/2026, no servidor descartável de desenvolvimento.
+Medido em 07 e 08/10/2026, no servidor descartável de desenvolvimento.
 
-Com o DeepSeek 4.1 Flash, as duas configurações acertaram quase tudo: 24 de 24
-runs com fluigctl e 23 de 24 sem. A diferença está no custo de chegar lá. Com
-fluigctl, o agente:
+Em três modelos, o agente com fluigctl acertou 72 de 72 runs; sem fluigctl, 63 de
+72. Com o Claude Haiku 5.5 a diferença de acerto fica clara (24/24 contra 19/24):
+as 3 runs sem fluigctl que criaram um processo do zero falharam, duas com um
+`.process` ilegível e uma com um fim que o Studio não representa. Em todos os
+modelos, com fluigctl o agente levou 2,8 a 3,0× menos tempo e processou 3,4 a
+5,0× menos tokens.
 
-- levou 3,0× menos tempo (104 contra 311 minutos somados);
-- custou 3,3× menos (US$ 0,61 contra US$ 2,01);
-- processou 3,4× menos tokens (42 contra 142 milhões);
-- fez metade das chamadas de ferramenta (876 contra 1.817).
+## Três modelos
 
-Nas edições de diagrama (tarefas 3 a 5), a vantagem passa de 6× em tempo.
+Cada célula traz "com fluigctl · sem fluigctl", somando as 24 runs de cada lado
+(8 tarefas × 3 repetições).
 
-## Resultado por tarefa
+| Modelo | Acerto | Tempo somado (min) | Custo (US$) | Tokens (milhões) | Passos do agente |
+| --- | --- | --- | --- | --- | --- |
+| DeepSeek 4.1 Flash | 24 · 23 | 104 · 311 | 0,61 · 2,01 | 42,0 · 142,0 | 876 · 1.817 |
+| Claude Haiku 5.5 | 24 · 19 | 36 · 109 | 0,48 · 5,31 | 16,8 · 84,1 | 492 · 1.172 |
+| Claude Sonnet 5.5 | 24 · 21 | 26 · 70 | 4,44 · 14,95 | 6,6 · 31,9 | 292 · 676 |
+
+Tokens = entrada nova + entrada lida do cache + saída. Passos = chamadas de
+ferramenta no DeepSeek e turnos no Claude Code. O custo do Claude é o preço de
+lista que o Claude Code informa. A bateria do DeepSeek seguiu um protocolo um
+pouco diferente (veja [Limitações](#limitações)), então o acerto dela não se
+compara direto com o dos modelos Claude.
+
+Tokens por tipo, Haiku e Sonnet (milhões, soma das 24 runs):
+
+| | Haiku com | Haiku sem | Sonnet com | Sonnet sem |
+| --- | ---: | ---: | ---: | ---: |
+| Entrada nova (inclui gravação de cache) | 1,00 | 2,25 | 0,63 | 1,21 |
+| Entrada lida do cache | 15,51 | 80,61 | 5,94 | 30,26 |
+| Saída | 0,25 | 1,22 | 0,07 | 0,41 |
+| **Total** | **16,77** | **84,08** | **6,64** | **31,88** |
+
+## Haiku e Sonnet por tarefa
+
+Acerto e tokens por run (média, em milhões), "com · sem" fluigctl.
+
+| Tarefa | Haiku: acerto | Haiku: tokens | Sonnet: acerto | Sonnet: tokens |
+| --- | --- | --- | --- | --- |
+| 1. Campo obrigatório | 3/3 · 2/3 | 0,34 · 0,99 | 3/3 · 3/3 | 0,18 · 0,22 |
+| 2. Rótulo e opção | 3/3 · 3/3 | 0,31 · 0,82 | 3/3 · 3/3 | 0,21 · 0,37 |
+| 3. Inserir tarefa | 3/3 · 3/3 | 0,57 · 4,60 | 3/3 · 3/3 | 0,27 · 1,51 |
+| 4. Caminho de revisão | 3/3 · 3/3 | 1,61 · 6,48 | 3/3 · 2/3 | 0,39 · 2,77 |
+| 5. Service task + recuperação | 3/3 · 2/3 | 0,88 · 9,59 | 3/3 · 3/3 | 0,46 · 3,19 |
+| 6. Dataset | 3/3 · 3/3 | 0,19 · 0,28 | 3/3 · 3/3 | 0,13 · 0,03 |
+| 7. Corrigir a causa e publicar versão nova | 3/3 · 3/3 | 0,64 · 1,21 | 3/3 · 3/3 | 0,25 · 0,55 |
+| 8. Processo do zero | 3/3 · 0/3 | 1,05 · 4,06 | 3/3 · 1/3 | 0,33 · 1,97 |
+
+Os defeitos se concentram onde o agente sem fluigctl escreve o `.process`
+sozinho (tarefas 3 a 5 e 8). No dataset (tarefa 6), o Sonnet sem fluigctl foi
+mais barato: uma chamada SOAP direta custa menos que ler a skill do fluigctl.
+
+## Defeitos com Haiku e Sonnet
+
+Com fluigctl, nenhum defeito nas 48 runs. Sem fluigctl:
+
+- **h8b1 e h8b3**: `.process` ilegível (não tem o elemento raiz do Studio).
+- **h8b2**: publicou um fim de tipo que o Studio não representa (o próprio pull
+  do fluigctl recusa baixá-lo); `.process` local sem estilos.
+- **h5b2**: o servidor recusou liberar a versão ("Notificar financeiro não possui
+  script"); sobrou uma versão em edição e nenhuma solicitação de prova.
+- **h1b3**: o campo funciona, mas o dataset do formulário virou
+  `DSformXH1B3_1791430346744`.
+- **s4b2**: no `.process` local a ligação nova está desenhada ao contrário do
+  modelo (o desenho sai de `task21`, o modelo diz que sai do gateway).
+- **s8b3**: "Aprovar compra" atribuída ao executor do estado 4, o início, e não
+  de "Solicitar item" (na prática é a mesma pessoa, mas não é o pedido).
+- **s8b4**: `.process` local com ligações sem estilo (o Studio as mostra sem cor).
+
+Além disso, h4b2 e h4b3 criaram uma versão nova do formulário sem campo novo. A
+tarefa 7 nova (publicar a correção como versão nova e provar com solicitação
+nova, sem converter a travada) passou nas 12 runs dos dois modelos.
+
+## DeepSeek por tarefa
 
 O acerto empatou; o custo não. Cada célula traz "com fluigctl · sem fluigctl",
 com 3 runs por célula. O custo é a média por run; as chamadas são a mediana.
@@ -35,7 +97,7 @@ cai de 3 a 10×. No dataset (tarefa 6), que é só uma chamada SOAP, quase não 
 diferença. No diagnóstico (tarefa 7) as duas configurações empatam, porque o
 trabalho difícil ainda não tem comando no fluigctl (veja [Lacunas](#lacunas-do-fluigctl)).
 
-## Custo em tokens
+## Custo em tokens no DeepSeek
 
 Com fluigctl, as 24 runs processaram 42,0 milhões de tokens; sem fluigctl,
 142,0 milhões (3,4×). Cerca de 95% é leitura de cache: a cada chamada de
@@ -67,7 +129,7 @@ A diferença em tokens é maior que a de tempo nas tarefas de diagrama (até 9,9
 na tarefa 3). Sem fluigctl, o agente lê e reescreve o XML do `.process` dentro
 do contexto, e esse XML volta a ser lido a cada chamada seguinte.
 
-## Tempo por tarefa
+## Tempo por tarefa no DeepSeek
 
 Tempo mediano por run, em minutos (3 runs por célula):
 
@@ -86,7 +148,7 @@ A diferença é maior onde a tarefa mexe no diagrama (tarefas 3 a 5 e 8). Sem
 fluigctl, o agente edita por conta própria o XML do `.process` e a definição
 enviada ao servidor, e precisou de 2 a 3× mais chamadas de ferramenta para isso.
 
-## Defeitos e resíduo no servidor
+## Defeitos e resíduo no DeepSeek
 
 Sem fluigctl sobraram mais versões e solicitações de teste no servidor, e os
 três defeitos reais apareceram todos nessa configuração.
@@ -138,14 +200,32 @@ DeepSeek 4.1 Flash (opencode-go), no servidor descartável de desenvolvimento.
   controle achou um bug no fluigctl, corrigido antes das runs: a atribuição lida
   do diagrama baixado do servidor vinha vazia.
 
+Segunda bateria, em 08/10/2026, com Claude Haiku 5.5 e Claude Sonnet 5.5 (os
+aliases `haiku` e `sonnet` do Claude Code):
+
+- Cada run é um `claude -p` isolado, disparado pelo orquestrador: só Bash, Read,
+  Write, Edit, Glob e Grep; sem skills globais, MCP, subagents nem configurações
+  do usuário.
+- Sem fluigctl, o agente não pode acessar nada do repositório; a skill de
+  padrões vai numa cópia fora dele.
+- A tarefa 7 segue a regra de versão: corrigir é publicar a versão nova e provar
+  com uma solicitação nova. A solicitação travada não pode ser convertida nem
+  movida, porque isso é decisão do usuário. O verificador confere que ela
+  continua na versão 1.
+- Os ambientes partem da mesma base intocada da bateria do DeepSeek.
+- 6 runs do Sonnet foram cortadas no meio pelo limite de sessão do plano Claude e
+  refeitas em ambientes novos (s3b4, s4b4, s5b4, s5b5, s6a4, s8b4). As cortadas
+  não entram na conta.
+
 Custo e tokens vêm do provedor, por run.
 
 ## Limitações
 
-O acerto da configuração sem fluigctl está inflado: ela leu conhecimento que o
-próprio fluigctl produziu.
+Na bateria do DeepSeek o acerto sem fluigctl está inflado: ela leu conhecimento
+que o próprio fluigctl produziu. Na do Haiku e do Sonnet o repositório ficou
+fechado, e a diferença de acerto apareceu.
 
-- **Contaminação.** O prompt proibia o CLI e `src/`/`dist/`, mas não o resto do
+- **Contaminação (só DeepSeek).** O prompt proibia o CLI e `src/`/`dist/`, mas não o resto do
   repositório. As 3 runs da tarefa 8 sem fluigctl copiaram o formato do
   `.process` de arquivos do Studio em `test/fixtures` e leram os WSDL de lá. A
   k4b2 leu `docs/`, e outras 3 runs leram o README. Num projeto real, só com
@@ -153,19 +233,22 @@ próprio fluigctl produziu.
 - **Ponto de partida favorável.** Nas tarefas 1 a 5 e 7, o agente sem fluigctl
   editou um `.process` e um formulário já gerados pelo fluigctl, com estilos e
   tamanhos certos; ele só precisou não estragar.
-- **Um modelo só.** No piloto anterior, com Claude Haiku, nenhuma de 3 runs sem
-  fluigctl saiu inteira: formulário e dataset renomeados sem pedido e `.process`
-  inválido. Com fluigctl, foram 5 de 5.
+- **Protocolos diferentes.** A tarefa 7 e o isolamento do repositório mudaram
+  entre a bateria do DeepSeek e a dos modelos Claude. Tempo e tokens se comparam
+  entre as três; o acerto sem fluigctl do DeepSeek só se compara refazendo as 24
+  runs dele com as regras novas.
 - **Amostra pequena.** São 3 repetições por célula. Dá para afirmar a diferença
   de tempo e custo, que é grande e consistente, mas não uma diferença de acerto
   de 1 run.
-- **Ordem de execução.** As runs foram em blocos de 8 (todas as tarefas de uma
-  configuração, depois da outra), 6 em paralelo no mesmo servidor. A carga do
-  servidor não foi controlada.
+- **Ordem e auditoria.** No DeepSeek as runs foram em blocos de 8 de uma mesma
+  configuração; no Haiku e no Sonnet, alternando com e sem fluigctl. Sempre 6 em
+  paralelo no mesmo servidor, sem controle da carga. Do Haiku não há transcrição,
+  então o isolamento depende da instrução do prompt. Do Sonnet, as 8 runs sem
+  fluigctl com transcrição não tocaram no repositório.
 
 ## Lacunas do fluigctl
 
-A tarefa 7 mostra o que falta: com fluigctl ela custou quase o mesmo que sem
+A tarefa 7 do DeepSeek mostra o que falta: com fluigctl ela custou quase o mesmo que sem
 (US$ 0,106 contra 0,115 por run) e levou 13 minutos na mediana.
 
 - **Versão nova, conversão a critério do usuário.** Corrigir a causa é publicar
