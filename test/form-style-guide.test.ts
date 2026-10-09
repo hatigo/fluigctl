@@ -9,6 +9,7 @@ import {
   ASSETS_STYLE_GUIDE,
   CANDIDATOS_STYLE_GUIDE,
   baixarStyleGuide,
+  compatibilizarFluigc,
   diretorioDoCache,
   lerManifesto,
   mensagemCacheAusente,
@@ -21,12 +22,15 @@ const CSS = '/style-guide/css/fluig-style-guide.min.css';
 const CSS_FLAT = '/style-guide/css/fluig-style-guide-flat.min.css';
 const JQUERY = '/portal/resources/js/jquery/jquery.js';
 const JS = '/style-guide/js/fluig-style-guide.min.js';
+const SELECT = '/style-guide/js/fluig-style-guide-select.min.js';
 const WOFF = '/style-guide/fonts/x.woff';
 
 const CORPO_CSS = "@font-face{src:url(../fonts/x.woff)} .bg{background:url(data:image/png;base64,AAAA)} .remote{background:url(https://cdn.example.com/y.png)} .proto{background:url(//cdn.example.com/z.png)} .frag{background:url(#grad)}";
+const sha256de = (texto: string): string => createHash('sha256').update(Buffer.from(texto)).digest('hex');
 const CORPO_JQUERY = 'jquery-fonte-ç-€';
 const CORPO_JS = 'fluig-style-guide-js';
 const CORPO_WOFF = 'woff-fonte';
+const CORPO_SELECT = 'window.FLUIGC=window.FLUIGC||{};window.top.WCMAPI;';
 
 function servidor(overrides: Record<string, RotaResposta> = {}): Promise<FakeFluig> {
   const rotas: Record<string, RotaResposta> = {
@@ -34,6 +38,7 @@ function servidor(overrides: Record<string, RotaResposta> = {}): Promise<FakeFlu
     [CSS]: { status: 404, body: 'sem css plano' },
     [JQUERY]: { body: CORPO_JQUERY },
     [JS]: { body: CORPO_JS },
+    [SELECT]: { body: CORPO_SELECT },
     [WOFF]: { body: CORPO_WOFF },
     ...overrides,
   };
@@ -88,16 +93,17 @@ test('baixa os três assets e as referências do CSS, com bytes, hashes e fontes
   const { base, cache } = tempCache();
   try {
     const m = await baixarStyleGuide({ baseUrl: s.url, cookie: 'JSESSIONID=abc', cacheDir: cache });
-    assert.deepEqual(Object.keys(m.arquivos).sort(), [CSS, JQUERY, JS, WOFF].sort());
+    assert.deepEqual(Object.keys(m.arquivos).sort(), [CSS, JQUERY, JS, SELECT, WOFF].sort());
     assert.equal(m.versao, 1);
     assert.equal(m.origem, s.url);
     assert.match(m.criadoEm, /^\d{4}-\d{2}-\d{2}T/);
-    assert.deepEqual(m.fontes, { [CSS]: CSS_FLAT, [JQUERY]: JQUERY, [JS]: JS, [WOFF]: WOFF });
+    assert.deepEqual(m.fontes, { [CSS]: CSS_FLAT, [JQUERY]: JQUERY, [JS]: JS, [SELECT]: SELECT, [WOFF]: WOFF });
     assert.equal(m.ignorados.length, 0);
     const esperados: [string, string][] = [
       [CSS, CORPO_CSS],
       [JQUERY, CORPO_JQUERY],
       [JS, CORPO_JS],
+      [SELECT, CORPO_SELECT],
       [WOFF, CORPO_WOFF],
     ];
     for (const [caminho, esperado] of esperados) {
@@ -122,6 +128,7 @@ test('baixa os três assets e as referências do CSS, com bytes, hashes e fontes
 test('candidato: primeiro 404, segundo 200 -> usa o segundo e registra em fontes', async () => {
   const s = await fakeFluig({
     [CSS_FLAT]: { status: 404, body: 'sem flat' },
+    [SELECT]: { body: CORPO_SELECT },
     [CSS]: { headers: { 'content-type': 'text/css' }, body: CORPO_CSS },
     [JQUERY]: { body: CORPO_JQUERY },
     [JS]: { body: CORPO_JS },
@@ -145,6 +152,7 @@ test('referência url() do CSS que falta é ignorada e o bootstrap conclui', asy
   const FALTA = '/style-guide/images/missing.png';
   const s = await fakeFluig({
     [CSS_FLAT]: { headers: { 'content-type': 'text/css' }, body: CSS_COM_FALTA },
+    [SELECT]: { body: CORPO_SELECT },
     [CSS]: { status: 404, body: 'sem css emitido' },
     [JQUERY]: { body: CORPO_JQUERY },
     [JS]: { body: CORPO_JS },
@@ -305,6 +313,156 @@ test('lerManifesto retorna undefined quando ausente ou inválido', () => {
     assert.equal(lerManifesto(cache), undefined, 'ignorados precisa ser array');
     writeFileSync(join(cache, 'manifesto.json'), JSON.stringify({ versao: 1, origem: 'x', criadoEm: 'y', arquivos: {}, fontes: {}, ignorados: [] }));
     assert.ok(lerManifesto(cache) !== undefined, 'as 6 chaves válidas são aceitas');
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('compatibilizarFluigc: hash conhecido aplica o token exato e é idempotente; desconhecido recusa', () => {
+  const original = Buffer.from('a;window.top.WCMAPI;b;window.top.WCMAPI;c', 'utf8');
+  const hashOriginal = sha256de(original.toString('utf8'));
+  const r = compatibilizarFluigc(original, hashOriginal, [hashOriginal]);
+  assert.ok(r, 'hash conhecido deve patchá-lo');
+  assert.equal(r!.patch.versao, 1);
+  assert.equal(r!.patch.ocorrencias, 2);
+  assert.equal(r!.patch.hashOriginal, hashOriginal);
+  assert.equal(r!.conteudo.toString('utf8'), 'a;window.__fluigPreviewWCMAPI;b;window.__fluigPreviewWCMAPI;c');
+  assert.ok(!r!.conteudo.toString('utf8').includes('window.top.WCMAPI'));
+  assert.equal(r!.patch.hashDerivado, sha256de(r!.conteudo.toString('utf8')));
+  // idempotência: o hash derivado não está no conjunto de origens conhecidas -> nada a reaplicar
+  assert.equal(compatibilizarFluigc(r!.conteudo, r!.patch.hashDerivado, [hashOriginal]), undefined);
+  // fail-closed: hash fora do conjunto
+  assert.equal(compatibilizarFluigc(original, sha256de('outro'), [hashOriginal]), undefined);
+});
+
+test('baixarStyleGuide patcha o bundle FLUIGC de hash conhecido e preserva o original em .orig', async () => {
+  const CORPO_BUNDLE = ['var x=1;', ...Array.from({ length: 8 }, () => 'window.top.WCMAPI;'), 'window.FLUIGC={};'].join('');
+  const s = await fakeFluig({
+    [CSS_FLAT]: { headers: { 'content-type': 'text/css' }, body: CORPO_CSS },
+    [CSS]: { status: 404, body: 'sem css plano' },
+    [JQUERY]: { body: CORPO_JQUERY },
+    [JS]: { body: CORPO_BUNDLE },
+    [WOFF]: { body: CORPO_WOFF },
+  });
+  const { base, cache } = tempCache();
+  try {
+    const m = await baixarStyleGuide({ baseUrl: s.url, cookie: 'c', cacheDir: cache, assets: [JS], hashesFluigc: [sha256de(CORPO_BUNDLE)] });
+    const patchado = readFileSync(join(cache, JS.slice(1)), 'utf8');
+    assert.ok(patchado.includes('window.__fluigPreviewWCMAPI'), 'bytes patchados no caminho de navegador');
+    assert.ok(!patchado.includes('window.top.WCMAPI'), 'token original não resta');
+    assert.equal(readFileSync(join(cache, `${JS.slice(1)}.orig`), 'utf8'), CORPO_BUNDLE, 'original preservado em .orig');
+    const compat = m.compatibilidade![JS]!;
+    assert.equal(compat.versao, 1);
+    assert.equal(compat.asset, JS);
+    assert.equal(compat.ocorrencias, 8, '8 ocorrências do token, como no bundle oficial');
+    assert.equal(compat.hashOriginal, sha256de(CORPO_BUNDLE));
+    assert.equal(compat.hashDerivado, sha256de(patchado));
+    assert.equal(m.arquivos[JS]!.sha256, compat.hashDerivado, 'o manifesto aponta o hash da variante servida');
+    assert.deepEqual(lerManifesto(cache), m);
+  } finally {
+    await s.close();
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('baixarStyleGuide recusa patch de hash desconhecido e guarda o original, sem sidecar', async () => {
+  const CORPO_BUNDLE = 'var y=2;window.top.WCMAPI;';
+  const s = await fakeFluig({
+    [CSS_FLAT]: { headers: { 'content-type': 'text/css' }, body: CORPO_CSS },
+    [CSS]: { status: 404, body: 'sem css plano' },
+    [JQUERY]: { body: CORPO_JQUERY },
+    [JS]: { body: CORPO_BUNDLE },
+    [WOFF]: { body: CORPO_WOFF },
+  });
+  const { base, cache } = tempCache();
+  try {
+    const m = await baixarStyleGuide({ baseUrl: s.url, cookie: 'c', cacheDir: cache, assets: [JS], hashesFluigc: [] });
+    assert.equal(readFileSync(join(cache, JS.slice(1)), 'utf8'), CORPO_BUNDLE, 'original intacto');
+    assert.equal(existsSync(join(cache, `${JS.slice(1)}.orig`)), false, 'sem sidecar quando recusado');
+    const compat = m.compatibilidade![JS]!;
+    assert.equal(compat.recusado, true);
+    assert.equal(compat.hashDerivado, undefined);
+    assert.equal(m.arquivos[JS]!.sha256, sha256de(CORPO_BUNDLE));
+    assert.deepEqual(lerManifesto(cache), m);
+  } finally {
+    await s.close();
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('lerManifesto aceita compatibilidade opcional válida e rejeita formato inválido', () => {
+  const { base, cache } = tempCache();
+  try {
+    mkdirSync(cache, { recursive: true });
+    const base6 = { versao: 1, origem: 'x', criadoEm: 'y', arquivos: {}, fontes: {}, ignorados: [] };
+    writeFileSync(join(cache, 'manifesto.json'), JSON.stringify({ ...base6, compatibilidade: { [JS]: { versao: 1, asset: JS, hashOriginal: 'a'.repeat(64), recusado: true } } }));
+    const lido = lerManifesto(cache);
+    assert.ok(lido && lido.compatibilidade, 'compatibilidade opcional aceita');
+    assert.equal(lido!.compatibilidade![JS]!.recusado, true);
+    writeFileSync(join(cache, 'manifesto.json'), JSON.stringify({ ...base6, compatibilidade: { [JS]: { versao: 1, asset: JS, hashOriginal: 'a'.repeat(64), hashDerivado: 'zz', ocorrencias: 1 } } }));
+    assert.equal(lerManifesto(cache), undefined, 'hashDerivado não-hex é inválido');
+    writeFileSync(join(cache, 'manifesto.json'), JSON.stringify({ ...base6, compatibilidade: 3 }));
+    assert.equal(lerManifesto(cache), undefined, 'compatibilidade não-objeto é inválida');
+    writeFileSync(join(cache, 'manifesto.json'), JSON.stringify({ ...base6, extraDesconhecido: 1 }));
+    assert.equal(lerManifesto(cache), undefined, 'chave extra desconhecida é inválida');
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('baixarStyleGuide patcha o bundle de select (hash conhecido) e preserva o original em .orig', async () => {
+  const CORPO_SELECT_BUNDLE = 'var s=1;window.top.WCMAPI;window.FLUIGC=window.FLUIGC||{};';
+  const s = await servidor({ [SELECT]: { body: CORPO_SELECT_BUNDLE } });
+  const { base, cache } = tempCache();
+  try {
+    const m = await baixarStyleGuide({ baseUrl: s.url, cookie: 'c', cacheDir: cache, hashesFluigc: [sha256de(CORPO_SELECT_BUNDLE)] });
+    const patchado = readFileSync(join(cache, SELECT.slice(1)), 'utf8');
+    assert.ok(patchado.includes('window.__fluigPreviewWCMAPI'), 'select patchado no caminho de navegador');
+    assert.ok(!patchado.includes('window.top.WCMAPI'), 'token original não resta no select');
+    assert.equal(readFileSync(join(cache, `${SELECT.slice(1)}.orig`), 'utf8'), CORPO_SELECT_BUNDLE, 'original do select preservado em .orig');
+    const compat = m.compatibilidade![SELECT]!;
+    assert.equal(compat.versao, 1);
+    assert.equal(compat.asset, SELECT);
+    assert.equal(compat.ocorrencias, 1, 'o bundle de select tem 1 ocorrência do token');
+    assert.equal(compat.hashOriginal, sha256de(CORPO_SELECT_BUNDLE));
+    assert.equal(compat.hashDerivado, sha256de(patchado));
+    assert.equal(m.arquivos[SELECT]!.sha256, compat.hashDerivado);
+    assert.equal(m.compatibilidade![JS]!.recusado, true, 'o bundle base de hash desconhecido fica recusado');
+    assert.deepEqual(lerManifesto(cache), m);
+  } finally {
+    await s.close();
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('baixarStyleGuide recusa o patch do select de hash desconhecido e guarda o original', async () => {
+  const CORPO_SELECT_BUNDLE = 'var s=2;window.top.WCMAPI;';
+  const s = await servidor({ [SELECT]: { body: CORPO_SELECT_BUNDLE } });
+  const { base, cache } = tempCache();
+  try {
+    const m = await baixarStyleGuide({ baseUrl: s.url, cookie: 'c', cacheDir: cache, assets: [SELECT], hashesFluigc: [] });
+    assert.equal(readFileSync(join(cache, SELECT.slice(1)), 'utf8'), CORPO_SELECT_BUNDLE, 'select original intacto');
+    assert.equal(existsSync(join(cache, `${SELECT.slice(1)}.orig`)), false, 'sem sidecar quando recusado');
+    assert.equal(m.compatibilidade![SELECT]!.recusado, true);
+    assert.equal(m.compatibilidade![SELECT]!.hashDerivado, undefined);
+    assert.equal(m.arquivos[SELECT]!.sha256, sha256de(CORPO_SELECT_BUNDLE));
+  } finally {
+    await s.close();
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('manifestoValido exige asset e rejeita chave extra na compatibilidade', () => {
+  const { base, cache } = tempCache();
+  try {
+    mkdirSync(cache, { recursive: true });
+    const base6 = { versao: 1, origem: 'x', criadoEm: 'y', arquivos: {}, fontes: {}, ignorados: [] };
+    writeFileSync(join(cache, 'manifesto.json'), JSON.stringify({ ...base6, compatibilidade: { [JS]: { versao: 1, hashOriginal: 'a'.repeat(64), recusado: true } } }));
+    assert.equal(lerManifesto(cache), undefined, 'entrada sem asset é inválida');
+    writeFileSync(join(cache, 'manifesto.json'), JSON.stringify({ ...base6, compatibilidade: { [JS]: { versao: 1, asset: JS, hashOriginal: 'a'.repeat(64), recusado: true, chaveExtra: 1 } } }));
+    assert.equal(lerManifesto(cache), undefined, 'chave extra na entrada é inválida');
+    writeFileSync(join(cache, 'manifesto.json'), JSON.stringify({ ...base6, compatibilidade: { [JS]: { versao: 1, asset: JS, hashOriginal: 'a'.repeat(64), recusado: true } } }));
+    assert.ok(lerManifesto(cache) !== undefined, 'forma válida com asset continua aceita');
   } finally {
     rmSync(base, { recursive: true, force: true });
   }

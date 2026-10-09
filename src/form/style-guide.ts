@@ -11,6 +11,12 @@ export const ASSETS_STYLE_GUIDE: readonly string[] = [
   '/style-guide/js/fluig-style-guide.min.js',
 ];
 
+/** Bundle oficial dos componentes de select/select2 do FLUIGC. */
+export const ASSET_FLUIGC_SELECT = '/style-guide/js/fluig-style-guide-select.min.js';
+
+/** Assets baixados no bootstrap: os três emitidos + o select oficial. */
+export const ASSETS_BOOTSTRAP: readonly string[] = [...ASSETS_STYLE_GUIDE, ASSET_FLUIGC_SELECT];
+
 /**
  * Candidatos ordenados por caminho de navegador. O primeiro que responder OK
  * vira a fonte do asset; o corpo é sempre gravado sob o caminho de navegador.
@@ -22,11 +28,101 @@ export const CANDIDATOS_STYLE_GUIDE: Record<string, readonly string[]> = {
   ],
   '/portal/resources/js/jquery/jquery.js': ['/portal/resources/js/jquery/jquery.js'],
   '/style-guide/js/fluig-style-guide.min.js': ['/style-guide/js/fluig-style-guide.min.js'],
+  [ASSET_FLUIGC_SELECT]: [ASSET_FLUIGC_SELECT],
 };
 
 export interface ArquivoCache {
   tamanho: number;
   sha256: string;
+}
+
+/** Asset oficial que traz o runtime FLUIGC (bundle do Style Guide). */
+export const ASSET_FLUIGC = '/style-guide/js/fluig-style-guide.min.js';
+
+/** Patch estreito e versionado aplicado ao bundle oficial do FLUIGC. */
+export interface PatchFluigc {
+  token: string;
+  substituto: string;
+  versao: 1;
+}
+export const PATCH_FLUIGC: PatchFluigc = {
+  token: 'window.top.WCMAPI',
+  substituto: 'window.__fluigPreviewWCMAPI',
+  versao: 1,
+};
+
+/**
+ * sha256 das origens oficiais conhecidas do bundle FLUIGC para as quais o patch
+ * se aplica. Fail-closed: um conteúdo cujo hash não esteja aqui NÃO é patchado.
+ */
+export const HASHES_FLUIGC_CONHECIDOS: readonly string[] = [
+  '1cfad5165aaba8265b8c2659f33e3da6c10b0b1ffe4c0cb9b5df3a9bba33dbc0',
+  '206af92cba9ca5ed1ac800107e0ed72b84bdd58892ba9d3625244fd08b76e0e7',
+];
+
+/** Assets que recebem o patch estreito de compatibilidade (bundle + select). */
+const ASSETS_PATCHAVEIS: readonly string[] = [ASSET_FLUIGC, ASSET_FLUIGC_SELECT];
+
+/** Metadados da camada de compatibilidade registrados no manifesto. */
+export interface CompatibilidadeFluigc {
+  versao: 1;
+  asset: string;
+  hashOriginal: string;
+  hashDerivado?: string;
+  ocorrencias?: number;
+  recusado?: boolean;
+}
+
+export interface ResultadoPatchFluigc {
+  conteudo: Buffer;
+  patch: { versao: 1; hashOriginal: string; hashDerivado: string; ocorrencias: number };
+}
+
+/** Troca o token exato por bytes, sem regex, contando as ocorrências. */
+function substituirTokenBytes(conteudo: Buffer, token: Buffer, substituto: Buffer): { conteudo: Buffer; ocorrencias: number } {
+  const partes: Buffer[] = [];
+  let ocorrencias = 0;
+  let i = 0;
+  for (;;) {
+    const achado = conteudo.indexOf(token, i);
+    if (achado === -1) {
+      partes.push(conteudo.subarray(i));
+      break;
+    }
+    partes.push(conteudo.subarray(i, achado));
+    partes.push(substituto);
+    ocorrencias += 1;
+    i = achado + token.length;
+  }
+  return { conteudo: Buffer.concat(partes), ocorrencias };
+}
+
+/**
+ * Aplica o patch de compatibilidade do FLUIGC, fail-closed pelo hash.
+ *
+ * Idempotência: o conjunto de hashes conhecidos só contém hashes da ORIGEM
+ * (bundle não patchado). O hash derivado (pós-patch) NÃO está nele, então rodar
+ * de novo sobre o conteúdo já patchado devolve `undefined` e nada é reaplicado;
+ * além disso, se o token não aparece mais (`ocorrencias === 0`), também devolve
+ * `undefined`.
+ */
+export function compatibilizarFluigc(
+  conteudo: Buffer,
+  hashOriginal: string,
+  conhecidos: readonly string[] = HASHES_FLUIGC_CONHECIDOS,
+): ResultadoPatchFluigc | undefined {
+  if (!conhecidos.includes(hashOriginal)) return undefined;
+  const { conteudo: patchado, ocorrencias } = substituirTokenBytes(
+    conteudo,
+    Buffer.from(PATCH_FLUIGC.token, 'utf8'),
+    Buffer.from(PATCH_FLUIGC.substituto, 'utf8'),
+  );
+  if (ocorrencias === 0) return undefined;
+  const hashDerivado = createHash('sha256').update(patchado).digest('hex');
+  return {
+    conteudo: patchado,
+    patch: { versao: PATCH_FLUIGC.versao, hashOriginal, hashDerivado, ocorrencias },
+  };
 }
 
 export interface ManifestoStyleGuide {
@@ -38,6 +134,8 @@ export interface ManifestoStyleGuide {
   fontes: Record<string, string>;
   /** caminhos de referências url() do CSS que não puderam ser baixados */
   ignorados: readonly string[];
+  /** metadados do patch de compatibilidade do FLUIGC, por caminho de navegador */
+  compatibilidade?: Record<string, CompatibilidadeFluigc>;
 }
 
 /** <XDG_STATE_HOME or ~/.local/state>/fluigctl/form/styleguide */
@@ -61,8 +159,9 @@ const chavesManifesto = ['versao', 'origem', 'criadoEm', 'arquivos', 'fontes', '
 function manifestoValido(valor: unknown): valor is ManifestoStyleGuide {
   if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
   const o = valor as Record<string, unknown>;
-  if (Object.keys(o).length !== chavesManifesto.length) return false;
   if (!chavesManifesto.every((k) => k in o)) return false;
+  const extras = Object.keys(o).filter((k) => !(chavesManifesto as readonly string[]).includes(k));
+  if (extras.length > 1 || (extras.length === 1 && extras[0] !== 'compatibilidade')) return false;
   if (o['versao'] !== 1) return false;
   if (typeof o['origem'] !== 'string' || typeof o['criadoEm'] !== 'string') return false;
   const arquivos = o['arquivos'];
@@ -83,6 +182,24 @@ function manifestoValido(valor: unknown): valor is ManifestoStyleGuide {
   const ignorados = o['ignorados'];
   if (!Array.isArray(ignorados)) return false;
   if (!ignorados.every((caminho) => typeof caminho === 'string' && caminho.startsWith('/'))) return false;
+  const compat = o['compatibilidade'];
+  if (compat !== undefined) {
+    if (!compat || typeof compat !== 'object' || Array.isArray(compat)) return false;
+    for (const [asset, valor] of Object.entries(compat as Record<string, unknown>)) {
+      if (!asset.startsWith('/')) return false;
+      if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return false;
+      const c = valor as Record<string, unknown>;
+      if (c['versao'] !== 1) return false;
+      if (typeof c['asset'] !== 'string' || c['asset'].length === 0) return false;
+      const permitidas = ['versao', 'asset', 'hashOriginal', 'hashDerivado', 'ocorrencias', 'recusado'];
+      if (Object.keys(c).some((k) => !permitidas.includes(k))) return false;
+      if (typeof c['hashOriginal'] !== 'string' || !/^[a-f0-9]{64}$/.test(c['hashOriginal'])) return false;
+      if (c['recusado'] === true) continue;
+      if (c['recusado'] !== undefined) return false;
+      if (typeof c['hashDerivado'] !== 'string' || !/^[a-f0-9]{64}$/.test(c['hashDerivado'])) return false;
+      if (typeof c['ocorrencias'] !== 'number' || !Number.isInteger(c['ocorrencias']) || c['ocorrencias'] < 1) return false;
+    }
+  }
   return true;
 }
 
@@ -199,12 +316,14 @@ export async function baixarStyleGuide(opcoes: {
   fetchImpl?: typeof fetch;
   assets?: readonly string[];
   candidatos?: Record<string, readonly string[]>;
+  hashesFluigc?: readonly string[];
 }): Promise<ManifestoStyleGuide> {
   const cacheDir = opcoes.cacheDir ?? diretorioDoCache();
   const usarFetch = opcoes.fetchImpl ?? fetch;
   const base = opcoes.baseUrl.replace(/\/+$/, '');
   const candidatos = opcoes.candidatos ?? CANDIDATOS_STYLE_GUIDE;
-  const fila = [...(opcoes.assets ?? ASSETS_STYLE_GUIDE)];
+  const hashesFluigc = opcoes.hashesFluigc ?? HASHES_FLUIGC_CONHECIDOS;
+  const fila = [...(opcoes.assets ?? ASSETS_BOOTSTRAP)];
   const deTopo = new Set(fila);
   const vistos = new Set<string>();
   const baixados: { caminho: string; candidato: string; corpo: Buffer }[] = [];
@@ -286,12 +405,36 @@ export async function baixarStyleGuide(opcoes: {
 
   mkdirSync(cacheDir, { recursive: true });
   const arquivos: Record<string, ArquivoCache> = {};
+  const compatibilidade: Record<string, CompatibilidadeFluigc> = {};
   for (const { caminho, corpo } of baixados) {
     const alvo = alvoDeEscrita(cacheDir, caminho);
+    const hashOriginal = createHash('sha256').update(corpo).digest('hex');
+    if (ASSETS_PATCHAVEIS.includes(caminho)) {
+      const resultado = compatibilizarFluigc(corpo, hashOriginal, hashesFluigc);
+      if (resultado) {
+        // guarda a variante patchada no caminho de navegador e preserva o original
+        writeFileSync(alvo, resultado.conteudo);
+        writeFileSync(alvoDeEscrita(cacheDir, `${caminho}.orig`), corpo);
+        arquivos[caminho] = { tamanho: resultado.conteudo.length, sha256: resultado.patch.hashDerivado };
+        compatibilidade[caminho] = {
+          versao: 1,
+          asset: caminho,
+          hashOriginal,
+          hashDerivado: resultado.patch.hashDerivado,
+          ocorrencias: resultado.patch.ocorrencias,
+        };
+        continue;
+      }
+      // fail-closed: hash desconhecido não é patchado; guarda o original e registra a recusa
+      writeFileSync(alvo, corpo);
+      arquivos[caminho] = { tamanho: corpo.length, sha256: hashOriginal };
+      compatibilidade[caminho] = { versao: 1, asset: caminho, hashOriginal, recusado: true };
+      continue;
+    }
     writeFileSync(alvo, corpo);
     arquivos[caminho] = {
       tamanho: corpo.length,
-      sha256: createHash('sha256').update(corpo).digest('hex'),
+      sha256: hashOriginal,
     };
   }
 
@@ -302,6 +445,7 @@ export async function baixarStyleGuide(opcoes: {
     arquivos,
     fontes,
     ignorados,
+    ...(Object.keys(compatibilidade).length === 0 ? {} : { compatibilidade }),
   };
   const destino = join(cacheDir, 'manifesto.json');
   const temporario = `${destino}.${process.pid}.tmp`;
