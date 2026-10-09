@@ -110,7 +110,7 @@ test('registra diagnóstico de contexto simulado e de eventos/datasets ausentes'
   const { sandbox, avisos } = rodar(CONTEXTO_PADRAO);
   const mensagens: string[] = sandbox.__fluigPreview.diagnosticos.map((d: { mensagem: string }) => d.mensagem);
   assert.ok(mensagens.some((m) => /SIMULADO/.test(m) && /displayFields/.test(m) && /validateForm/.test(m)));
-  assert.ok(mensagens.some((m) => /DatasetFactory/.test(m)));
+  assert.ok(mensagens.some((m) => /datasets no preview só funcionam com --server/.test(m)));
   for (const d of sandbox.__fluigPreview.diagnosticos) assert.equal(typeof d.em, 'string');
   assert.ok(avisos.some((m) => m.startsWith('preview: ')));
 });
@@ -440,4 +440,29 @@ test('frame servido referencia jQuery e o style-guide do cache e mantém connect
     await core.close();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('DatasetFactory/ConstraintType do shim enfileiram até conectar e resolvem ok/erro', () => {
+  const { sandbox } = rodar(CONTEXTO_PADRAO);
+  assert.deepEqual({ ...sandbox.ConstraintType }, { MUST: 1, SHOULD: 2, MUST_NOT: 3 });
+  const constraint = sandbox.DatasetFactory.createConstraint('x', '1', '1', sandbox.ConstraintType.MUST, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(constraint)), { campo: 'x', inicial: '1', final: '1', tipo: 1, like: true });
+  const enviadas: unknown[] = [];
+  const porta: any = { onmessage: null, postMessage: (m: unknown) => enviadas.push(m) };
+  let sucesso: unknown;
+  let erro: string | undefined;
+  sandbox.DatasetFactory.getDataset('ds', ['a'], [constraint], ['a'], {
+    success: (r: unknown) => { sucesso = r; },
+    error: (e: Error) => { erro = e.message; },
+  });
+  assert.equal(enviadas.length, 0, 'sem canal ainda não envia');
+  sandbox.__fluigPreview.conectar(porta);
+  assert.equal(enviadas.length, 1, 'flush ao conectar');
+  assert.deepEqual(JSON.parse(JSON.stringify(enviadas[0])), {
+    v: 1, type: 'dataset', id: 'ds-1', nome: 'ds', campos: ['a'],
+    restricoes: [{ campo: 'x', inicial: '1', final: '1', tipo: 1, like: true }], ordem: ['a'],
+  });
+  porta.onmessage({ data: { v: 1, type: 'dataset:ok', id: 'ds-1', columns: ['A'], values: [] } });
+  assert.deepEqual(JSON.parse(JSON.stringify(sucesso)), { columns: ['A'], values: [] });
+  assert.equal(erro, undefined);
 });

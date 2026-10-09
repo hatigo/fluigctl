@@ -300,7 +300,7 @@ contacting the server.
 
 ```sh
 fluigctl form bootstrap --server <servidor>
-fluigctl form open forms/formNovo
+fluigctl form open forms/formNovo --server <servidor>
 fluigctl form close forms/formNovo
 ```
 
@@ -319,10 +319,16 @@ API forms expect: `getValue`/`setValue` (and `form.getValue`/`setValue`),
 `getUser`, plus `wdkAddChild`/`fnWdkRemoveChild` for parent-child tables (`___N`
 suffix, hidden template row). FLUIGC components use the
 `__fluigPreview.calendar`/`__fluigPreview.select` bridge, which calls the real
-`FLUIGC` loaded from the cached `fluig-style-guide.min.js`. Server events
-(`displayFields`/`enableFields`/`validateForm`) and `DatasetFactory`/datasets
-are NOT executed — they surface as diagnostics, and server-dependent components
-degrade. None of this was exercised in a real browser.
+`FLUIGC` loaded from the cached `fluig-style-guide.min.js`. With `--server
+<alias>`, the form's `DatasetFactory.getDataset(...)` reaches the real server
+through the control bridge: the frame sends the request over the control port,
+the local process queries the dataset REST route and returns columns/values —
+the frame gets no cookie and makes no network calls. Without `--server` the call
+returns an explicit error and no fabricated data. Server events
+(`displayFields`/`enableFields`/`validateForm`) are still NOT executed, and
+server-dependent FLUIGC components degrade. Datasets are not cached and a query
+may have server side effects, so prefer read-only datasets. None of this was
+exercised in a real browser.
 
 `persistenceType` and the parent folder cannot be changed after the form is
 created. Without flags, `push form --create` takes the folder where all of the

@@ -5,9 +5,32 @@ import { homedir, platform } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { ErroFluigctl } from '../errors.js';
+import { loadConfig, resolvePassword, resolveServer, serverUrl } from '../config.js';
+import { consultarDataset } from '../fluig/dataset-rest.js';
+import { login } from '../fluig/session.js';
 import { CONTEXTO_PADRAO, type ContextoPreview } from './frame-api.js';
-import { resolveFormSource, startPreviewCore } from './preview-core.js';
+import { resolveFormSource, startPreviewCore, type ConsultaDatasetPreview, type ResultadoDatasetPreview } from './preview-core.js';
 import { diretorioDoCache, lerManifesto, mensagemCacheAusente } from './style-guide.js';
+
+type BackendDataset = (consulta: ConsultaDatasetPreview) => Promise<ResultadoDatasetPreview | undefined>;
+
+/**
+ * Resolve o servidor como o resto do CLI e devolve um backend de dataset para o
+ * preview. O cookie fica só na closure; nunca é impresso nem vai ao frame.
+ */
+export async function consultaDoServidor(alias: string): Promise<BackendDataset> {
+  const servidor = resolveServer(loadConfig(), alias);
+  const senha = resolvePassword(servidor);
+  const url = serverUrl(servidor);
+  const cookie = await login(url, servidor.username, senha);
+  return (consulta) =>
+    consultarDataset(url, cookie, {
+      nome: consulta.nome,
+      campos: consulta.campos,
+      restricoes: consulta.restricoes,
+      ordem: consulta.ordem,
+    }).then((r) => (r ? { columns: r.colunas, values: r.linhas } : undefined));
+}
 
 export interface RegistroPreview {
   version: 1;
@@ -86,12 +109,13 @@ function abrirNavegador(url: string): void {
 }
 
 export async function servirPreview(opcoes: {
-  arquivo: string; token?: string; registroDir?: string; cacheDir?: string; pid?: number; contexto?: ContextoPreview;
+  arquivo: string; token?: string; registroDir?: string; cacheDir?: string; pid?: number; contexto?: ContextoPreview; dataset?: BackendDataset;
 }): Promise<{ registro: RegistroPreview; url: string; fechar(): Promise<void> }> {
   const source = resolveFormSource(opcoes.arquivo);
   const preview = await startPreviewCore(opcoes.arquivo, {
     ...(opcoes.cacheDir === undefined ? {} : { cacheDir: opcoes.cacheDir }),
     ...(opcoes.contexto === undefined ? {} : { contexto: opcoes.contexto }),
+    ...(opcoes.dataset === undefined ? {} : { dataset: opcoes.dataset }),
   });
   const registro: RegistroPreview = {
     version: 1,
@@ -142,7 +166,8 @@ export async function abrirPreview(opcoes: {
   };
 
   if (opcoes.foreground) {
-    const instancia = await servirPreview(comum);
+    const dataset = opcoes.servidorAlias ? await consultaDoServidor(opcoes.servidorAlias) : undefined;
+    const instancia = await servirPreview({ ...comum, ...(dataset === undefined ? {} : { dataset }) });
     if (opcoes.abrirNavegador !== false) abrirNavegador(instancia.url);
     return { registro: instancia.registro, url: instancia.url, reutilizada: false };
   }
@@ -153,6 +178,8 @@ export async function abrirPreview(opcoes: {
   const args = [cli, 'form', 'serve', source.html, '--token', token];
   if (opcoes.registroDir) args.push('--registry-dir', opcoes.registroDir);
   args.push('--cache-dir', cacheDir);
+  // O filho recebe só o alias; ele resolve a senha/cookie por conta própria.
+  if (opcoes.servidorAlias) args.push('--server', opcoes.servidorAlias);
   const contexto = opcoes.contexto ?? CONTEXTO_PADRAO;
   args.push('--modo', contexto.modo, '--atividade', String(contexto.atividade), '--usuario', contexto.usuario);
   if (contexto.processo !== undefined) args.push('--processo', String(contexto.processo));
@@ -193,7 +220,7 @@ export async function fecharPreview(arquivo: string, registroDir?: string): Prom
 
 /** Só o subcomando interno usa: mantém o filho vivo e limpa o registro ao sair. */
 export async function executarServidorPreview(opcoes: {
-  arquivo: string; token?: string; registroDir?: string; cacheDir?: string; contexto?: ContextoPreview;
+  arquivo: string; token?: string; registroDir?: string; cacheDir?: string; contexto?: ContextoPreview; dataset?: BackendDataset;
 }): Promise<never> {
   const instancia = await servirPreview(opcoes);
   const encerrar = async () => {

@@ -88,7 +88,7 @@ O relatório completo, com tarefas, defeitos, método e limitações, está em
 | `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
 | `request start` / `show` / `move` / `cancel` (solicitações sem a tela do Fluig) | pronto, conferido no localdev com a contratação: recuperação, laço de aprovação e reprovação |
 | `form new` (pasta de formulário como a do Studio: style guide, `form name="form"`, campos — inclusive select e radio — e `validateForm` dos obrigatórios) | pronto; publicado com `push form --create` (que assume a pasta dos formulários, `ds<nome>` e a persistência do Studio) no localdev e usado por um processo criado pelo `diagram new` |
-| `form bootstrap` / `open` / `close` (preview local do formulário: baixa o Style Guide para um cache local e serve tudo dele, com reload ao salvar) | implementado e validado: `form open` aceita `--modo ADD|MOD|VIEW` (padrão ADD), `--atividade <n>` (padrão 0) e `--usuario <login>` (padrão `preview`) e injeta no frame um contexto SIMULADO com a API do formulário (`getValue`/`setValue`, `form.getChildrenIndexes`, `wdkAddChild`/`fnWdkRemoveChild` com sufixo `___N`) e uma ponte FLUIGC (`__fluigPreview.calendar`/`select`) sobre o `fluig-style-guide.min.js` do cache. O bootstrap resolve o Style Guide por candidatos (no `fluig-localdev` o CSS veio do `-flat`, 182 arquivos) e registra como ignorado o que faltar. Eventos de servidor (displayFields/enableFields/validateForm) e datasets/DatasetFactory NÃO são executados — viram diagnóstico; demonstração offline sem navegador, nenhum navegador real exercitado |
+| `form bootstrap` / `open` / `close` (preview local do formulário: baixa o Style Guide para um cache local e serve tudo dele, com reload ao salvar) | implementado e validado: `form open` aceita `--modo ADD|MOD|VIEW` (padrão ADD), `--atividade <n>` (padrão 0) e `--usuario <login>` (padrão `preview`) e injeta no frame um contexto SIMULADO com a API do formulário (`getValue`/`setValue`, `form.getChildrenIndexes`, `wdkAddChild`/`fnWdkRemoveChild` com sufixo `___N`) e uma ponte FLUIGC (`__fluigPreview.calendar`/`select`) sobre o `fluig-style-guide.min.js` do cache. O bootstrap resolve o Style Guide por candidatos (no `fluig-localdev` o CSS veio do `-flat`, 182 arquivos) e registra como ignorado o que faltar. Eventos de servidor (displayFields/enableFields/validateForm) e datasets/DatasetFactory NÃO são executados sem `--server` — viram diagnóstico; com `--server <alias>` o frame consulta datasets reais via `DatasetFactory` pela ponte do controle (o frame não recebe cookie nem faz rede). Sem `--server` a chamada devolve erro explícito, sem dado inventado; datasets não são cacheados e podem ter efeito no servidor (prefira datasets de leitura). Demonstração offline sem navegador, nenhum navegador real exercitado |
 | `diagram show/add/timer/link/condition/assign/rename/remove/organize/straighten/undo` (editar o diagrama pelo terminal, com as operações e o desfazer do visualizador; `add --after A --before B` insere entre dois, abrindo espaço e religando) | pronto |
 | `diagram new` (processo novo como o Studio grava: pool, raias, início ligado ao fim) | pronto; abre no Studio sem alteração e passa no `diagram check` |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, textos sem fonte, losangos sem pontos e formas sem o visual do Studio (`--fix` acrescenta), elementos sem saída ou sem entrada e o padrão das service tasks; `--fix` também devolve ao canto da tarefa a bolinha de erro que o Studio deixou solta) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
@@ -344,7 +344,7 @@ close).
 
 ```sh
 fluigctl form bootstrap --server <servidor>
-fluigctl form open forms/formNovo
+fluigctl form open forms/formNovo --server <servidor>   # habilita datasets reais
 ```
 
 Quando o cache existe (populado por `form bootstrap --server <alias>`), o
@@ -352,9 +352,15 @@ Quando o cache existe (populado por `form bootstrap --server <alias>`), o
 sem contactar o servidor; salvar o HTML, o JS ou o CSS do formulário recarrega o
 preview, `form close` encerra e reabrir reaproveita o mesmo servidor. Sem o
 cache, o `form open` recusa e manda rodar o bootstrap, em vez de baixar sozinho.
-Os scripts locais do formulário rodam. `DatasetFactory`/datasets e os eventos
-de servidor (`displayFields`/`enableFields`/`validateForm`) NÃO são executados —
-os dois viram diagnóstico, e componentes que dependem do servidor degradam.
+Os scripts locais do formulário rodam. Com `--server <alias>`, o
+`DatasetFactory.getDataset(...)` do formulário chega ao servidor real: o frame
+manda o pedido pela porta do controle, o processo local consulta o REST de
+datasets e devolve colunas/valores — o frame não recebe cookie nem faz rede.
+Sem `--server`, a chamada devolve um erro explícito e nenhum dado inventado. Os
+eventos de servidor (`displayFields`/`enableFields`/`validateForm`) continuam
+NÃO sendo executados, e componentes FLUIGC que dependem do servidor degradam.
+Datasets não são cacheados e a consulta pode ter efeito no servidor: use
+datasets de leitura.
 
 O `form open` aceita ainda `--modo ADD|MOD|VIEW` (padrão ADD), `--atividade <n>`
 (padrão 0) e `--usuario <login>` (padrão `preview`); esses valores formam um

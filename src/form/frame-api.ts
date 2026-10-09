@@ -62,6 +62,64 @@ export function scriptDaApi(contexto: ContextoPreview): string {
     try { console.warn('preview: ' + mensagem); } catch (erro) { /* console ausente */ }
   }
   window.__fluigPreview = { contexto: congelado, diagnosticos: diagnosticos, diagnosticar: diagnosticar };
+  window.ConstraintType = { MUST: 1, SHOULD: 2, MUST_NOT: 3 };
+  var canal = null;
+  var pedidos = {};
+  var contadorDatasets = 0;
+  function enviarPedido(id) {
+    var pedido = pedidos[id];
+    if (!pedido || !canal) return;
+    try {
+      canal.postMessage(pedido.mensagem);
+    } catch (e) {
+      delete pedidos[id];
+      if (pedido.opcoes && pedido.opcoes.error) pedido.opcoes.error(new Error('falha ao enviar o pedido de dataset: ' + ((e && e.message) || e)));
+    }
+  }
+  window.DatasetFactory = {
+    createConstraint: function (campo, inicial, final, tipo, like) {
+      return { campo: campo, inicial: inicial, final: final, tipo: tipo, like: !!like };
+    },
+    getDataset: function (nome, fields, constraints, order, options) {
+      var opcoes = options || {};
+      try {
+        contadorDatasets += 1;
+        var id = 'ds-' + contadorDatasets;
+        var mensagem = {
+          v: 1,
+          type: 'dataset',
+          id: id,
+          nome: nome,
+          campos: fields || [],
+          restricoes: (constraints || []).map(function (c) {
+            return { campo: c.campo, inicial: c.inicial, final: c.final, tipo: c.tipo, like: !!c.like };
+          }),
+          ordem: order || []
+        };
+        pedidos[id] = { opcoes: opcoes, mensagem: mensagem };
+        enviarPedido(id);
+      } catch (e) {
+        if (opcoes.error) opcoes.error(new Error('não consegui montar o pedido de dataset: ' + ((e && e.message) || e)));
+      }
+    }
+  };
+  window.__fluigPreview.conectar = function (port) {
+    canal = port;
+    port.onmessage = function (evento) {
+      var m = evento && evento.data;
+      if (!m || m.v !== 1 || (m.type !== 'dataset:ok' && m.type !== 'dataset:error')) return;
+      var pedido = pedidos[m.id];
+      if (!pedido) return;
+      delete pedidos[m.id];
+      if (m.type === 'dataset:ok') {
+        if (pedido.opcoes && pedido.opcoes.success) pedido.opcoes.success({ columns: m.columns, values: m.values });
+      } else if (pedido.opcoes && pedido.opcoes.error) {
+        pedido.opcoes.error(new Error(m.message));
+      }
+    };
+    var ids = Object.keys(pedidos);
+    for (var i = 0; i < ids.length; i++) enviarPedido(ids[i]);
+  };
   window.WKNumState = String(contexto.atividade);
   window.WKUser = String(contexto.usuario);
   window.WKMode = String(contexto.modo);
@@ -191,6 +249,6 @@ export function scriptDaApi(contexto: ContextoPreview): string {
     avisarComponentes();
   }
   diagnosticar('contexto do preview é SIMULADO; eventos de servidor (displayFields/enableFields/validateForm) NÃO são executados');
-  diagnosticar('DatasetFactory/datasets indisponíveis no preview local');
+  diagnosticar('datasets no preview só funcionam com --server; sem servidor a chamada devolve erro explícito (nenhum dado inventado)');
 })();`;
 }

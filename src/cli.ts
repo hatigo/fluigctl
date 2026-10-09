@@ -57,7 +57,7 @@ import { encaixarErros, errosForaDoCanto } from './diagram/erros.js';
 import { novoProcesso } from './diagram/novo.js';
 import { USO_EDICAO, comandoEdicaoDiagrama, ehComandoDeEdicao } from './commands/diagram-edit.js';
 import { criarFormulario, lerCampo as lerCampoDeFormulario } from './commands/form-new.js';
-import { abrirPreview, fecharPreview, executarServidorPreview } from './form/preview-session.js';
+import { abrirPreview, consultaDoServidor, fecharPreview, executarServidorPreview } from './form/preview-session.js';
 import { baixarStyleGuide, diretorioDoCache } from './form/style-guide.js';
 import type { ContextoPreview, ModoPreview } from './form/frame-api.js';
 
@@ -107,7 +107,9 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
                       [--modo ADD|MOD|VIEW] [--atividade <n>] [--usuario <login>]
       abre no navegador um preview local do formulário em 127.0.0.1, isolado e somente leitura;
       renderiza offline a partir do cache do Style Guide e recarrega quando o arquivo muda;
-      --modo/--atividade/--usuario simulam o contexto de execução (eventos de servidor não rodam)
+      --modo/--atividade/--usuario simulam o contexto de execução (eventos de servidor não rodam);
+      --server habilita consultas reais de dataset pelo frame (DatasetFactory); sem ele, a chamada
+      devolve erro explícito, sem dado inventado
   fluigctl form close <pasta-ou-html>
       encerra o preview desse formulário
 
@@ -1377,6 +1379,7 @@ async function comandoForm(argv: string[]): Promise<void> {
         usuario: { type: 'string' },
         processo: { type: 'string' },
         empresa: { type: 'string' },
+        server: { type: 'string' },
       },
     });
     const arquivo = positionals[0];
@@ -1388,10 +1391,12 @@ async function comandoForm(argv: string[]): Promise<void> {
       ...(values.processo === undefined ? {} : { processo: lerAtividade(values.processo, '--processo') }),
       ...(values.empresa === undefined ? {} : { empresa: lerAtividade(values.empresa, '--empresa') }),
     };
+    const dataset = values.server === undefined ? undefined : await consultaDoServidor(values.server);
     await executarServidorPreview({
       arquivo,
       token: values.token,
       contexto,
+      ...(dataset === undefined ? {} : { dataset }),
       ...(values['registry-dir'] === undefined ? {} : { registroDir: values['registry-dir'] }),
       ...(values['cache-dir'] === undefined ? {} : { cacheDir: values['cache-dir'] }),
     });
