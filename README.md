@@ -88,7 +88,7 @@ O relatório completo, com tarefas, defeitos, método e limitações, está em
 | `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
 | `request start` / `show` / `move` / `cancel` (solicitações sem a tela do Fluig) | pronto, conferido no localdev com a contratação: recuperação, laço de aprovação e reprovação |
 | `form new` (pasta de formulário como a do Studio: style guide, `form name="form"`, campos — inclusive select e radio — e `validateForm` dos obrigatórios) | pronto; publicado com `push form --create` (que assume a pasta dos formulários, `ds<nome>` e a persistência do Studio) no localdev e usado por um processo criado pelo `diagram new` |
-| `form bootstrap` / `open` / `close` (preview local do formulário: baixa o Style Guide para um cache local e serve tudo dele, com reload ao salvar) | implementado e validado: o `form bootstrap` resolve o Style Guide por uma lista ordenada de candidatos — no `fluig-localdev` o CSS principal veio de `/style-guide/css/fluig-style-guide-flat.min.css` (626925 bytes) e o cache ficou com 182 arquivos. Assets referenciados pelo CSS que faltam no servidor entram como ignorados, sem abortar. A demonstração offline sem navegador foi executada com o cache real (open, reload por SSE, reabrir reaproveitando o pid, close) sem tocar o servidor; datasets e FLUIGC ainda não existem |
+| `form bootstrap` / `open` / `close` (preview local do formulário: baixa o Style Guide para um cache local e serve tudo dele, com reload ao salvar) | implementado e validado: `form open` aceita `--modo ADD|MOD|VIEW` (padrão ADD), `--atividade <n>` (padrão 0) e `--usuario <login>` (padrão `preview`) e injeta no frame um contexto SIMULADO com a API do formulário (`getValue`/`setValue`, `form.getChildrenIndexes`, `wdkAddChild`/`fnWdkRemoveChild` com sufixo `___N`) e uma ponte FLUIGC (`__fluigPreview.calendar`/`select`) sobre o `fluig-style-guide.min.js` do cache. O bootstrap resolve o Style Guide por candidatos (no `fluig-localdev` o CSS veio do `-flat`, 182 arquivos) e registra como ignorado o que faltar. Eventos de servidor (displayFields/enableFields/validateForm) e datasets/DatasetFactory NÃO são executados — viram diagnóstico; demonstração offline sem navegador, nenhum navegador real exercitado |
 | `diagram show/add/timer/link/condition/assign/rename/remove/organize/straighten/undo` (editar o diagrama pelo terminal, com as operações e o desfazer do visualizador; `add --after A --before B` insere entre dois, abrindo espaço e religando) | pronto |
 | `diagram new` (processo novo como o Studio grava: pool, raias, início ligado ao fim) | pronto; abre no Studio sem alteração e passa no `diagram check` |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, textos sem fonte, losangos sem pontos e formas sem o visual do Studio (`--fix` acrescenta), elementos sem saída ou sem entrada e o padrão das service tasks; `--fix` também devolve ao canto da tarefa a bolinha de erro que o Studio deixou solta) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
@@ -352,9 +352,20 @@ Quando o cache existe (populado por `form bootstrap --server <alias>`), o
 sem contactar o servidor; salvar o HTML, o JS ou o CSS do formulário recarrega o
 preview, `form close` encerra e reabrir reaproveita o mesmo servidor. Sem o
 cache, o `form open` recusa e manda rodar o bootstrap, em vez de baixar sozinho.
-Os scripts locais do formulário rodam, mas `DatasetFactory`, FLUIGC e recursos
-remotos do Fluig ainda não existem nesta fatia — o preview não fala com o
-servidor.
+Os scripts locais do formulário rodam. `DatasetFactory`/datasets e os eventos
+de servidor (`displayFields`/`enableFields`/`validateForm`) NÃO são executados —
+os dois viram diagnóstico, e componentes que dependem do servidor degradam.
+
+O `form open` aceita ainda `--modo ADD|MOD|VIEW` (padrão ADD), `--atividade <n>`
+(padrão 0) e `--usuario <login>` (padrão `preview`); esses valores formam um
+contexto SIMULADO injetado antes dos scripts do formulário. O frame ganha a API
+que o formulário espera: `getValue`/`setValue` (e `form.getValue`/`setValue`),
+`form.getFormMode`, `form.getChildrenIndexes`, `getAtividade`/`getMode`/
+`getUser`, e `wdkAddChild`/`fnWdkRemoveChild` para tabelas pai-filho (sufixo
+`___N`, linha modelo escondida). Componentes FLUIGC usam a ponte
+`__fluigPreview.calendar`/`__fluigPreview.select`, que chama o `FLUIGC` real
+carregado do `fluig-style-guide.min.js` do cache. Nada disso foi exercitado num
+navegador real.
 
 ### 2. Acompanhar um diagrama enquanto ele muda
 

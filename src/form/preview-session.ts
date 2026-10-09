@@ -5,6 +5,7 @@ import { homedir, platform } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { ErroFluigctl } from '../errors.js';
+import { CONTEXTO_PADRAO, type ContextoPreview } from './frame-api.js';
 import { resolveFormSource, startPreviewCore } from './preview-core.js';
 import { diretorioDoCache, lerManifesto, mensagemCacheAusente } from './style-guide.js';
 
@@ -85,13 +86,13 @@ function abrirNavegador(url: string): void {
 }
 
 export async function servirPreview(opcoes: {
-  arquivo: string; token?: string; registroDir?: string; cacheDir?: string; pid?: number;
+  arquivo: string; token?: string; registroDir?: string; cacheDir?: string; pid?: number; contexto?: ContextoPreview;
 }): Promise<{ registro: RegistroPreview; url: string; fechar(): Promise<void> }> {
   const source = resolveFormSource(opcoes.arquivo);
-  const preview = await startPreviewCore(
-    opcoes.arquivo,
-    opcoes.cacheDir === undefined ? {} : { cacheDir: opcoes.cacheDir },
-  );
+  const preview = await startPreviewCore(opcoes.arquivo, {
+    ...(opcoes.cacheDir === undefined ? {} : { cacheDir: opcoes.cacheDir }),
+    ...(opcoes.contexto === undefined ? {} : { contexto: opcoes.contexto }),
+  });
   const registro: RegistroPreview = {
     version: 1,
     arquivo: source.html,
@@ -115,7 +116,7 @@ export async function servirPreview(opcoes: {
 
 export async function abrirPreview(opcoes: {
   arquivo: string; abrirNavegador?: boolean; foreground?: boolean;
-  registroDir?: string; cacheDir?: string; servidorAlias?: string; cli?: string;
+  registroDir?: string; cacheDir?: string; servidorAlias?: string; cli?: string; contexto?: ContextoPreview;
 }): Promise<{ registro: RegistroPreview; url: string; reutilizada: boolean }> {
   // O cache efetivo é resolvido aqui e repassado ao filho: sem isso o preview
   // em segundo plano não receberia o diretório padrão e serviria 404 no Style Guide.
@@ -136,6 +137,7 @@ export async function abrirPreview(opcoes: {
   const comum = {
     arquivo: source.html,
     cacheDir,
+    contexto: opcoes.contexto ?? CONTEXTO_PADRAO,
     ...(opcoes.registroDir === undefined ? {} : { registroDir: opcoes.registroDir }),
   };
 
@@ -151,6 +153,10 @@ export async function abrirPreview(opcoes: {
   const args = [cli, 'form', 'serve', source.html, '--token', token];
   if (opcoes.registroDir) args.push('--registry-dir', opcoes.registroDir);
   args.push('--cache-dir', cacheDir);
+  const contexto = opcoes.contexto ?? CONTEXTO_PADRAO;
+  args.push('--modo', contexto.modo, '--atividade', String(contexto.atividade), '--usuario', contexto.usuario);
+  if (contexto.processo !== undefined) args.push('--processo', String(contexto.processo));
+  if (contexto.empresa !== undefined) args.push('--empresa', String(contexto.empresa));
   const filho = spawn(process.execPath, args, { detached: true, stdio: 'ignore' });
   filho.unref();
 
@@ -187,7 +193,7 @@ export async function fecharPreview(arquivo: string, registroDir?: string): Prom
 
 /** Só o subcomando interno usa: mantém o filho vivo e limpa o registro ao sair. */
 export async function executarServidorPreview(opcoes: {
-  arquivo: string; token?: string; registroDir?: string; cacheDir?: string;
+  arquivo: string; token?: string; registroDir?: string; cacheDir?: string; contexto?: ContextoPreview;
 }): Promise<never> {
   const instancia = await servirPreview(opcoes);
   const encerrar = async () => {

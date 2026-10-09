@@ -309,8 +309,20 @@ what the CSS references) into `~/.local/state/fluigctl/form/styleguide`. Once th
 cache exists, `form open` runs the form in an isolated loopback iframe and
 serves the assets from the cache, without contacting the server; without the
 cache it refuses and tells you to run the bootstrap, instead of downloading on
-every open. It does not support DatasetFactory, FLUIGC or any Fluig remote
-resource yet.
+every open.
+
+`form open` also accepts `--modo ADD|MOD|VIEW` (default ADD), `--atividade <n>`
+(default 0) and `--usuario <login>` (default `preview`). Those values form a
+SIMULATED context injected before the form's own scripts. The frame gains the
+API forms expect: `getValue`/`setValue` (and `form.getValue`/`setValue`),
+`form.getFormMode`, `form.getChildrenIndexes`, `getAtividade`/`getMode`/
+`getUser`, plus `wdkAddChild`/`fnWdkRemoveChild` for parent-child tables (`___N`
+suffix, hidden template row). FLUIGC components use the
+`__fluigPreview.calendar`/`__fluigPreview.select` bridge, which calls the real
+`FLUIGC` loaded from the cached `fluig-style-guide.min.js`. Server events
+(`displayFields`/`enableFields`/`validateForm`) and `DatasetFactory`/datasets
+are NOT executed — they surface as diagnostics, and server-dependent components
+degrade. None of this was exercised in a real browser.
 
 `persistenceType` and the parent folder cannot be changed after the form is
 created. Without flags, `push form --create` takes the folder where all of the

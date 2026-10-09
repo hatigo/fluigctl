@@ -59,6 +59,7 @@ import { USO_EDICAO, comandoEdicaoDiagrama, ehComandoDeEdicao } from './commands
 import { criarFormulario, lerCampo as lerCampoDeFormulario } from './commands/form-new.js';
 import { abrirPreview, fecharPreview, executarServidorPreview } from './form/preview-session.js';
 import { baixarStyleGuide, diretorioDoCache } from './form/style-guide.js';
+import type { ContextoPreview, ModoPreview } from './form/frame-api.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -103,8 +104,10 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       baixa uma vez o Style Guide do servidor para o cache local (~/.local/state/fluigctl/form/styleguide);
       o form open lê tudo daí, sem depender do servidor aberto
   fluigctl form open <pasta-ou-html> [--no-open] [--foreground] [--server <nome>]
+                      [--modo ADD|MOD|VIEW] [--atividade <n>] [--usuario <login>]
       abre no navegador um preview local do formulário em 127.0.0.1, isolado e somente leitura;
-      renderiza offline a partir do cache do Style Guide e recarrega quando o arquivo muda
+      renderiza offline a partir do cache do Style Guide e recarrega quando o arquivo muda;
+      --modo/--atividade/--usuario simulam o contexto de execução (eventos de servidor não rodam)
   fluigctl form close <pasta-ou-html>
       encerra o preview desse formulário
 
@@ -1287,7 +1290,25 @@ async function comandoForm(argv: string[]): Promise<void> {
     'uso: fluigctl form new <nome> --field <campo[!][:tipo[:Rótulo]]>... [--title T] [--forms <pasta>]\n' +
     '     fluigctl form bootstrap --server <nome>\n' +
     '     fluigctl form open <pasta-ou-html> [--no-open] [--foreground] [--server <nome>]\n' +
+    '                          [--modo ADD|MOD|VIEW] [--atividade <n>] [--usuario <login>]\n' +
     '     fluigctl form close <pasta-ou-html>';
+
+  const lerModo = (valor: string): ModoPreview => {
+    if (valor !== 'ADD' && valor !== 'MOD' && valor !== 'VIEW') {
+      throw new ErroFluigctl(`--modo "${valor}": use ADD, MOD ou VIEW`, 2);
+    }
+    return valor;
+  };
+  const lerAtividade = (valor: string, flag: string): number => {
+    if (!/^\d+$/.test(valor) || !Number.isSafeInteger(Number(valor))) {
+      throw new ErroFluigctl(`${flag} "${valor}": use um inteiro não negativo`, 2);
+    }
+    return Number(valor);
+  };
+  const lerUsuario = (valor: string): string => {
+    if (valor.length === 0) throw new ErroFluigctl('--usuario: informe um login não vazio', 2);
+    return valor;
+  };
 
   if (sub === 'bootstrap') {
     const { values } = parseArgs({ args: argv.slice(1), options: { server: { type: 'string' } } });
@@ -1309,14 +1330,23 @@ async function comandoForm(argv: string[]): Promise<void> {
         'no-open': { type: 'boolean', default: false },
         foreground: { type: 'boolean', default: false },
         server: { type: 'string' },
+        modo: { type: 'string', default: 'ADD' },
+        atividade: { type: 'string', default: '0' },
+        usuario: { type: 'string', default: 'preview' },
       },
     });
     const arquivo = positionals[0];
     if (!arquivo || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+    const contexto: ContextoPreview = {
+      modo: lerModo(values.modo),
+      atividade: lerAtividade(values.atividade, '--atividade'),
+      usuario: lerUsuario(values.usuario),
+    };
     const instancia = await abrirPreview({
       arquivo,
       abrirNavegador: !values['no-open'],
       foreground: values.foreground,
+      contexto,
       ...(values.server === undefined ? {} : { servidorAlias: values.server }),
     });
     console.log(`${instancia.reutilizada ? 'preview já aberto' : 'preview aberto'}: ${instancia.url}`);
@@ -1342,13 +1372,26 @@ async function comandoForm(argv: string[]): Promise<void> {
         token: { type: 'string' },
         'registry-dir': { type: 'string' },
         'cache-dir': { type: 'string' },
+        modo: { type: 'string' },
+        atividade: { type: 'string' },
+        usuario: { type: 'string' },
+        processo: { type: 'string' },
+        empresa: { type: 'string' },
       },
     });
     const arquivo = positionals[0];
     if (!arquivo || !values.token || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+    const contexto: ContextoPreview = {
+      modo: lerModo(values.modo ?? 'ADD'),
+      atividade: lerAtividade(values.atividade ?? '0', '--atividade'),
+      usuario: lerUsuario(values.usuario ?? 'preview'),
+      ...(values.processo === undefined ? {} : { processo: lerAtividade(values.processo, '--processo') }),
+      ...(values.empresa === undefined ? {} : { empresa: lerAtividade(values.empresa, '--empresa') }),
+    };
     await executarServidorPreview({
       arquivo,
       token: values.token,
+      contexto,
       ...(values['registry-dir'] === undefined ? {} : { registroDir: values['registry-dir'] }),
       ...(values['cache-dir'] === undefined ? {} : { cacheDir: values['cache-dir'] }),
     });
