@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { ErroFluigctl } from '../errors.js';
 import { lerDiagrama, type Diagrama, type Ponto } from '../push/diagram/modelo.js';
 import { gerarSvg, pontosDoFluxo } from '../push/diagram/svg.js';
-import { adicionarNoXml, ligarNoXml, scriptsDasCriadas, type TipoNovo } from './add.js';
+import { adicionarNoXml, ligarNoXml, scriptsDasCriadas, validarMinutos, type TipoNovo } from './add.js';
 import { redimensionarPoolNoXml, redimensionarRaiaNoXml } from './lanes.js';
 import { organizarNoXml } from './layout.js';
 import { removerNoXml } from './remove.js';
@@ -513,10 +513,16 @@ async function tratarEdicao(
       const y = numero('y');
       const nome = typeof corpo['nome'] === 'string' ? corpo['nome'] : undefined;
       const grupo = typeof corpo['grupo'] === 'string' ? corpo['grupo'] : undefined;
+      const minutos = corpo['minutos'];
+      if (tipo === 'temporizador') {
+        if (typeof minutos !== 'number') throw new EdicaoInvalida('o campo minutos é obrigatório');
+        validarMinutos(minutos);
+      }
+      if (tipo !== 'temporizador' && minutos !== undefined) throw new EdicaoInvalida('minutos só é aceito para temporizador');
       let criados: string[] = [];
       let xmlNovo = '';
       const r = aplicarEdicao(arquivo, undoDir, (t) => {
-        const feito = adicionarNoXml(t, { tipo, x, y, ...(nome === undefined ? {} : { nome }), ...(grupo === undefined ? {} : { grupo }) });
+        const feito = adicionarNoXml(t, { tipo, x, y, ...(nome === undefined ? {} : { nome }), ...(grupo === undefined ? {} : { grupo }), ...(tipo === 'temporizador' ? { minutos: minutos as number } : {}) });
         criados = feito.criados;
         xmlNovo = feito.xml;
         return feito.xml;
@@ -658,7 +664,7 @@ button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7p
 .save.pending{color:#b45309;background:#fffbeb;border-color:#fde68a}.save.pending::before{background:#f59e0b}.save.err{color:#b91c1c;background:#fef2f2;border-color:#fecaca}.save.err::before{background:#dc2626}
 .save.pulso{animation:pulso .9s ease-out}@keyframes gira{to{transform:rotate(360deg)}}@keyframes pulso{0%{box-shadow:0 0 0 0 #16a34a66}100%{box-shadow:0 0 0 10px #16a34a00}}
 .edit-toggle[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}.edit-toggle[aria-pressed="true"]:hover{background:#1d47b3}
-#edit-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px}#edit-tools[hidden]{display:none}.mode{font-size:12px;font-weight:700;color:#1e40af;background:#dbeafe;border-radius:999px;padding:4px 9px;white-space:nowrap}
+#edit-tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px}#edit-tools[hidden]{display:none}#timer-minutes{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}#timer-minutes input{width:72px;padding:6px;border:1px solid #c3cddd;border-radius:6px;font:inherit;color:var(--ink)}.mode{font-size:12px;font-weight:700;color:#1e40af;background:#dbeafe;border-radius:999px;padding:4px 9px;white-space:nowrap}
 body.editing #canvas{background-color:#f3f6ff}body.editing .fluig-hit.movable{cursor:move}.fluig-hit.moving{fill:#2457d61f;stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none}
 .fluig-hit.flow.moving{fill:none;stroke-width:3}.alca-raia{fill:var(--brand);stroke:#fff;stroke-width:2;cursor:ns-resize;vector-effect:non-scaling-stroke}.previa-raia{stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;pointer-events:none;vector-effect:non-scaling-stroke}
 .conector{fill:var(--brand);stroke:#fff;stroke-width:2;cursor:crosshair;vector-effect:non-scaling-stroke}.conector:hover{fill:#1d47b3}.previa-ligacao{stroke:var(--brand);stroke-width:2;stroke-dasharray:6 4;fill:none;pointer-events:none;vector-effect:non-scaling-stroke}
@@ -675,7 +681,7 @@ button.perigo{color:#b91c1c;border-color:#fecaca}button.perigo:hover{background:
 #script-code.vazio{background:#f8fafc;color:var(--muted);white-space:normal;font-family:system-ui,sans-serif}
 @media(max-width:720px){#inspector{position:absolute;right:0;top:0;width:min(360px,92vw);box-shadow:-8px 0 28px #17203333}.status span:last-child{display:none}.title small{max-width:45vw}}
 </style></head><body>
-<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><span id="save-state" class="save" role="status" aria-live="polite" title="As edições são gravadas no .process assim que você as faz">Tudo salvo</span><select id="add-menu" aria-label="Adicionar elemento" title="Escolha o tipo e clique no diagrama onde ele vai ficar"><option value="">+ Adicionar…</option><option value="humana">Tarefa humana</option><option value="recuperacao">Service task com recuperação</option><option value="servico">Service task sozinha</option><option value="gateway">Gateway exclusivo</option><option value="paralelo">Gateway paralelo (abre)</option><option value="juncao">Junção paralela (fecha)</option><option value="inicio">Início</option><option value="fim">Fim</option></select><button id="organize" type="button" title="Reorganiza o diagrama inteiro pela receita de layout: ordem cronológica, pares de recuperação, raias do tamanho do conteúdo e ligações retas (desfaz numa vez só)">Organizar</button><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button><button id="refresh-viewer" type="button" title="Reler o arquivo e atualizar o diagrama">Atualizar</button><button id="shutdown-viewer" type="button" title="Encerrar o servidor local e desconectar o visualizador">Encerrar</button></header>
+<header><div class="brand">fluigctl</div><div class="title"><strong>${titulo}</strong><small>${caminho}</small></div><div class="status"><span id="dot" class="dot"></span><span id="status">carregando…</span></div><span id="edit-tools" hidden><span class="mode">Modo de edição</span><span id="save-state" class="save" role="status" aria-live="polite" title="As edições são gravadas no .process assim que você as faz">Tudo salvo</span><select id="add-menu" aria-label="Adicionar elemento" title="Escolha o tipo e clique no diagrama onde ele vai ficar"><option value="">+ Adicionar…</option><option value="humana">Tarefa humana</option><option value="recuperacao">Service task com recuperação</option><option value="servico">Service task sozinha</option><option value="gateway">Gateway exclusivo</option><option value="paralelo">Gateway paralelo (abre)</option><option value="juncao">Junção paralela (fecha)</option><option value="inicio">Início</option><option value="fim">Fim</option><option value="temporizador">Temporizador</option></select><label id="timer-minutes" for="timer-minutes-input" hidden>Minutos <input id="timer-minutes-input" type="number" min="1" step="1" value="30" inputmode="numeric"></label><button id="organize" type="button" title="Reorganiza o diagrama inteiro pela receita de layout: ordem cronológica, pares de recuperação, raias do tamanho do conteúdo e ligações retas (desfaz numa vez só)">Organizar</button><button id="straighten-all" type="button" title="Traça todas as ligações do diagrama em ângulos retos, pela receita de layout (desfaz numa vez só)">Endireitar todas</button><button id="undo" type="button" title="Desfazer (Ctrl+Z)">Desfazer</button><button id="redo" type="button" title="Refazer (Ctrl+Shift+Z)">Refazer</button></span><button id="edit-toggle" class="edit-toggle" type="button" aria-pressed="false" title="Ligar o modo de edição">Editar</button><button id="fit" type="button" title="Ajustar o diagrama à janela">Ajustar</button><button id="refresh-viewer" type="button" title="Reler o arquivo e atualizar o diagrama">Atualizar</button><button id="shutdown-viewer" type="button" title="Encerrar o servidor local e desconectar o visualizador">Encerrar</button></header>
 <section id="script-view" role="dialog" aria-label="Script da service task" hidden><header><div><strong id="script-title">Script</strong><small id="script-path"></small></div><button id="script-copy" type="button" title="Copiar o caminho do arquivo">Copiar caminho</button><button id="script-close" class="close" type="button" aria-label="Fechar o script">×</button></header><pre id="script-code"></pre></section>
 <div id="error" class="banner" role="alert"></div><div id="notice" class="banner" role="status"></div>
 <div id="workspace"><main id="canvas"><div class="empty">Carregando diagrama…</div></main><aside id="inspector" aria-label="Propriedades do elemento"><div class="panel-head"><div><span id="kind" class="badge"></span><h2 id="element-name"></h2><div id="element-id" class="id"></div></div><button id="close-panel" class="close" type="button" aria-label="Fechar propriedades">×</button></div>
@@ -1003,13 +1009,16 @@ async function ligar(origem,destino){
   finally{ocupado=false}
 }
 // Adicionar: escolhe o tipo no menu, e o próximo clique no diagrama diz onde.
-const addMenu=document.querySelector('#add-menu');let colocando,selecionarDepois;
-const NOMES_TIPO={humana:'tarefa humana',recuperacao:'service task com recuperação',servico:'service task',gateway:'gateway',paralelo:'gateway paralelo',juncao:'junção paralela',inicio:'início',fim:'fim'};
-function pararDeColocar(){colocando=undefined;addMenu.value='';document.body.classList.remove('colocando')}
-addMenu.addEventListener('change',()=>{colocando=addMenu.value||undefined;document.body.classList.toggle('colocando',Boolean(colocando));if(colocando)flash('Clique no diagrama onde a '+NOMES_TIPO[colocando]+' vai ficar. Esc cancela.')});
+const addMenu=document.querySelector('#add-menu'),timerMinutes=document.querySelector('#timer-minutes'),timerMinutesInput=document.querySelector('#timer-minutes-input');let colocando,selecionarDepois;
+const NOMES_TIPO={humana:'tarefa humana',recuperacao:'service task com recuperação',servico:'service task',gateway:'gateway',paralelo:'gateway paralelo',juncao:'junção paralela',inicio:'início',fim:'fim',temporizador:'temporizador'};
+function pararDeColocar(){colocando=undefined;addMenu.value='';timerMinutes.hidden=true;document.body.classList.remove('colocando')}
+addMenu.addEventListener('change',()=>{colocando=addMenu.value||undefined;timerMinutes.hidden=colocando!=='temporizador';document.body.classList.toggle('colocando',Boolean(colocando));if(colocando){if(colocando==='temporizador')timerMinutesInput.focus();flash('Clique no diagrama onde o '+NOMES_TIPO[colocando]+' vai ficar. Esc cancela.')}});
+function minutosDoTemporizador(){const minutos=Number(timerMinutesInput.value);return Number.isInteger(minutos)&&minutos>0?minutos:undefined}
 async function colocarEm(e){
-  const tipo=colocando;pararDeColocar();if(ocupado)return;ocupado=true;
-  try{const q=pontoDoDiagrama(e);const {status,dados}=await pedir('add',{tipo,x:Math.round(q.x/10)*10,y:Math.round(q.y/10)*10,hash:hashAtual});
+  const tipo=colocando,minutos=tipo==='temporizador'?minutosDoTemporizador():undefined;
+  if(tipo==='temporizador'&&minutos===undefined){flash('Minutos: use um número inteiro positivo antes de posicionar o temporizador.');timerMinutesInput.focus();return}
+  pararDeColocar();if(ocupado)return;ocupado=true;
+  try{const q=pontoDoDiagrama(e);const {status,dados}=await pedir('add',{tipo,x:Math.round(q.x/10)*10,y:Math.round(q.y/10)*10,hash:hashAtual,...(tipo==='temporizador'?{minutos}: {})});
     if(dados.ok){selecionarDepois=dados.criados[0];
       const scripts=(dados.scripts||[]).length?'Script criado: '+dados.scripts.join(', ')+'. ':'';
       const existentes=(dados.scriptsExistentes||[]).length?'Script já existia e não foi tocado: '+dados.scriptsExistentes.join(', ')+'. ':'';

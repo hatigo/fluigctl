@@ -35,6 +35,12 @@ export const MODELOS: Record<string, Modelo> = {
     forma: "    <children xsi:type=\"pi:ContainerShape\" visible=\"true\" active=\"true\">\n      <graphicsAlgorithm xsi:type=\"al:Ellipse\" lineWidth=\"1\" width=\"35\" height=\"35\" x=\"573\" y=\"276\">\n        <graphicsAlgorithmChildren xsi:type=\"al:Ellipse\" lineWidth=\"1\" width=\"35\" height=\"35\"/>\n      </graphicsAlgorithm>\n      <link businessObjects=\"intermediateerror12\"/>\n      <anchors xsi:type=\"pi:ChopboxAnchor\"/>\n    </children>",
     modelo: "<bpmn2:BpmnIntermediateEvent id=\"intermediateerror12\" name=\"Erro ao obter al&#xe7;adas\" type=\"43\" extendedFields=\"&lt;list/>\" sequenceAttached=\"3\" signalId=\"0\" parentTask=\"servicetask3\"/>",
   },
+  "temporizador": {
+    id: "intermediatetimer1",
+    indice: 0,
+    forma: "    <children xsi:type=\"pi:ContainerShape\" visible=\"true\" active=\"true\">\n      <graphicsAlgorithm xsi:type=\"al:Ellipse\" lineWidth=\"1\" width=\"35\" height=\"35\" x=\"100\" y=\"100\"/>\n      <link businessObjects=\"intermediatetimer1\"/>\n      <anchors xsi:type=\"pi:ChopboxAnchor\"/>\n    </children>",
+    modelo: "<bpmn2:BpmnIntermediateEvent id=\"intermediatetimer1\" name=\"Temporizador\" type=\"32\" extendedFields=\"&lt;list/>\" sequenceAttached=\"0\" signalId=\"0\" trigger=\"&lt;org.eclipse.bpmn2.documentacional.BpmnTriggerData>&lt;runType>MINUTE&lt;/runType>&lt;timeTrigger>0:0:0&lt;/timeTrigger>&lt;frequencia>1&lt;/frequencia>&lt;isCondition>false&lt;/isCondition>&lt;/org.eclipse.bpmn2.documentacional.BpmnTriggerData>\"/>",
+  },
   "gateway": {
     id: "exclusivegateway6",
     indice: 10,

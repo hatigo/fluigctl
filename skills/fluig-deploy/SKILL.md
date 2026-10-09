@@ -126,8 +126,10 @@ they can:
   Assignment and condition blobs are only rewritten in Studio's exact format.
   When the panel cannot round-trip one, it shows it read-only.
 - add elements from the "+ Adicionar…" menu: human task, exclusive gateway,
-  parallel gateway and parallel join, start, end, a lone
-  service task, or a **service task with recovery**. The last one creates the
+  parallel gateway and parallel join, start, end, a lone service task, an
+  intermediate **timer**, or a **service task with recovery**. Choosing a timer
+  exposes an accessible minutes input (30 initially); use a positive integer
+  before clicking the diagram. Existing timer durations remain read-only. The last one creates the
   whole recovery pattern at once: the task, the error event, the handling task
   in `suporte_processos`, and both flows. A new service task gets its script at
   `workflow/scripts/<process>.<id>.js`: a skeleton that logs "not implemented
@@ -195,6 +197,9 @@ fluigctl diagram add <p>.process --type humana --name "Conferir pedido" --after 
 # append after an element (opens room and links it), or place at a centre point
 fluigctl diagram add <p>.process --type recuperacao --name "Integrar no RM" --after "Aprovar pedido"
 fluigctl diagram add <p>.process --type fim --name "Cancelado" --at 900,450
+# Timer duration is a positive integer in minutes; it is a Studio type-32 MINUTE trigger.
+fluigctl diagram add <p>.process --type temporizador --minutes 30 --after "Conferir pedido"
+fluigctl diagram timer <p>.process intermediatetimer37 --minutes 30
 fluigctl diagram link <p>.process "Aprovado?" "Revisar" --name "Revisar" --when decisao=revisar
 fluigctl diagram condition <p>.process "Aprovado?" --to "Cancelado" --when decisao!=aprovado
 fluigctl diagram assign <p>.process "Conferir pedido" --mechanism "Executor Atividade" --field idNode="Preencher pedido" --field returns=1
@@ -207,9 +212,10 @@ fluigctl diagram straighten <p>.process      # the viewer's Endireitar, every fl
 fluigctl diagram undo <p>.process            # and redo
 ```
 
-- `--type`: humana, servico, gateway, paralelo, juncao, inicio, fim, or
-  **recuperacao** (service task with the whole recovery pattern). A plain
-  `servico` breaks the pattern; use `recuperacao` for service tasks.
+- `--type`: humana, servico, gateway, paralelo, juncao, inicio, fim,
+  **temporizador**, or **recuperacao** (service task with the whole recovery
+  pattern). A plain `servico` breaks the pattern; use `recuperacao` for service tasks.
+- `--minutes N` is required for `--type temporizador`, and `diagram timer <p>.process <elemento> --minutes N` configures an existing one. `N` must be a positive integer; invalid values and non-timer targets are refused without writing.
 - `--lane <raia>` puts the new element in another lane.
 - A new service task gets a script skeleton in `workflow/scripts/`. Implement it
   before pushing.

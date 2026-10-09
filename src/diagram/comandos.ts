@@ -84,6 +84,8 @@ function abrirEspaco(xml: string, x: number, largura: number): { xml: string; mo
 export interface PedidoNovoElemento {
   tipo: TipoNovo;
   nome?: string;
+  /** Duração do temporizador em minutos inteiros positivos. */
+  minutos?: number;
   /** Grupo do tratamento, no padrão de recuperação. */
   grupo?: string;
 }
@@ -122,7 +124,7 @@ export function inserirEntreNoXml(xml: string, a: string, b: string, novo: Pedid
 
   const cy = raia ? centroNaRaia(lerDiagrama(texto), raia) : fa.absY + fa.altura / 2;
   const cx = fb.absX + w / 2;
-  const add = adicionarNoXml(texto, { tipo: novo.tipo, x: Math.round(cx), y: Math.round(cy), ...(novo.nome === undefined ? {} : { nome: novo.nome }), ...(novo.grupo === undefined ? {} : { grupo: novo.grupo }) });
+  const add = adicionarNoXml(texto, { tipo: novo.tipo, x: Math.round(cx), y: Math.round(cy), ...(novo.nome === undefined ? {} : { nome: novo.nome }), ...(novo.minutos === undefined ? {} : { minutos: novo.minutos }), ...(novo.grupo === undefined ? {} : { grupo: novo.grupo }) });
   texto = add.xml;
   const principal = add.criados[0]!;
   texto = ligarNoXml(texto, a, principal, nomeDoFluxo).xml;
@@ -147,7 +149,7 @@ export function inserirDepoisNoXml(xml: string, a: string, novo: PedidoNovoEleme
   const espaco = abrirEspaco(texto, fa.absX + fa.largura + 1, w + ESPACO);
   texto = espaco.xml;
   const cy = raia ? centroNaRaia(lerDiagrama(texto), raia) : fa.absY + fa.altura / 2;
-  const add = adicionarNoXml(texto, { tipo: novo.tipo, x: Math.round(inicio + w / 2), y: Math.round(cy), ...(novo.nome === undefined ? {} : { nome: novo.nome }), ...(novo.grupo === undefined ? {} : { grupo: novo.grupo }) });
+  const add = adicionarNoXml(texto, { tipo: novo.tipo, x: Math.round(inicio + w / 2), y: Math.round(cy), ...(novo.nome === undefined ? {} : { nome: novo.nome }), ...(novo.minutos === undefined ? {} : { minutos: novo.minutos }), ...(novo.grupo === undefined ? {} : { grupo: novo.grupo }) });
   texto = ligarNoXml(add.xml, a, add.criados[0]!).xml;
   texto = endireitarNoXml(texto, fluxosDe(texto, [a, add.criados[0]!, ...espaco.movidos])).xml;
   return { xml: texto, criados: add.criados, movidos: espaco.movidos };
@@ -178,6 +180,7 @@ const TIPO_LEGIVEL: Record<string, string> = {
   'BpmnGateway/121': 'gateway inclusivo',
   'BpmnGateway/126': 'gateway paralelo',
   'BpmnGateway/127': 'junção paralela',
+  'BpmnIntermediateEvent/32': 'temporizador intermediário',
   'BpmnIntermediateEvent/43': 'evento de erro',
   'BpmnAnnotation/0': 'anotação',
 };

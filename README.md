@@ -88,7 +88,7 @@ O relatório completo, com tarefas, defeitos, método e limitações, está em
 | `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
 | `request start` / `show` / `move` / `cancel` (solicitações sem a tela do Fluig) | pronto, conferido no localdev com a contratação: recuperação, laço de aprovação e reprovação |
 | `form new` (pasta de formulário como a do Studio: style guide, `form name="form"`, campos — inclusive select e radio — e `validateForm` dos obrigatórios) | pronto; publicado com `push form --create` (que assume a pasta dos formulários, `ds<nome>` e a persistência do Studio) no localdev e usado por um processo criado pelo `diagram new` |
-| `diagram show/add/link/condition/assign/rename/remove/organize/straighten/undo` (editar o diagrama pelo terminal, com as operações e o desfazer do visualizador; `add --after A --before B` insere entre dois, abrindo espaço e religando) | pronto |
+| `diagram show/add/timer/link/condition/assign/rename/remove/organize/straighten/undo` (editar o diagrama pelo terminal, com as operações e o desfazer do visualizador; `add --after A --before B` insere entre dois, abrindo espaço e religando) | pronto |
 | `diagram new` (processo novo como o Studio grava: pool, raias, início ligado ao fim) | pronto; abre no Studio sem alteração e passa no `diagram check` |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, textos sem fonte, losangos sem pontos e formas sem o visual do Studio (`--fix` acrescenta), elementos sem saída ou sem entrada e o padrão das service tasks; `--fix` também devolve ao canto da tarefa a bolinha de erro que o Studio deixou solta) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
 | `server import` (servidores da extensão Fluiggers, e as senhas com `--with-passwords`) | pronto |
@@ -185,6 +185,7 @@ parâmetro é o usuário, o que deixava o laço de aprovação sem fim.
 
 ```sh
 npm install && npm run build
+node bin/fluigctl.js --help   # usa o build local, sem instalação global
 npm link            # deixa `fluigctl` no PATH
 ```
 
@@ -316,6 +317,17 @@ troca de nome —, porque `addServer` recusa nome repetido de propósito: gravar
 cima do registro que está lá não passaria por essa checagem. O nome pode mudar,
 e o antigo não fica para trás.
 
+### Temporizadores intermediários pelo terminal
+
+Use apenas duração em minutos inteiros positivos. A criação segue as mesmas regras de inserção, escrita atômica e desfazer do visualizador; a configuração recusa alvos que não sejam temporizadores e não grava em caso de erro.
+
+```sh
+node bin/fluigctl.js diagram add workflow/diagrams/<p>.process --type temporizador --minutes 30 --after "Atividade anterior"
+node bin/fluigctl.js diagram timer workflow/diagrams/<p>.process intermediatetimer37 --minutes 30
+```
+
+O build local é chamado pelo wrapper versionado `bin/fluigctl.js`; rode `npm run build` antes, sem `npm link` ou instalação global. O timer sai como evento intermediário Studio tipo 32, com gatilho `MINUTE`, `timeTrigger` `0:0:0` e frequência igual aos minutos.
+
 ### 2. Acompanhar um diagrama enquanto ele muda
 
 ```sh
@@ -414,8 +426,9 @@ O visualizador abre somente leitura. O botão **Editar** liga o modo de edição
   com o campo Nome em foco.
   - Tipos: tarefa humana, gateway exclusivo, gateway paralelo (abre), junção
     paralela (fecha), início, fim, service task sozinha, e **service task com
-    recuperação**. O temporizador fica para depois: ele exige configurar o
-    gatilho no painel.
+    recuperação**. Ao escolher Temporizador, informe minutos inteiros positivos
+    (30 inicial) antes de clicar no diagrama; o painel não edita a duração de um
+    temporizador já criado.
   - A **service task com recuperação** cria o padrão inteiro de uma vez:
     - a tarefa automática;
     - o evento de erro no canto inferior direito;

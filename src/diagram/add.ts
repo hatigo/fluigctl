@@ -34,7 +34,7 @@ import { blobDeAtribuicao, codificarAtributo, estiloDoArquivo, trocarAtributosNa
  * novo no diagram check.
  */
 
-export type TipoNovo = 'humana' | 'servico' | 'gateway' | 'fim' | 'inicio' | 'paralelo' | 'juncao' | 'recuperacao';
+export type TipoNovo = 'humana' | 'servico' | 'gateway' | 'fim' | 'inicio' | 'paralelo' | 'juncao' | 'temporizador' | 'recuperacao';
 
 const TIPOS: Record<Exclude<TipoNovo, 'recuperacao'> | 'erro', { tipo: string; type: string; prefixo: string; nome: string }> = {
   humana: { tipo: 'BpmnTask', type: '80', prefixo: 'task', nome: 'Nova tarefa' },
@@ -45,6 +45,7 @@ const TIPOS: Record<Exclude<TipoNovo, 'recuperacao'> | 'erro', { tipo: string; t
   paralelo: { tipo: 'BpmnGateway', type: '126', prefixo: 'parallelgateway', nome: 'Paralelo' },
   juncao: { tipo: 'BpmnGateway', type: '127', prefixo: 'joingateway', nome: 'Junção' },
   erro: { tipo: 'BpmnIntermediateEvent', type: '43', prefixo: 'intermediateerror', nome: 'Erro' },
+  temporizador: { tipo: 'BpmnIntermediateEvent', type: '32', prefixo: 'intermediatetimer', nome: 'Temporizador' },
 };
 
 const TOKEN = /<!--[\s\S]*?-->|<\?[\s\S]*?\?>|<(\/?)([\w:.-]+)((?:\s+[\w:.-]+\s*=\s*"[^"]*")*)\s*(\/?)>/g;
@@ -367,8 +368,35 @@ export interface PedidoAdicionar {
   x: number;
   y: number;
   nome?: string;
+  /** Duração do temporizador em minutos inteiros positivos. */
+  minutos?: number;
   /** Grupo de suporte da tarefa de tratamento (recuperação). */
   grupo?: string;
+}
+
+export function validarMinutos(minutos: number | undefined): number {
+  if (!Number.isInteger(minutos) || minutos === undefined || minutos <= 0) {
+    throw new EdicaoInvalida('--minutes: use um número inteiro positivo de minutos');
+  }
+  return minutos;
+}
+
+function gatilhoTemporizador(minutos: number): string {
+  return `<org.eclipse.bpmn2.documentacional.BpmnTriggerData><runType>MINUTE</runType><timeTrigger>0:0:0</timeTrigger><frequencia>${minutos}</frequencia><isCondition>false</isCondition></org.eclipse.bpmn2.documentacional.BpmnTriggerData>`;
+}
+
+/** Troca somente o gatilho de um temporizador intermediário existente. */
+export function configurarTemporizadorNoXml(xml: string, id: string, minutos: number): string {
+  validarMinutos(minutos);
+  const objeto = lerDiagrama(xml).objetos.find((o) => o.attrs['id'] === id);
+  if (!objeto) throw new ConflitoEdicao('elemento-removido', `o elemento ${id} não existe mais`);
+  if (objeto.tipo !== 'BpmnIntermediateEvent' || objeto.attrs['type'] !== '32') {
+    throw new EdicaoInvalida(`${id} não é um temporizador intermediário`);
+  }
+  const tag = tagBpmn(xml, id);
+  if (!tag) throw new EdicaoInvalida(`${id} não possui objeto BPMN no XML`);
+  const nova = trocarAtributosNaTag(tag.tag, { trigger: gatilhoTemporizador(minutos) }, ['extendedFields', 'type'], estiloDoArquivo(xml));
+  return xml.slice(0, tag.inicio) + nova + xml.slice(tag.inicio + tag.tag.length);
 }
 
 /**
@@ -378,7 +406,8 @@ export interface PedidoAdicionar {
  */
 export function adicionarNoXml(xml: string, p: PedidoAdicionar): { xml: string; criados: string[] } {
   if (![p.x, p.y].every((n) => Number.isFinite(n) && n >= 0 && n < 100000)) throw new EdicaoInvalida('posição inválida');
-  if (!['humana', 'servico', 'gateway', 'fim', 'inicio', 'paralelo', 'juncao', 'recuperacao'].includes(p.tipo)) throw new EdicaoInvalida(`tipo desconhecido: ${p.tipo}`);
+  if (!['humana', 'servico', 'gateway', 'fim', 'inicio', 'paralelo', 'juncao', 'temporizador', 'recuperacao'].includes(p.tipo)) throw new EdicaoInvalida(`tipo desconhecido: ${p.tipo}`);
+  if (p.tipo === 'temporizador') validarMinutos(p.minutos);
   const d = lerDiagrama(xml);
   const nome = (p.nome ?? '').trim() || (p.tipo === 'recuperacao' ? TIPOS.servico.nome : TIPOS[p.tipo].nome);
 
@@ -395,7 +424,13 @@ export function adicionarNoXml(xml: string, p: PedidoAdicionar): { xml: string; 
   const y = Math.round(p.y - (ehGateway ? w / 2 : h / 2));
   if (!dentro(x, y, w, h)) throw new EdicaoInvalida('o elemento ficaria fora da pool; escolha um ponto dentro dela');
 
-  let r = criarNoXml(xml, { tipo: tipoBase, nome, x, y });
+  let r = criarNoXml(xml, {
+    tipo: tipoBase,
+    nome,
+    x,
+    y,
+    ...(p.tipo === 'temporizador' ? { atributos: { trigger: gatilhoTemporizador(p.minutos!) } } : {}),
+  });
   if (p.tipo !== 'recuperacao') return { xml: r.xml, criados: [r.id] };
 
   const servico = r.id;

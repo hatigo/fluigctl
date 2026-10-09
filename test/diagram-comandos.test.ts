@@ -85,6 +85,36 @@ test('diagram show: na ordem do fluxo, com raia, atribuição e condição', () 
   assert.equal(m.elementos[erro - 1]!.id, 'servicetask3', 'o evento de erro vem logo depois da tarefa dele');
 });
 
+test('pelo terminal: temporizador cria/configura e recusas não gravam', () => {
+  const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-timer-'));
+  try {
+    const arquivo = join(raiz, 'contratacao.process');
+    writeFileSync(arquivo, CONTRATACAO);
+    const env = { ...process.env, XDG_STATE_HOME: join(raiz, 'estado'), FLUIGCTL_FONTE_STUDIO: 'arial' };
+    const f = (...args: string[]) => execFileSync(process.execPath, [BIN, 'diagram', ...args], { env, encoding: 'utf8' });
+    assert.throws(() => f('add', arquivo, '--type', 'temporizador', '--after', 'task5'), /inteiro positivo/);
+    assert.equal(readFileSync(arquivo, 'utf8'), CONTRATACAO, 'temporizador sem --minutes não escreve');
+    assert.match(f('add', arquivo, '--type', 'temporizador', '--minutes', '30', '--after', 'task5', '--before', 'exclusivegateway6'), /criado\(s\): intermediatetimer37/);
+    assert.match(f('show', arquivo), /intermediatetimer37  temporizador intermediário/);
+    assert.match(f('timer', arquivo, 'intermediatetimer37', '--minutes', '31'), /temporizador configurado/);
+    assert.match(objeto(readFileSync(arquivo, 'utf8'), 'intermediatetimer37').attrs['trigger'] ?? '', /<frequencia>31<\/frequencia>/);
+    const depois = readFileSync(arquivo, 'utf8');
+    for (const minutos of ['0', '1.5', '-1']) {
+      const args = minutos === '-1' ? ['--minutes=-1'] : ['--minutes', minutos];
+      assert.throws(() => f('timer', arquivo, 'intermediatetimer37', ...args), /inteiro positivo/);
+      assert.equal(readFileSync(arquivo, 'utf8'), depois);
+    }
+    assert.throws(() => f('timer', arquivo, 'task2', '--minutes', '30'), /não é um temporizador/);
+    assert.equal(readFileSync(arquivo, 'utf8'), depois);
+    f('undo', arquivo);
+    assert.match(objeto(readFileSync(arquivo, 'utf8'), 'intermediatetimer37').attrs['trigger'] ?? '', /<frequencia>30<\/frequencia>/, 'undo restaura a duração anterior');
+    f('redo', arquivo);
+    assert.equal(readFileSync(arquivo, 'utf8'), depois, 'redo restaura a configuração');
+  } finally {
+    rmSync(raiz, { recursive: true, force: true });
+  }
+});
+
 test('pelo terminal: add entre dois, assign, check e undo, no mesmo histórico do visualizador', () => {
   const raiz = mkdtempSync(join(tmpdir(), 'fluigctl-cmd-'));
   try {

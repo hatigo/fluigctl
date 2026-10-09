@@ -5,13 +5,15 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { adicionarNoXml, blocosDeTopo, criarNoXml, ligarNoXml } from '../src/diagram/add.js';
+import { adicionarNoXml, blocosDeTopo, configurarTemporizadorNoXml, criarNoXml, ligarNoXml } from '../src/diagram/add.js';
 import { checarDiagrama } from '../src/diagram/check.js';
 import { desfazerUltimaEdicao, hash } from '../src/diagram/edit.js';
 import { lerAtribuicao } from '../src/diagram/props.js';
+import { organizarNoXml } from '../src/diagram/layout.js';
 import { servirDiagrama } from '../src/diagram/viewer.js';
 import { lerDiagrama } from '../src/push/diagram/modelo.js';
 import { converterDiagrama } from '../src/push/diagram/ecm30.js';
+import { gerarProcess } from '../src/pull/process-diagram.js';
 
 /**
  * Modo de edição, passo 4: criar elementos. O que se cria vai para o fim das
@@ -118,6 +120,26 @@ test('a criação não piora a conversão do push', () => {
   }
 });
 
+test('temporizador MINUTE cria o relógio Studio, converte e só configura o tipo certo', () => {
+  const criado = adicionarNoXml(CONTRATACAO, { tipo: 'temporizador', minutos: 30, x: 300, y: 450 });
+  const id = criado.criados[0]!;
+  assert.equal(id, 'intermediatetimer37');
+  assert.equal(objeto(criado.xml, id)!.attrs['type'], '32');
+  assert.equal(objeto(criado.xml, id)!.attrs['sequenceAttached'], '0');
+  assert.equal(objeto(criado.xml, id)!.attrs['signalId'], '0');
+  assert.match(objeto(criado.xml, id)!.attrs['trigger'] ?? '', /<runType>MINUTE<\/runType><timeTrigger>0:0:0<\/timeTrigger><frequencia>30<\/frequencia>/);
+  const forma = blocosDeTopo(criado.xml).blocos.find((b) => b.id === id)!;
+  assert.match(criado.xml.slice(forma.inicio, forma.fim), /<points x="6" y="17"\/>/, 'o visual recebe o ícone de relógio do Studio');
+  assert.ok(lerDiagrama(organizarNoXml(criado.xml).xml).caixas.has(id), 'o layout preserva o temporizador');
+  const ecm30 = converterDiagrama(criado.xml, { companyId: 1, formId: 1 }).xml;
+  assert.match(objeto(gerarProcess(ecm30).process, id)!.attrs['trigger'] ?? '', /<runType>MINUTE<\/runType><timeTrigger>0:0:0<\/timeTrigger><frequencia>30<\/frequencia>/, 'push/pull offline preserva MINUTE/30');
+  const configurado = configurarTemporizadorNoXml(criado.xml, id, 31);
+  assert.match(objeto(configurado, id)!.attrs['trigger'] ?? '', /<frequencia>31<\/frequencia>/);
+  assert.throws(() => configurarTemporizadorNoXml(criado.xml, 'task2', 30), /não é um temporizador/);
+  assert.throws(() => adicionarNoXml(CONTRATACAO, { tipo: 'temporizador', x: 300, y: 450 }), /inteiro positivo/);
+  for (const minutos of [0, -1, 1.5]) assert.throws(() => adicionarNoXml(CONTRATACAO, { tipo: 'temporizador', minutos, x: 300, y: 450 }), /inteiro positivo/);
+});
+
 test('ligar dois elementos atualiza modelo, âncoras e conexões, e recusa o que não faz sentido', () => {
   const a = criarNoXml(CONTRATACAO, { tipo: 'humana', nome: 'A', x: 200, y: 450 });
   const b = criarNoXml(a.xml, { tipo: 'fim', nome: 'B', x: 400, y: 460 });
@@ -190,6 +212,48 @@ test('o visualizador cria pela rota add, e um desfazer tira tudo o que a criaç�
     const html = await (await fetch(v.url)).text();
     assert.match(html, /id="add-menu"/);
     assert.match(html, /Service task com recuperação/);
+  } finally {
+    await v.fechar();
+    p.limpar();
+  }
+});
+
+test('o visualizador cria temporizador com minutos, e recusas não escrevem', async () => {
+  const p = projeto();
+  const v = await servirDiagrama({ arquivo: p.arquivo, registroDir: p.registro, undoDir: p.undo });
+  const postar = async (corpo: unknown) => {
+    const r = await fetch(`${v.url}add`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) });
+    return { status: r.status, dados: (await r.json()) as Record<string, unknown> };
+  };
+  try {
+    const criado = await postar({ tipo: 'temporizador', minutos: 30, x: 260, y: 300, hash: hash(CONTRATACAO) });
+    assert.equal(criado.status, 200);
+    const id = (criado.dados['criados'] as string[])[0]!;
+    let texto = readFileSync(p.arquivo, 'utf8');
+    assert.match(objeto(texto, id)!.attrs['trigger'] ?? '', /<runType>MINUTE<\/runType><timeTrigger>0:0:0<\/timeTrigger><frequencia>30<\/frequencia>/);
+    const estado = await (await fetch(`${v.url}state`)).json() as { elementos: { id: string }[] };
+    assert.ok(estado.elementos.some((e) => e.id === id), 'recarregar preserva o timer');
+    const depois = texto;
+    for (const corpo of [
+      { tipo: 'temporizador', x: 260, y: 300, hash: hash(texto) },
+      { tipo: 'temporizador', minutos: 0, x: 260, y: 300, hash: hash(texto) },
+      { tipo: 'temporizador', minutos: '30', x: 260, y: 300, hash: hash(texto) },
+    ]) {
+      assert.equal((await postar(corpo)).status, 400);
+      assert.equal(readFileSync(p.arquivo, 'utf8'), depois);
+    }
+    const conflito = await postar({ tipo: 'temporizador', minutos: 30, x: 260, y: 300, hash: hash(CONTRATACAO) });
+    assert.equal(conflito.status, 409);
+    assert.equal(readFileSync(p.arquivo, 'utf8'), depois);
+    assert.equal((await (await fetch(`${v.url}undo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json() as { ok: boolean }).ok, true);
+    assert.equal(readFileSync(p.arquivo, 'utf8'), CONTRATACAO);
+    assert.equal((await (await fetch(`${v.url}redo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).json() as { ok: boolean }).ok, true);
+    assert.equal(readFileSync(p.arquivo, 'utf8'), depois);
+    const html = await (await fetch(v.url)).text();
+    assert.match(html, /<option value="temporizador">Temporizador<\/option>/);
+    assert.match(html, /id="timer-minutes-input" type="number" min="1" step="1" value="30"/);
+    assert.match(html, /if\(colocando\)\{if\(colocando==='temporizador'\)/);
+    assert.match(html, /if\(colocando\)\{pararDeColocar\(\);flash\('Adição cancelada/);
   } finally {
     await v.fechar();
     p.limpar();

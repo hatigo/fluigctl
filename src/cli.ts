@@ -104,10 +104,12 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       as raias (padrão: Solicitante) e o início ligado ao fim; abre sem alteração
       no Studio e se edita pelo diagram open
 
-  fluigctl diagram show|add|link|condition|assign|rename|remove|organize|straighten|undo|redo <arquivo.process> ...
+  fluigctl diagram show|add|timer|link|condition|assign|rename|remove|organize|straighten|undo|redo <arquivo.process> ...
       edita o diagrama pelo terminal, com as operações e o desfazer do visualizador
       (os elementos por id ou nome exato; diagram show lista). Exemplos:
         diagram add p.process --type humana --name "Conferir" --after "Aprovar" --before "Aprovado?"
+        diagram add p.process --type temporizador --minutes 30 --after "Conferir"
+        diagram timer p.process intermediatetimer37 --minutes 30
         diagram assign p.process "Conferir" --mechanism "Executor Atividade" --field idNode="Preencher" --field returns=1
         diagram link p.process "Aprovado?" "Fim" --when decisao=aprovado
 

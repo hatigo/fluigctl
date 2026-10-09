@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { ErroFluigctl } from '../errors.js';
-import { adicionarNoXml, ligarNoXml, scriptsDasCriadas, type TipoNovo } from '../diagram/add.js';
+import { adicionarNoXml, configurarTemporizadorNoXml, ligarNoXml, scriptsDasCriadas, validarMinutos, type TipoNovo } from '../diagram/add.js';
 import { definirCondicaoNoXml, formatarDiagrama, inserirDepoisNoXml, inserirEntreNoXml, mostrarDiagrama, resolverElemento } from '../diagram/comandos.js';
 import { ConflitoEdicao, EdicaoInvalida, aplicarEdicao, desfazerUltimaEdicao, endireitar, hash, refazerEdicao, renomearElemento } from '../diagram/edit.js';
 import { organizarNoXml } from '../diagram/layout.js';
@@ -20,7 +20,8 @@ import { removerNoXml } from '../diagram/remove.js';
 
 export const USO_EDICAO = [
   'fluigctl diagram show <arquivo.process> [--json]',
-  'fluigctl diagram add <arquivo.process> --type <tipo> [--name N] [--group G] (--after <el> [--before <el>] | --at <x>,<y>) [--lane <raia>]',
+  'fluigctl diagram add <arquivo.process> --type <tipo> [--name N] [--group G] [--minutes N] (--after <el> [--before <el>] | --at <x>,<y>) [--lane <raia>]',
+  'fluigctl diagram timer <arquivo.process> <elemento> --minutes N',
   'fluigctl diagram link <arquivo.process> <origem> <destino> [--name N] [--when campo=valor]... [--expression E]',
   'fluigctl diagram condition <arquivo.process> <gateway> --to <destino> (--when campo=valor | --when campo!=valor)... | --expression E',
   'fluigctl diagram assign <arquivo.process> <tarefa> --mechanism <M> [--field k=v]... | --custom <MEC_ID> | --none',
@@ -31,8 +32,8 @@ export const USO_EDICAO = [
   'fluigctl diagram undo|redo <arquivo.process>',
 ];
 
-const TIPOS: TipoNovo[] = ['humana', 'servico', 'gateway', 'fim', 'inicio', 'paralelo', 'juncao', 'recuperacao'];
-const SUBCOMANDOS = new Set(['show', 'add', 'link', 'condition', 'assign', 'rename', 'remove', 'organize', 'straighten', 'undo', 'redo']);
+const TIPOS: TipoNovo[] = ['humana', 'servico', 'gateway', 'fim', 'inicio', 'paralelo', 'juncao', 'temporizador', 'recuperacao'];
+const SUBCOMANDOS = new Set(['show', 'add', 'timer', 'link', 'condition', 'assign', 'rename', 'remove', 'organize', 'straighten', 'undo', 'redo']);
 
 export function ehComandoDeEdicao(sub: string | undefined): boolean {
   return sub !== undefined && SUBCOMANDOS.has(sub);
@@ -90,6 +91,7 @@ function executar(sub: string, argv: string[]): void {
       field: { type: 'string', multiple: true },
       custom: { type: 'string' },
       none: { type: 'boolean', default: false },
+      minutes: { type: 'string' },
     },
   });
   const arquivo = positionals[0];
@@ -105,7 +107,10 @@ function executar(sub: string, argv: string[]): void {
   if (sub === 'add') {
     const tipo = values.type as TipoNovo | undefined;
     if (!tipo || !TIPOS.includes(tipo)) throw new ErroFluigctl(`--type: use ${TIPOS.join(', ')}\nuso: ${uso}`, 2);
-    const novo = { tipo, ...(values.name === undefined ? {} : { nome: values.name }), ...(values.group === undefined ? {} : { grupo: values.group }) };
+    const minutos = values.minutes === undefined ? undefined : Number(values.minutes);
+    if (tipo === 'temporizador') validarMinutos(minutos);
+    if (tipo !== 'temporizador' && values.minutes !== undefined) throw new EdicaoInvalida('--minutes só é aceito com --type temporizador');
+    const novo = { tipo, ...(values.name === undefined ? {} : { nome: values.name }), ...(values.group === undefined ? {} : { grupo: values.group }), ...(minutos === undefined ? {} : { minutos }) };
     let criados: string[] = [];
     let movidos: string[] = [];
     let xmlNovo = '';
@@ -129,6 +134,17 @@ function executar(sub: string, argv: string[]): void {
     }, undefined, () => scriptsDasCriadas(arquivo, xmlNovo, criados));
     console.log(`criado(s): ${criados.join(', ')}${movidos.length ? `; abriu espaço movendo ${movidos.length} elemento(s)` : ''}`);
     for (const s of r.criados ?? []) console.log(`  script novo: ${relative(process.cwd(), s)} (esqueleto: implemente antes de publicar)`);
+    avisar(r.avisos);
+    return;
+  }
+
+  if (sub === 'timer') {
+    const [, ref] = positionals;
+    const minutos = values.minutes === undefined ? undefined : Number(values.minutes);
+    if (!ref) throw new ErroFluigctl(`uso: ${uso}`, 2);
+    validarMinutos(minutos);
+    const r = aplicarEdicao(arquivo, undoDir(), (t) => configurarTemporizadorNoXml(t, resolverElemento(t, ref).attrs['id']!, minutos!));
+    console.log('temporizador configurado');
     avisar(r.avisos);
     return;
   }
