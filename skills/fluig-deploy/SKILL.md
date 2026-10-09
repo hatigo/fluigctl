@@ -288,6 +288,30 @@ fluigctl form new formNovo --title "Pedido" --field "pedido!:text:Pedido" \
   --field "decisao!:radio(aprovado=Aprovar|reprovado=Reprovar):Decisão"
 ```
 
+The preview reads the Style Guide from a local cache and serves it without
+contacting the server on open, with reload on save. Bootstrap is validated
+against `fluig-localdev`: each asset is resolved through an ordered candidate
+list (there the main CSS came from the `-flat` path,
+`/style-guide/css/fluig-style-guide-flat.min.css`, 626925 bytes) and 182 files
+were cached. CSS-referenced assets missing on the server are recorded as ignored
+without aborting the bootstrap. A browserless offline demonstration was run
+against that real cache (open, reload on save, reuse on reopen, close) without
+contacting the server.
+
+```sh
+fluigctl form bootstrap --server <servidor>
+fluigctl form open forms/formNovo
+fluigctl form close forms/formNovo
+```
+
+`form bootstrap` downloads the CSS, jQuery and `fluig-style-guide.min.js` (plus
+what the CSS references) into `~/.local/state/fluigctl/form/styleguide`. Once the
+cache exists, `form open` runs the form in an isolated loopback iframe and
+serves the assets from the cache, without contacting the server; without the
+cache it refuses and tells you to run the bootstrap, instead of downloading on
+every open. It does not support DatasetFactory, FLUIGC or any Fluig remote
+resource yet.
+
 `persistenceType` and the parent folder cannot be changed after the form is
 created. Without flags, `push form --create` takes the folder where all of the
 server's forms are (it refuses when they are in more than one and lists them),

@@ -57,6 +57,8 @@ import { encaixarErros, errosForaDoCanto } from './diagram/erros.js';
 import { novoProcesso } from './diagram/novo.js';
 import { USO_EDICAO, comandoEdicaoDiagrama, ehComandoDeEdicao } from './commands/diagram-edit.js';
 import { criarFormulario, lerCampo as lerCampoDeFormulario } from './commands/form-new.js';
+import { abrirPreview, fecharPreview, executarServidorPreview } from './form/preview-session.js';
+import { baixarStyleGuide, diretorioDoCache } from './form/style-guide.js';
 
 const USO = `fluigctl — sobe datasets, formulários, widgets e processos para o TOTVS Fluig, e baixa esses artefatos
 
@@ -97,6 +99,14 @@ const USO = `fluigctl — sobe datasets, formulários, widgets e processos para 
       name="form"); tipos text, textarea, number, date, email, select e radio, com as
       opções no tipo: decisao!:radio(aprovado=Aprovar|reprovado=Reprovar):Decisão;
       o ! marca obrigatório e gera events/validateForm.js; publica-se com push form --create
+  fluigctl form bootstrap --server <nome>
+      baixa uma vez o Style Guide do servidor para o cache local (~/.local/state/fluigctl/form/styleguide);
+      o form open lê tudo daí, sem depender do servidor aberto
+  fluigctl form open <pasta-ou-html> [--no-open] [--foreground] [--server <nome>]
+      abre no navegador um preview local do formulário em 127.0.0.1, isolado e somente leitura;
+      renderiza offline a partir do cache do Style Guide e recarrega quando o arquivo muda
+  fluigctl form close <pasta-ou-html>
+      encerra o preview desse formulário
 
   fluigctl diagram new <processId> --name <nome> [--lane <raia>]... [--form <id|nome>]
                       [--category <categoria>] [--server <nome>] [--workflow <pasta>]
@@ -1271,9 +1281,81 @@ async function comandoRequest(argv: string[]): Promise<void> {
   return mostrar(id);
 }
 
-function comandoForm(argv: string[]): void {
-  const uso = 'uso: fluigctl form new <nome> --field <campo[!][:tipo[:Rótulo]]>... [--title T] [--forms <pasta>]';
-  if (argv[0] !== 'new') throw new ErroFluigctl(uso, 2);
+async function comandoForm(argv: string[]): Promise<void> {
+  const sub = argv[0];
+  const uso =
+    'uso: fluigctl form new <nome> --field <campo[!][:tipo[:Rótulo]]>... [--title T] [--forms <pasta>]\n' +
+    '     fluigctl form bootstrap --server <nome>\n' +
+    '     fluigctl form open <pasta-ou-html> [--no-open] [--foreground] [--server <nome>]\n' +
+    '     fluigctl form close <pasta-ou-html>';
+
+  if (sub === 'bootstrap') {
+    const { values } = parseArgs({ args: argv.slice(1), options: { server: { type: 'string' } } });
+    if (!values.server) throw new ErroFluigctl(uso, 2);
+    const servidor = resolveServer(loadConfig(), values.server);
+    const senha = resolvePassword(servidor);
+    const baseUrl = serverUrl(servidor);
+    const cookie = await login(baseUrl, servidor.username, senha);
+    const manifesto = await baixarStyleGuide({ baseUrl, cookie });
+    console.log(`style guide em cache: ${Object.keys(manifesto.arquivos).length} arquivo(s) em ${diretorioDoCache()}`);
+    return;
+  }
+
+  if (sub === 'open') {
+    const { values, positionals } = parseArgs({
+      args: argv.slice(1),
+      allowPositionals: true,
+      options: {
+        'no-open': { type: 'boolean', default: false },
+        foreground: { type: 'boolean', default: false },
+        server: { type: 'string' },
+      },
+    });
+    const arquivo = positionals[0];
+    if (!arquivo || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+    const instancia = await abrirPreview({
+      arquivo,
+      abrirNavegador: !values['no-open'],
+      foreground: values.foreground,
+      ...(values.server === undefined ? {} : { servidorAlias: values.server }),
+    });
+    console.log(`${instancia.reutilizada ? 'preview já aberto' : 'preview aberto'}: ${instancia.url}`);
+    console.log(`pid: ${instancia.registro.pid}`);
+    return;
+  }
+
+  if (sub === 'close') {
+    const arquivo = argv[1];
+    if (!arquivo || argv.length !== 2) throw new ErroFluigctl(uso, 2);
+    const fechado = await fecharPreview(arquivo);
+    console.log(fechado ? `preview encerrado: ${fechado.arquivo}` : `não havia preview aberto para ${resolve(arquivo)}`);
+    return;
+  }
+
+  // É a entrada privada do processo em segundo plano. Não aparece no help para
+  // que ninguém precise conhecer token nem diretório de registro.
+  if (sub === 'serve') {
+    const { values, positionals } = parseArgs({
+      args: argv.slice(1),
+      allowPositionals: true,
+      options: {
+        token: { type: 'string' },
+        'registry-dir': { type: 'string' },
+        'cache-dir': { type: 'string' },
+      },
+    });
+    const arquivo = positionals[0];
+    if (!arquivo || !values.token || positionals.length !== 1) throw new ErroFluigctl(uso, 2);
+    await executarServidorPreview({
+      arquivo,
+      token: values.token,
+      ...(values['registry-dir'] === undefined ? {} : { registroDir: values['registry-dir'] }),
+      ...(values['cache-dir'] === undefined ? {} : { cacheDir: values['cache-dir'] }),
+    });
+    return;
+  }
+
+  if (sub !== 'new') throw new ErroFluigctl(uso, 2);
   const { values, positionals } = parseArgs({
     args: argv.slice(1),
     allowPositionals: true,

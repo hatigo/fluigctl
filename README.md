@@ -88,6 +88,7 @@ O relatório completo, com tarefas, defeitos, método e limitações, está em
 | `dataset run` (roda um dataset no servidor e mostra as linhas; só lê) | pronto |
 | `request start` / `show` / `move` / `cancel` (solicitações sem a tela do Fluig) | pronto, conferido no localdev com a contratação: recuperação, laço de aprovação e reprovação |
 | `form new` (pasta de formulário como a do Studio: style guide, `form name="form"`, campos — inclusive select e radio — e `validateForm` dos obrigatórios) | pronto; publicado com `push form --create` (que assume a pasta dos formulários, `ds<nome>` e a persistência do Studio) no localdev e usado por um processo criado pelo `diagram new` |
+| `form bootstrap` / `open` / `close` (preview local do formulário: baixa o Style Guide para um cache local e serve tudo dele, com reload ao salvar) | implementado e validado: o `form bootstrap` resolve o Style Guide por uma lista ordenada de candidatos — no `fluig-localdev` o CSS principal veio de `/style-guide/css/fluig-style-guide-flat.min.css` (626925 bytes) e o cache ficou com 182 arquivos. Assets referenciados pelo CSS que faltam no servidor entram como ignorados, sem abortar. A demonstração offline sem navegador foi executada com o cache real (open, reload por SSE, reabrir reaproveitando o pid, close) sem tocar o servidor; datasets e FLUIGC ainda não existem |
 | `diagram show/add/timer/link/condition/assign/rename/remove/organize/straighten/undo` (editar o diagrama pelo terminal, com as operações e o desfazer do visualizador; `add --after A --before B` insere entre dois, abrindo espaço e religando) | pronto |
 | `diagram new` (processo novo como o Studio grava: pool, raias, início ligado ao fim) | pronto; abre no Studio sem alteração e passa no `diagram check` |
 | `diagram check` (confere um `.process` editado fora do Studio: referências do Graphiti, fluxos × formas, textos sem fonte, losangos sem pontos e formas sem o visual do Studio (`--fix` acrescenta), elementos sem saída ou sem entrada e o padrão das service tasks; `--fix` também devolve ao canto da tarefa a bolinha de erro que o Studio deixou solta) | pronto; os 96 `.process` salvos pelo Studio nos workspaces passam sem erro de estrutura |
@@ -327,6 +328,33 @@ node bin/fluigctl.js diagram timer workflow/diagrams/<p>.process intermediatetim
 ```
 
 O build local é chamado pelo wrapper versionado `bin/fluigctl.js`; rode `npm run build` antes, sem `npm link` ou instalação global. O timer sai como evento intermediário Studio tipo 32, com gatilho `MINUTE`, `timeTrigger` `0:0:0` e frequência igual aos minutos.
+
+### Acompanhar um formulário enquanto ele muda
+
+O formulário usa o Style Guide do servidor, mas o preview não precisa dele aberto:
+baixe o Style Guide uma vez e depois o `form open` renderiza offline, do cache
+local. O bootstrap resolve cada asset por uma lista ordenada de candidatos; no
+`fluig-localdev` o CSS principal veio do caminho `-flat`
+(`/style-guide/css/fluig-style-guide-flat.min.css`, 626925 bytes) e o cache
+ficou com 182 arquivos. Assets referenciados pelo CSS que não existem no
+servidor são registrados como ignorados, sem abortar o bootstrap. A
+demonstração offline foi executada com esse cache real, sem navegador e sem
+tocar o servidor (open, reload por SSE ao salvar, reabrir reaproveitando o pid,
+close).
+
+```sh
+fluigctl form bootstrap --server <servidor>
+fluigctl form open forms/formNovo
+```
+
+Quando o cache existe (populado por `form bootstrap --server <alias>`), o
+`form open` sobe um servidor local em `127.0.0.1` e serve os assets do cache,
+sem contactar o servidor; salvar o HTML, o JS ou o CSS do formulário recarrega o
+preview, `form close` encerra e reabrir reaproveita o mesmo servidor. Sem o
+cache, o `form open` recusa e manda rodar o bootstrap, em vez de baixar sozinho.
+Os scripts locais do formulário rodam, mas `DatasetFactory`, FLUIGC e recursos
+remotos do Fluig ainda não existem nesta fatia — o preview não fala com o
+servidor.
 
 ### 2. Acompanhar um diagrama enquanto ele muda
 
