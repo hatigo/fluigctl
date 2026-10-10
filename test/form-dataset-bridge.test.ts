@@ -161,7 +161,9 @@ test('token errado devolve 404 e método não-POST devolve 405', async () => {
 class PorteFalso {
   onmessage: ((evento: { data: unknown }) => void) | null = null;
   enviadas: unknown[] = [];
+  fechado = false;
   postMessage(mensagem: unknown): void { this.enviadas.push(mensagem); }
+  close(): void { this.fechado = true; this.onmessage = null; }
 }
 
 function shimHarness(): any {
@@ -193,6 +195,7 @@ test('DatasetFactory enfileira antes de conectar, envia depois e resolve ok/erro
   assert.equal(porta.enviadas.length, 0, 'sem canal ainda não envia');
 
   sandbox.__fluigPreview.conectar(porta);
+  assert.equal(typeof porta.onmessage, 'function', 'conectar ativa a porta (onmessage ligado)');
   assert.equal(porta.enviadas.length, 1, 'flush ao conectar');
   assert.deepEqual(JSON.parse(JSON.stringify(porta.enviadas[0])), {
     v: 1, type: 'dataset', id: 'ds-1', nome: 'ds', campos: ['A'],
@@ -219,6 +222,7 @@ async function controlHarness(resposta: () => Promise<{ json: () => Promise<unkn
   f: ReturnType<typeof formulario>;
   port: PorteFalso;
   fetchChamadas: { url: string; opcoes: any }[];
+  sse: { onmessage: (() => void) | null };
 }> {
   const f = formulario();
   const core = await startPreviewCore(f.html);
@@ -228,6 +232,7 @@ async function controlHarness(resposta: () => Promise<{ json: () => Promise<unkn
   const listeners: Record<string, (e: any) => void> = {};
   const canais: CanalFalso[] = [];
   const fetchChamadas: { url: string; opcoes: any }[] = [];
+  let sseRef: { onmessage: (() => void) | null } | null = null;
   class MessageChannelFalso {
     port1 = new PorteFalso();
     port2 = new PorteFalso();
@@ -239,13 +244,13 @@ async function controlHarness(resposta: () => Promise<{ json: () => Promise<unkn
     document: { querySelector: () => frame },
     addEventListener: (nome: string, fn: (e: any) => void) => { listeners[nome] = fn; },
     console: { warn() {}, log() {}, error() {} },
-    EventSource: class { onmessage: (() => void) | null = null; constructor(readonly url: string) {} },
+    EventSource: class { onmessage: (() => void) | null = null; constructor(readonly url: string) { sseRef = this; } },
     MessageChannel: MessageChannelFalso,
     fetch: async (url: string, opcoes: any) => { fetchChamadas.push({ url, opcoes }); return resposta(); },
   };
   vm.runInNewContext(script, contexto);
   listeners['message']!({ source: frameWindow, data: { v: 1, type: 'hello', nonce } });
-  return { core, f, port: canais[0]!.port1, fetchChamadas };
+  return { core, f, port: canais[0]!.port1, fetchChamadas, sse: sseRef! };
 }
 
 test('script de controle leva o pedido ao route e devolve dataset:ok', async () => {
@@ -369,5 +374,37 @@ test('servirPreview encaminha o backend de dataset ao route', async () => {
   } finally {
     await core.fechar();
     f.limpar();
+  }
+});
+
+test('pedidos concorrentes correlacionam ids distintos e não vazam', async () => {
+  const h = await controlHarness(async () => ({ json: async () => ({ columns: ['A'], values: [{ A: 1 }] }) }));
+  try {
+    h.port.onmessage!({ data: { v: 1, type: 'dataset', id: 'ds-1', nome: 'a' } });
+    h.port.onmessage!({ data: { v: 1, type: 'dataset', id: 'ds-2', nome: 'b' } });
+    await tick();
+    assert.equal(h.fetchChamadas.length, 2, 'um fetch por pedido');
+    const corpos = h.fetchChamadas.map((c) => JSON.parse(c.opcoes.body) as { id: string });
+    assert.deepEqual(corpos.map((c) => c.id).sort(), ['ds-1', 'ds-2']);
+    const respostas = JSON.parse(JSON.stringify(h.port.enviadas)) as { type: string; id: string }[];
+    assert.deepEqual(respostas.map((r) => r.id).sort(), ['ds-1', 'ds-2']);
+    assert.deepEqual([...new Set(respostas.map((r) => r.type))], ['dataset:ok']);
+  } finally {
+    await h.core.close();
+    h.f.limpar();
+  }
+});
+
+test('reload (SSE) fecha a porta antiga antes de trocar o src: resposta tardia é ignorada', async () => {
+  const h = await controlHarness(async () => ({ json: async () => ({ columns: [], values: [] }) }));
+  try {
+    assert.ok(h.sse, 'EventSource assinado');
+    assert.equal(h.port.fechado, false, 'porta ativa antes do reload');
+    h.sse!.onmessage!();
+    assert.equal(h.port.fechado, true, 'a porta antiga é fechada no reload');
+    assert.equal(h.port.onmessage, null, 'o handler removido descarta a resposta tardia');
+  } finally {
+    await h.core.close();
+    h.f.limpar();
   }
 });
